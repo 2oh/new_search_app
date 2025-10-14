@@ -1,3 +1,9 @@
+# このモジュールは、filepicker関連で大幅変更する前のもの
+# この状態はapp.pyとしての最終系で、正常動作はしていない。
+# この大幅変更時に、モジュール名称をappからmainに変更
+
+
+
 import flet as ft
 import pandas as pd
 import os
