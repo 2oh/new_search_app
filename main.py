@@ -95,18 +95,17 @@ def main(page: ft.Page):
         excel_folder_field.value = os.path.dirname(selected_excel_path)
 
         # ✅ Excel選択時：シート・列選択のコントロールを完全再生成
-        sheet_dropdown = None  # ← 明示的に破棄
         sheet_dropdown = ft.Dropdown(
             label="シート選択",
             width=300,
-            on_change=on_sheet_selected,  # ✅ これを追加
+            on_change=on_sheet_selected,  # ✅ ユーザー選択時に自動読み込み
         )
         column_dropdown = ft.Dropdown(label="列選択（項目名行に基づく）", width=400)
         extracted_keywords.controls.clear()
 
-        # 再生成したコントロールを UI に再配置
+        # 再生成してUIに再配置
         layout.controls[2] = ft.Row(
-            [sheet_dropdown, ft.ElevatedButton("シート読み込み", on_click=on_sheet_selected)],
+            [sheet_dropdown],  # ✅ シート読み込みボタン削除
             alignment="center",
         )
         layout.controls[3] = ft.Row(
@@ -116,12 +115,12 @@ def main(page: ft.Page):
 
         page.update()
 
-        # ✅ Excelのシート一覧を取得
+        # ✅ Excelのシート一覧を取得（初期値はNone、ユーザー選択を待つ）
         try:
             xls = pd.ExcelFile(selected_excel_path)
             sheet_dropdown.options = [ft.dropdown.Option(name) for name in xls.sheet_names]
-            sheet_dropdown.value = xls.sheet_names[0] if xls.sheet_names else None
-            page.snack_bar = ft.SnackBar(ft.Text(f"{len(xls.sheet_names)} シートを読み込みました"))
+            sheet_dropdown.value = None  # ✅ 自動選択しない
+            page.snack_bar = ft.SnackBar(ft.Text(f"{len(xls.sheet_names)} シートを読み込みました（選択してください）"))
             page.snack_bar.open = True
             page.update()
         except Exception as ex:
@@ -233,9 +232,9 @@ def main(page: ft.Page):
     # レイアウト
     # ------------------------------
     layout = ft.Column([
-        ft.Text("🔍 Excel検索モード (Step 2.2 項目名行検出対応)", size=20, weight=ft.FontWeight.BOLD),
+        ft.Text("🔍 Excel検索モード", size=20, weight=ft.FontWeight.BOLD),
         ft.Row([excel_folder_field, ft.ElevatedButton("Excelを選択", on_click=pick_excel_click)], alignment="center"),
-        ft.Row([sheet_dropdown, ft.ElevatedButton("シート読み込み", on_click=on_sheet_selected)], alignment="center"),
+        ft.Row([sheet_dropdown], alignment="center"),  # ✅ ボタン削除済
         ft.Row([column_dropdown, ft.ElevatedButton("列を読み込む", on_click=on_column_selected)], alignment="center"),
         ft.Divider(),
         ft.Text("📄 抽出された検索文字列:"),
