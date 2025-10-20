@@ -19,14 +19,17 @@ def main(page: ft.Page):
         if os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        return {"excel_folder": "", "pdf_folder": "", "output_folder": "", "search_mode": "Excel"}
+        # return {"excel_folder": "", "pdf_folder": "", "output_folder": "", "search_mode": "Excel"}
+        return {"excel_folder": "", "pdf_folder": "", "output_folder": "", "search_mode": "Excel", "target_columns": ["品番", "PG名"]}
 
-    def save_config():
+    # def save_config():
+    def save_config(e):
         config.update({
             "excel_folder": excel_folder_field.value,
             "pdf_folder": search_folder_field.value,
             "output_folder": output_folder_field.value,
             "search_mode": mode_dropdown.value,
+            "target_columns": [x.strip() for x in target_col_field.value.split(",") if x.strip()]
         })
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
@@ -39,6 +42,19 @@ def main(page: ft.Page):
     excel_folder_field = ft.TextField(label="Excelフォルダ", value=config.get("excel_folder", ""), expand=True)
     search_folder_field = ft.TextField(label="検索先フォルダ（PDF）", value=config.get("pdf_folder", ""), expand=True)
     output_folder_field = ft.TextField(label="出力先フォルダ", value=config.get("output_folder", ""), expand=True)
+    target_col_field = ft.TextField(
+        label="抽出対象列（カンマ区切り）",
+        value=", ".join(config.get("target_columns", [])),
+        width=400
+    )
+    
+    # def save_target_columns(e):
+    #     config["target_columns"] = [x.strip() for x in target_col_field.value.split(",") if x.strip()]
+    #     save_config(config)
+    #     page.snack_bar = ft.SnackBar(ft.Text("抽出対象列の設定を保存しました。"))
+    #     page.snack_bar.open = True
+    #     page.update()
+
     mode_dropdown = ft.Dropdown(
         label="検索モード",
         options=[ft.dropdown.Option("Excel"), ft.dropdown.Option("通常")],
@@ -238,7 +254,17 @@ def main(page: ft.Page):
         ft.Row([column_dropdown, ft.ElevatedButton("列を読み込む", on_click=on_column_selected)], alignment="center"),
         ft.Divider(),
         ft.Text("📄 抽出された検索文字列:"),
-        extracted_keywords
+        extracted_keywords,
+
+        ft.Divider(),
+        ft.Text("⚙️ 抽出対象列の設定:"),
+        ft.Row(
+            # [target_col_field, ft.ElevatedButton("保存", on_click=save_target_columns)],
+            # [target_col_field, ft.ElevatedButton("設定を保存", on_click=lambda e: save_config())],
+            [target_col_field, ft.ElevatedButton("設定を保存", on_click=save_config)],
+            alignment="center"
+        )
+
     ], expand=True, scroll="auto")
 
     page.add(layout)
