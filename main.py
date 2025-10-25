@@ -7,10 +7,87 @@ from openpyxl import load_workbook
 
 CONFIG_FILE = "config.json"
 
+# ===== Excel抽出関数 =====
+def extract_data_from_excel(file_path: str, detected_columns: dict, header_row_index: int):
+    """
+    Excelから指定列を抽出し、数量が0・空白のみを除外。
+    品名は「品名」見出し列 + 直後の Unnamed 列群をまとめて連結（非空のみ結合）。
+    """
+    df = pd.read_excel(file_path, header=header_row_index)
+
+    # --- まず検出済みキーの列だけ取り出し（無くても後で'品名'を上書きで作るのでOK） ---
+    col_items = [col for col in detected_columns.keys() if col in df.columns]
+    sub_df = df[col_items].copy()
+
+    # ====== 品名列の堅牢な抽出・結合 ======
+    cols = list(df.columns)
+
+    def find_name_block_indices(cols):
+        """'品名'を含む見出しの列を起点に、右側の Unnamed 列を連結対象として巻き取る"""
+        for i, c in enumerate(cols):
+            if "品名" in str(c):
+                j = i + 1
+                block = [i]
+                # 右隣に 'Unnamed' や 空文字/None の見出しが続く限り巻き取る
+                while j < len(cols):
+                    cj = str(cols[j])
+                    if cj.startswith("Unnamed") or cj.strip() == "" or cj.lower() == "none" or cj.lower() == "nan":
+                        block.append(j)
+                        j += 1
+                    else:
+                        break
+                return block
+        return []
+
+    name_idx = find_name_block_indices(cols)
+
+    if name_idx:
+        name_df = df.iloc[:, name_idx].astype(str)
+        # 行単位で非空のセルのみ連結（1列目空・2列目のみ値→2列目だけ残る）
+        sub_df["品名"] = (
+            name_df.apply(
+                lambda row: " ".join(v.strip() for v in row if v.strip() and v.lower() != "nan"),
+                axis=1
+            ).str.strip()
+        )
+    else:
+        # フォールバック：見出し名に「品名」を含む単独列がある場合
+        name_like_cols = [c for c in df.columns if "品名" in str(c)]
+        if len(name_like_cols) == 1:
+            sub_df["品名"] = df[name_like_cols[0]].astype(str).fillna("").str.strip()
+        # なければ品名は作らない（必要なら空列で用意してもOK）
+        # else:
+        #     sub_df["品名"] = ""
+
+    # ====== 数量フィルタ（0と空白のみ除外、文字列は空でなければOK） ======
+    quantity_col = next((c for c in df.columns if "数量" in str(c)), None)
+    if quantity_col:
+        def keep_row(x):
+            if pd.isna(x):
+                return False
+            s = str(x).strip()
+            if s == "":
+                return False
+            try:
+                # 数値変換できた場合は 0 だけNG
+                return float(s.replace(",", "")) != 0.0
+            except ValueError:
+                # 数値でなければ（例: '各1', '約3'）→ OK
+                return True
+
+        sub_df = sub_df[df[quantity_col].apply(keep_row)]
+
+    # 品番は空でも除外しない（要件どおり）
+    return sub_df
 
 def main(page: ft.Page):
     page.title = "PDF検索ツール - Excel検索モード Step 2.2（項目名行検出対応）"
     page.scroll = "adaptive"
+
+    # 仮のExcel情報（実際はフェーズ1で検出済み）
+    excel_path = "test_data.xlsx"
+    header_row_index = 2
+    detected_columns = {"品番": 2, "PG名": 4, "数量": 6}
 
     # ------------------------------
     # 設定ファイル
@@ -244,6 +321,35 @@ def main(page: ft.Page):
     def pick_excel_click(e):
         file_picker.pick_files(allowed_extensions=["xlsx", "xls"])
 
+    # UI要素
+    message = ft.Text("")
+    table = ft.DataTable(
+        columns=[ft.DataColumn(ft.Text("項目"))],
+        rows=[]
+    )
+
+    def on_extract_click(e):
+        try:
+            df = extract_data_from_excel(excel_path, detected_columns, header_row_index)
+            if df.empty:
+                message.value = "抽出結果がありません。"
+                table.columns = [ft.DataColumn(ft.Text("項目"))]  # リセットしてもOK
+                table.rows = []
+            else:
+                message.value = f"{len(df)}件のデータを抽出しました。"
+                table.columns = [ft.DataColumn(ft.Text(c)) for c in df.columns]
+                table.rows = [
+                    ft.DataRow(cells=[ft.DataCell(ft.Text(str(v))) for v in row])
+                    for row in df.values.tolist()
+                ]
+            page.update()
+        except Exception as ex:
+            message.value = f"エラー: {ex}"
+            page.update()
+
+    # ボタン追加
+    extract_button = ft.ElevatedButton("Excelデータ抽出", on_click=on_extract_click)
+    
     # ------------------------------
     # レイアウト
     # ------------------------------
@@ -263,7 +369,11 @@ def main(page: ft.Page):
             # [target_col_field, ft.ElevatedButton("設定を保存", on_click=lambda e: save_config())],
             [target_col_field, ft.ElevatedButton("設定を保存", on_click=save_config)],
             alignment="center"
-        )
+        ),
+        ft.Text("Excel–PDF結合アプリ（フェーズ2）", size=20, weight="bold"),
+        extract_button,
+        message,
+        table
 
     ], expand=True, scroll="auto")
 
