@@ -1,0 +1,311 @@
+# ======================================================
+#  Excel–PDF結合アプリ（フェーズ2.5・最終整備版）
+# ======================================================
+
+import flet as ft
+import pandas as pd
+import os
+import json
+import re
+from openpyxl import load_workbook
+
+CONFIG_FILE = "config.json"
+
+
+# ======================================================
+# === 設定ファイル操作 ===
+# ======================================================
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {
+        "search_folder": "",
+        "output_folder": "",
+        "search_mode": "Excel",
+        "target_columns": ["品番", "PG名"],  # ← 本来の意味に戻した
+    }
+
+
+# ======================================================
+# === ヘルパー関数 ===
+# ======================================================
+def normalize(text: str) -> str:
+    """列名比較用の正規化関数（全角半角・スラッシュ・空白を統一）"""
+    if text is None:
+        return ""
+    s = str(text).strip().lower()
+    s = s.translate(
+        str.maketrans(
+            "０１２３４５６７８９ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ",
+            "0123456789abcdefghijklmnopqrstuvwxyz",
+        )
+    )
+    s = re.sub(r"[／/・\.\s　\-＿_]", "", s)
+    return s
+
+
+# ======================================================
+# === Excelヘルパー関数 ===
+# ======================================================
+def detect_columns(file_path: str, sheet_name: str, header_row_index: int, target_columns=None):
+    """normalize対応の列検出"""
+    if target_columns is None:
+        target_columns = ["品番", "PG名", "品名", "数量"]
+
+    df = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row_index)
+    if str(df.columns[0]).startswith("Unnamed"):
+        df = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row_index + 1)
+
+    detected = {}
+    normalized_cols = [normalize(c) for c in df.columns]
+
+    for target in target_columns:
+        nt = normalize(target)
+        for i, c in enumerate(normalized_cols):
+            if nt in c or c in nt:
+                detected[target] = i
+                break
+
+    print(f"[DEBUG] detect_columns detected={detected}")
+    return detected
+
+
+def get_merged_cells_info(excel_path, sheet_name):
+    wb = load_workbook(excel_path, data_only=True)
+    ws = wb[sheet_name]
+    return ws.merged_cells.ranges
+
+
+def detect_header_row(df, merged_cells_info):
+    merged_rows = set()
+    for crange in merged_cells_info:
+        for r in range(crange.min_row - 1, crange.max_row):
+            merged_rows.add(r)
+
+    for i, row in df.iterrows():
+        if i in merged_rows:
+            continue
+        a_val = str(row.iloc[0]).strip() if not pd.isna(row.iloc[0]) else ""
+        if not a_val:
+            continue
+        filled = sum(1 for v in row if not pd.isna(v) and str(v).strip() != "")
+        if filled >= 2:
+            return i
+    return 0
+
+
+def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: dict, header_row_index: int):
+    """Excelデータを抽出し、数量が0・空白のみを除外"""
+    df = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row_index)
+
+    col_items = []
+    for key in ["品番", "PG名", "品名", "数量"]:
+        if key in detected_columns:
+            col_items.append(df.columns[detected_columns[key]])
+    sub_df = df[col_items].copy() if col_items else pd.DataFrame()
+
+    # 品名の右隣 Unnamed 列も結合
+    cols = list(df.columns)
+
+    def find_name_block_indices(cols):
+        for i, c in enumerate(cols):
+            if "品名" in str(c):
+                j = i + 1
+                block = [i]
+                while j < len(cols):
+                    cj = str(cols[j])
+                    if cj.startswith("Unnamed") or cj.strip() == "" or cj.lower() in ["none", "nan"]:
+                        block.append(j)
+                        j += 1
+                    else:
+                        break
+                return block
+        return []
+
+    name_idx = find_name_block_indices(cols)
+    if name_idx:
+        name_df = df.iloc[:, name_idx].astype(str)
+        sub_df["品名"] = name_df.apply(
+            lambda row: " ".join(v.strip() for v in row if v.strip() and v.lower() != "nan"),
+            axis=1,
+        ).str.strip()
+
+    # 数量フィルタ
+    quantity_col = next((c for c in df.columns if "数量" in str(c)), None)
+    if quantity_col:
+        def keep_row(x):
+            if pd.isna(x): return False
+            s = str(x).strip()
+            if s == "": return False
+            try:
+                return float(s.replace(",", "")) != 0.0
+            except ValueError:
+                return True
+
+        sub_df = sub_df[df[quantity_col].apply(keep_row)]
+
+    return sub_df
+
+
+# ======================================================
+# === mainアプリ ===
+# ======================================================
+def main(page: ft.Page):
+    page.title = "Excel–PDF結合アプリ（フェーズ2.5・最終整備版）"
+    page.scroll = "adaptive"
+
+    config = load_config()
+
+    # === 設定欄 ===
+    search_folder_field = ft.TextField(label="検索先フォルダ（PDF）", expand=True, value=config.get("search_folder", ""))
+    output_folder_field = ft.TextField(label="出力先フォルダ", expand=True, value=config.get("output_folder", ""))
+    target_col_field = ft.TextField(
+        label="抽出対象列（カンマ区切り）",
+        value=", ".join(config.get("target_columns", [])),
+        width=400,
+        visible=True,
+    )
+    search_text_field = ft.TextField(label="検索文字列（通常モード）", visible=False, width=400)
+
+    def on_mode_change(e=None):
+        if mode_dropdown.value == "Excel":
+            target_col_field.visible = True
+            search_text_field.visible = False
+        else:
+            target_col_field.visible = False
+            search_text_field.visible = True
+        page.update()
+
+    mode_dropdown = ft.Dropdown(
+        label="検索モード",
+        options=[ft.dropdown.Option("Excel"), ft.dropdown.Option("通常")],
+        value=config.get("search_mode", "Excel"),
+        on_change=on_mode_change,
+    )
+
+    # 起動時にもUI反映
+    on_mode_change()
+
+    # === 設定保存 ===
+    def save_config(e):
+        config.update({
+            "search_folder": search_folder_field.value,
+            "output_folder": output_folder_field.value,
+            "search_mode": mode_dropdown.value,
+            "target_columns": [x.strip() for x in target_col_field.value.split(",") if x.strip()],
+        })
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        page.snack_bar = ft.SnackBar(ft.Text("設定を保存しました。"))
+        page.snack_bar.open = True
+        page.update()
+
+    # === フォルダ選択 ===
+    folder_picker_search = ft.FilePicker()
+    folder_picker_output = ft.FilePicker()
+    page.overlay.extend([folder_picker_search, folder_picker_output])
+
+    def pick_search_folder(e: ft.FilePickerResultEvent):
+        if e.path:
+            search_folder_field.value = e.path
+            page.update()
+
+    def pick_output_folder(e: ft.FilePickerResultEvent):
+        if e.path:
+            output_folder_field.value = e.path
+            page.update()
+
+    def choose_search_folder(e):
+        folder_picker_search.on_result = pick_search_folder
+        folder_picker_search.get_directory_path(initial_directory=search_folder_field.value or os.getcwd())
+
+    def choose_output_folder(e):
+        folder_picker_output.on_result = pick_output_folder
+        folder_picker_output.get_directory_path(initial_directory=output_folder_field.value or os.getcwd())
+
+    # === Excel関連 ===
+    selected_excel_path = ""
+    excel_file_field = ft.TextField(label="Excelファイル", expand=True)
+    sheet_dropdown = ft.Dropdown(label="シート選択", width=300)
+    message = ft.Text("")
+    table = ft.DataTable(columns=[ft.DataColumn(ft.Text("項目"))], rows=[])
+
+    def on_pick_excel_result(e: ft.FilePickerResultEvent):
+        nonlocal selected_excel_path
+        if not e.files:
+            return
+        selected_excel_path = e.files[0].path
+        excel_file_field.value = os.path.abspath(selected_excel_path)
+        message.value = ""
+        table.columns = [ft.DataColumn(ft.Text("項目"))]
+        table.rows = []
+        try:
+            xls = pd.ExcelFile(selected_excel_path)
+            sheet_dropdown.options = [ft.dropdown.Option(name) for name in xls.sheet_names]
+            sheet_dropdown.value = None
+            page.snack_bar = ft.SnackBar(ft.Text(f"{len(xls.sheet_names)} シートを読み込みました。"))
+            page.snack_bar.open = True
+        except Exception as ex:
+            page.dialog = ft.AlertDialog(title=ft.Text("Excel読込エラー"), content=ft.Text(str(ex)))
+            page.dialog.open = True
+        page.update()
+
+    file_picker_excel = ft.FilePicker(on_result=on_pick_excel_result)
+    page.overlay.append(file_picker_excel)
+
+    def choose_excel_file(e):
+        file_picker_excel.pick_files(allowed_extensions=["xlsx", "xls"])
+
+    def on_extract_click(e):
+        if not selected_excel_path or not sheet_dropdown.value:
+            message.value = "Excelファイルとシートを選択してください。"
+            page.update()
+            return
+        try:
+            df_raw = pd.read_excel(selected_excel_path, sheet_name=sheet_dropdown.value, header=None)
+            merged_info = get_merged_cells_info(selected_excel_path, sheet_dropdown.value)
+            header_row_index = detect_header_row(df_raw, merged_info)
+            detected_columns = detect_columns(
+                selected_excel_path, sheet_dropdown.value, header_row_index,
+                target_columns=[x.strip() for x in target_col_field.value.split(",") if x.strip()]
+            )
+            df = extract_data_from_excel(selected_excel_path, sheet_dropdown.value, detected_columns, header_row_index)
+            if df.empty:
+                message.value = "抽出結果がありません。"
+                table.columns = [ft.DataColumn(ft.Text("項目"))]
+                table.rows = []
+            else:
+                message.value = f"{len(df)}件のデータを抽出しました。"
+                table.columns = [ft.DataColumn(ft.Text(c)) for c in df.columns]
+                table.rows = [
+                    ft.DataRow(cells=[ft.DataCell(ft.Text(str(v))) for v in row])
+                    for row in df.values.tolist()
+                ]
+            page.update()
+        except Exception as ex:
+            message.value = f"エラー: {ex}"
+            page.update()
+
+    # === UI構築 ===
+    layout = ft.Column([
+        ft.Text("⚙️ 設定", size=20, weight="bold"),
+        ft.Row([search_folder_field, ft.ElevatedButton("検索先フォルダ選択", on_click=choose_search_folder)], alignment="center"),
+        ft.Row([output_folder_field, ft.ElevatedButton("出力先フォルダ選択", on_click=choose_output_folder)], alignment="center"),
+        ft.Row([mode_dropdown, target_col_field, search_text_field], alignment="center"),
+        ft.Row([ft.ElevatedButton("💾 設定を保存", on_click=save_config)], alignment="center"),
+
+        ft.Divider(),
+        ft.Text("🔍 Excel検索モード", size=20, weight="bold"),
+        ft.Row([excel_file_field, ft.ElevatedButton("Excelを選択", on_click=choose_excel_file)], alignment="center"),
+        ft.Row([sheet_dropdown, ft.ElevatedButton("抽出実行", on_click=on_extract_click)], alignment="center"),
+
+        ft.Divider(),
+        message,
+        table,
+    ], expand=True, scroll="auto")
+
+    page.add(layout)
+
+
+ft.app(target=main)

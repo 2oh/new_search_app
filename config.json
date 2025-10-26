@@ -1,12 +1,11 @@
 {
-  "search_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\pdf_folder",
-  "output_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\pdf_output",
-  "search_mode": "通常",
+  "search_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\pdf_output",
+  "output_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\xlsx_folder",
+  "search_mode": "Excel",
   "excel_folder": "",
-  "pdf_folder": "",
+  "pdf_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\pdf_output",
   "target_columns": [
     "品番",
-    "PG名",
-    "rrr"
+    "PG名"
   ]
 }
