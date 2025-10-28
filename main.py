@@ -1,5 +1,6 @@
 # ======================================================
 #  Excel–PDF結合アプリ（フェーズ2.8.1 base）
+#  Excel–PDF結合アプリ（フェーズ2.9.0.1）
 # ======================================================
 
 import flet as ft
@@ -140,7 +141,7 @@ def main(page: ft.Page):
             "excel_folder": "",
             "pdf_folder": "",
             "output_folder": "",
-            "search_mode": "Excel",
+            "search_mode": "構成部品表",
             "target_columns": ["品番", "PG名"],
         }
 
@@ -170,8 +171,8 @@ def main(page: ft.Page):
     )
     mode_dropdown = ft.Dropdown(
         label="検索モード",
-        options=[ft.dropdown.Option("Excel"), ft.dropdown.Option("通常")],
-        value=config.get("search_mode", "Excel"),
+        options=[ft.dropdown.Option("構成部品表"), ft.dropdown.Option("通常")],
+        value=config.get("search_mode", "構成部品表"),
         width=150
     )
 
@@ -204,7 +205,7 @@ def main(page: ft.Page):
 
     # ---- 検索モード行 ----
     def update_mode_fields():
-        if mode_dropdown.value == "Excel":
+        if mode_dropdown.value == "構成部品表":
             # expandではなく固定幅にする
             target_col_field.expand = False
             target_col_field.width = 450  # ← 半分くらいの幅に調整（必要に応じて増減OK）
