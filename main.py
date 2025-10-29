@@ -1,6 +1,7 @@
 # ======================================================
 #  Excel–PDF結合アプリ（フェーズ2.8.1 base）
 #  Excel–PDF結合アプリ（フェーズ2.9.0.1）
+#  Excel–PDF結合アプリ（フェーズ2.9.0.2）
 # ======================================================
 
 import flet as ft
@@ -333,14 +334,22 @@ def main(page: ft.Page):
 
                 table.columns = [ft.DataColumn(ft.Text(c)) for c in df.columns]
                 table.rows = []
+
                 for _, row in df.iterrows():
                     cells = []
                     for c, v in row.items():
+                        # NaN・None・空文字などを一括で非表示化
+                        if pd.isna(v) or str(v).strip().lower() in ("nan", "none"):
+                            display_value = ""
+                        else:
+                            display_value = str(v)
+
                         if c == "出力対象":
                             cells.append(ft.DataCell(ft.Checkbox(value=bool(v))))
                         else:
-                            cells.append(ft.DataCell(ft.Text(str(v))))
+                            cells.append(ft.DataCell(ft.Text(display_value)))
                     table.rows.append(ft.DataRow(cells=cells))
+
             page.update()
         except Exception as ex:
             message.value = f"エラー: {ex}"
