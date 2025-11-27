@@ -34,30 +34,19 @@ def detect_columns(file_path: str, sheet_name: str, header_row_index: int, targe
         target_columns = ["品番", "PG名", "品名", "数量"]
 
     df = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row_index)
-
-    print(f"\n[DEBUG] ===== detect_columns start =====")
-    print(f"[DEBUG] header_row_index = {header_row_index}")
-    print(f"[DEBUG] df.columns = {list(df.columns)}")
-
     detected = {}
     normalized_cols = [normalize(c) for c in df.columns]
-    print(f"[DEBUG] normalized_cols = {normalized_cols}")
 
     for target in target_columns:
         norm_target = normalize(target)
-        print(f"[DEBUG] Searching for '{target}' (normalized='{norm_target}')")
         for i, col in enumerate(normalized_cols):
             if norm_target in col or col in norm_target:
-                print(f"[DEBUG]  -> matched '{df.columns[i]}' (normalized='{col}')")
                 detected[target] = i
                 break
             if norm_target.startswith("pg") and ("pg" in col or "ｐｇ" in col):
-                print(f"[DEBUG]  -> matched (special rule) '{df.columns[i]}' (normalized='{col}')")
                 detected[target] = i
                 break
     print(f"[DEBUG] detect_columns detected={detected}")
-    print(f"[DEBUG] ===== detect_columns end =====\n")
-
     return detected
 
 
@@ -132,35 +121,7 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
             except ValueError:
                 return True
         sub_df = sub_df[df[quantity_col].apply(keep_row)]
-
-    # ✅ 検出された列に基づいて、列名を統一（英字ブレ対応）
-    rename_map = {}
-    if "品番" in detected_columns:
-        rename_map[df.columns[detected_columns["品番"]]] = "品番"
-    if "PG名" in detected_columns:
-        rename_map[df.columns[detected_columns["PG名"]]] = "PG名"
-    if "品名" in detected_columns:
-        rename_map[df.columns[detected_columns["品名"]]] = "品名"
-    if "数量" in detected_columns:
-        rename_map[df.columns[detected_columns["数量"]]] = "数量"
-
-    sub_df.rename(columns=rename_map, inplace=True)
-
-    # ✅ 品名列が複数（例：'品名', 'Unnamed:3'）ある場合は結合して1列に統一
-    name_like_cols = [c for c in sub_df.columns if "品名" in str(c) or "Unnamed" in str(c)]
-    if len(name_like_cols) > 1:
-        sub_df["品名"] = sub_df[name_like_cols].astype(str).apply(
-            lambda row: " ".join(v.strip() for v in row if v.strip() and v.lower() != "nan"),
-            axis=1
-        )
-        sub_df.drop(columns=[c for c in name_like_cols if c != "品名"], inplace=True)
-
-    # ✅ 対象列のみを保持（項番・備考など除外）
-    keep_cols = [c for c in ["品番", "PG名", "品名", "数量"] if c in sub_df.columns]
-    sub_df = sub_df[keep_cols]
-
     return sub_df
-
 
 
 # ========= メイン =========
@@ -351,22 +312,27 @@ def main(page: ft.Page):
             detected_columns = detect_columns(selected_excel_path, sheet_dropdown.value, header_row_index)
             df = extract_data_from_excel(selected_excel_path, sheet_dropdown.value, detected_columns, header_row_index)
 
+            # --- 検索用文字列の生成 ---
             def create_search_keyword(text):
                 if pd.isna(text):
                     return ""
                 s = str(text).strip()
                 if len(s) >= 2 and s[0].upper() in ["I", "U", "H", "F"] and s[1].isdigit():
-                    s = s[1:]
+                    s = s[1:]  # 先頭1文字削除
+
+                # 特定パターン以降を削除
                 for pat in ["R/L", "L/R", "A/B"]:
                     idx = s.find(pat)
                     if idx != -1:
                         s = s[:idx]
+                # スラッシュ以降を削除
                 idx_slash = s.find("/")
                 if idx_slash != -1:
                     s = s[:idx_slash]
+
                 return s.strip()
 
-            # --- 品番 or PG名 のどちらか優先で生成（ラベル固定）
+            # 品番 or PG名 のどちらか優先で生成
             df["検索用文字列"] = df.apply(
                 lambda row: create_search_keyword(row.get("品番")) or create_search_keyword(row.get("PG名")),
                 axis=1
