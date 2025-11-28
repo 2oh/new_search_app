@@ -3,6 +3,7 @@
 #  Excel–PDF結合アプリ（フェーズ2.9.0.1）
 #  Excel–PDF結合アプリ（フェーズ2.9.0.2）
 #  Excel–PDF結合アプリ（フェーズ2.9.0.3）
+#  Excel–PDF結合アプリ（フェーズ2.9.0.4）
 # ======================================================
 
 import flet as ft
@@ -63,16 +64,63 @@ def detect_columns(file_path: str, sheet_name: str, header_row_index: int, targe
 
 # ========= 数量セルの背景色を取得 =========
 def get_quantity_colors(file_path: str, sheet_name: str, header_row_index: int, quantity_col_index: int):
+    """
+    数量セルに「何らかの色が付いているかどうか」を判定して返す。
+    - パターンなし or 塗りなし → ""（無色扱い）
+    - 何らかの色（RGB / indexed / theme） → 何かしらの文字列（非空）
+    """
     wb = load_workbook(file_path, data_only=True)
     ws = wb[sheet_name]
     colors = []
+
     for row_idx in range(header_row_index + 2, ws.max_row + 1):
         cell = ws.cell(row=row_idx, column=quantity_col_index + 1)  # openpyxlは1始まり
         fill = cell.fill
-        if fill and fill.fgColor and fill.fgColor.type == "rgb" and fill.fgColor.rgb not in (None, "00000000", "FFFFFFFF"):
-            colors.append(fill.fgColor.rgb)
+
+        if not fill:
+            colors.append("")
+            continue
+
+        pattern = getattr(fill, "patternType", None)
+        # パターンが none / 未設定なら「塗りなし」とみなす
+        if pattern in (None, "none"):
+            colors.append("")
+            continue
+
+        fg = fill.fgColor
+        if fg is None:
+            colors.append("")
+            continue
+
+        colored = False
+        marker = ""
+
+        # 1) RGB 色
+        if fg.type == "rgb":
+            # 完全な白 or 透明っぽい値は「塗りなし」とみなす
+            if fg.rgb not in (None, "00000000", "FFFFFFFF"):
+                colored = True
+                marker = fg.rgb
+
+        # 2) インデックス色（パレット）
+        elif fg.type == "indexed":
+            # 0, 64 は「塗りなし」的な扱いが多いので除外
+            if fg.index not in (0, 64):
+                colored = True
+                marker = f"indexed:{fg.index}"
+
+        # 3) テーマ色
+        elif fg.type == "theme":
+            # テーマ色で塗りがある場合は、とりあえず「色あり」とみなす
+            colored = True
+            marker = f"theme:{fg.theme}"
+
+        # その他タイプは一応「色なし」として扱う
+        if colored:
+            colors.append(marker)
         else:
             colors.append("")
+
     return colors
 
 
