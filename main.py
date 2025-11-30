@@ -1,9 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ（フェーズ2.8.1 base）
-#  Excel–PDF結合アプリ（フェーズ2.9.0.1）
-#  Excel–PDF結合アプリ（フェーズ2.9.0.2）
-#  Excel–PDF結合アプリ（フェーズ2.9.0.3）
-#  Excel–PDF結合アプリ（フェーズ2.9.0.4）
+#  Excel–PDF結合アプリ（v2.9.0.5）
 # ======================================================
 
 import flet as ft
@@ -170,15 +166,15 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
     quantity_col = next((c for c in df.columns if "数量" in str(c)), None)
     if quantity_col:
         def keep_row(x):
+            # ✅ 数量欄が完全に空（NaN / 空白）の行だけ除外する
             if pd.isna(x):
                 return False
             s = str(x).strip()
             if s == "":
                 return False
-            try:
-                return float(s.replace(",", "")) != 0.0
-            except ValueError:
-                return True
+            # 0 かどうかはここでは判定しない（表示はする）
+            return True
+
         sub_df = sub_df[df[quantity_col].apply(keep_row)]
 
     # ✅ 検出された列に基づいて、列名を統一（英字ブレ対応）
@@ -209,11 +205,9 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
 
     return sub_df
 
-
-
 # ========= メイン =========
 def main(page: ft.Page):
-    page.title = "Excel–PDF結合アプリ（フェーズ2.8.0）"
+    page.title = "Excel–PDF結合アプリ"
     page.scroll = "adaptive"
 
     try:
@@ -422,12 +416,37 @@ def main(page: ft.Page):
 
             qty_colors = []
             if "数量" in detected_columns:
-                qty_colors = get_quantity_colors(selected_excel_path, sheet_dropdown.value, header_row_index, detected_columns["数量"])
+                qty_colors = get_quantity_colors(
+                    selected_excel_path,
+                    sheet_dropdown.value,
+                    header_row_index,
+                    detected_columns["数量"]
+                )
                 df["数量セル色"] = qty_colors[: len(df)]
             else:
                 df["数量セル色"] = ""
 
-            df["出力対象"] = df["数量セル色"].apply(lambda x: False if x else True)
+            # 数量ゼロ判定（0, "0", "0.0", " 0 " などを想定）
+            def is_zero_quantity(v):
+                if pd.isna(v):
+                    return False
+                s = str(v).strip()
+                if s == "":
+                    return False
+                try:
+                    return float(s.replace(",", "")) == 0.0
+                except ValueError:
+                    return False
+
+            # 出力対象判定：色付き or 数量ゼロ → False
+            def decide_output_target(row):
+                colored = bool(row.get("数量セル色"))
+                zero_qty = False
+                if "数量" in df.columns:
+                    zero_qty = is_zero_quantity(row.get("数量"))
+                return not (colored or zero_qty)
+
+            df["出力対象"] = df.apply(decide_output_target, axis=1)
 
             if df.empty:
                 message.value = "抽出結果がありません。"
