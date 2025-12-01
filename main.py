@@ -210,6 +210,8 @@ def main(page: ft.Page):
     page.title = "Excel–PDF結合アプリ"
     page.scroll = "adaptive"
 
+    sheet_dropdown = None
+
     try:
         page.window_maximized = True
     except Exception:
@@ -322,14 +324,19 @@ def main(page: ft.Page):
     table = ft.DataTable(columns=[ft.DataColumn(ft.Text("項目"))], rows=[])
     table_header = ft.Row([], alignment="center")
 
-    # 🔽🔽 ここを追加 🔽🔽
-    def on_sheet_change(e):
-        # シート変更時に抽出結果を初期化
+    # 🔽 抽出結果エリアの初期化関数を追加 🔽
+    def reset_extract_view():
         table.rows = []
         table.columns = [ft.DataColumn(ft.Text("項目"))]
         table_header.controls = []
         message.value = ""
         page.update()
+    # 🔼 ここまで追加 🔼
+
+    # 🔽🔽 ここを追加 🔽🔽
+    def on_sheet_change(e):
+        # シート変更時に抽出結果を初期化
+        reset_extract_view()
 
     sheet_dropdown.on_change = on_sheet_change
     # 🔼🔼 ここまで追加 🔼🔼
@@ -341,23 +348,56 @@ def main(page: ft.Page):
         file_picker.pick_files(allowed_extensions=["xlsx", "xls"])
 
     def pick_excel_result(e: ft.FilePickerResultEvent):
-        nonlocal selected_excel_path
+        nonlocal selected_excel_path, sheet_dropdown
+
         if not e.files:
             return
+
+        # ★ 抽出エリアを初期化
+        reset_extract_view()
+
         selected_excel_path = e.files[0].path
         excel_folder_field.value = os.path.abspath(selected_excel_path)
         page.update()
+
         try:
             xls = pd.ExcelFile(selected_excel_path)
-            sheet_dropdown.options = [ft.dropdown.Option(name) for name in xls.sheet_names]
-            sheet_dropdown.value = None
+            sheet_names = xls.sheet_names
+
+            # ★ 既存 Dropdown を完全に削除
+            parent = sheet_dropdown.parent
+            parent.controls.remove(sheet_dropdown)
+
+            # ★ 新しい Dropdown を作成（初期値はプレースホルダ）
+            sheet_dropdown = ft.Dropdown(
+                label="シート選択",
+                width=300,
+                options=[
+                    ft.dropdown.Option("（シートを選択してください）"),
+                    *[ft.dropdown.Option(name) for name in sheet_names]
+                ],
+                value="（シートを選択してください）"
+            )
+
+            # ★ on_change を再設定
+            sheet_dropdown.on_change = on_sheet_change
+
+            # ★ レイアウトに戻す
+            parent.controls.insert(0, sheet_dropdown)
+            parent.update()
+
             page.snack_bar = ft.SnackBar(ft.Text("シートを選択してください。"))
             page.snack_bar.open = True
             page.update()
+
         except PermissionError:
-            page.dialog = ft.AlertDialog(title=ft.Text("ファイル使用中"), content=ft.Text("Excelファイルを閉じてください。"))
+            page.dialog = ft.AlertDialog(
+                title=ft.Text("ファイル使用中"),
+                content=ft.Text("Excelファイルを閉じてください。")
+            )
             page.dialog.open = True
             page.update()
+
 
     # ---- ヘッダ検出 ----
     def get_merged_cells_info(excel_path, sheet_name):

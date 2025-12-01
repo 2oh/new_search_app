@@ -714,6 +714,26 @@ fix: improve detection of colored quantity cells (support theme colors) (v2.9.0.
 
 2025/11/30
 
+「ゼロ数量の見える化」
 ・数量が 0 の行もテーブルに表示する
 ・ただし 出力対象は False（チェックOFF） にする
 ・数量セルが色付きの行と同じポリシーにする
+
+v2.9.0.5
+feat: show zero-quantity rows and mark them as non-output (v2.9.0.5)
+
+
+「Excel再読込時の完全初期化」
+・新しい Excel ファイルを選んだら
+	・シート選択をリセット
+	・抽出結果テーブルをクリア
+	・メッセージも消す
+	・ヘッダのボタン（全選択／全解除／PDF出力）も消す
+
+2025/12/1
+
+前回のNG
+・シート選択のリセットが出来ていない
+
+v2.9.0.6
+fix: fully reset view state when reloading Excel file (v2.9.0.6)
