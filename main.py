@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ（v2.9.0.5）
+#  Excel–PDF結合アプリ（v2.9.0.7）
 # ======================================================
 
 import flet as ft
@@ -296,8 +296,7 @@ def main(page: ft.Page):
             target_col_field.width = 450  # ← 半分くらいの幅に調整（必要に応じて増減OK）
             mode_row.controls = [
                 mode_dropdown,
-                target_col_field,
-                ft.ElevatedButton("設定を保存", on_click=save_config)
+                target_col_field
             ]
         else:
             manual_field = ft.TextField(
@@ -306,13 +305,12 @@ def main(page: ft.Page):
             )
             mode_row.controls = [
                 mode_dropdown,
-                manual_field,
-                ft.ElevatedButton("設定を保存", on_click=save_config)
+                manual_field
             ]
         page.update()
 
     mode_row = ft.Row(
-        [mode_dropdown, target_col_field, ft.ElevatedButton("設定を保存", on_click=save_config)],
+        [mode_dropdown, target_col_field],
         alignment="spaceBetween"
     )
     mode_dropdown.on_change = lambda e: update_mode_fields()
@@ -547,6 +545,8 @@ def main(page: ft.Page):
 
     # ---- レイアウト ----
     excel_folder_field = ft.TextField(label="選択中のExcelファイル", expand=True)
+    save_button = ft.ElevatedButton("設定を保存", on_click=save_config)
+
     layout = ft.Column([
         ft.Text("⚙️ 設定", size=20, weight="bold"),
         ft.Row([
@@ -558,6 +558,7 @@ def main(page: ft.Page):
             ft.ElevatedButton("フォルダを選択", on_click=pick_output_folder)
         ]),
         mode_row,
+        ft.Row([save_button], alignment="center"),
         ft.Divider(),
         ft.Text("🔍 Excel検索モード", size=20, weight="bold"),
         ft.Row([excel_folder_field, ft.ElevatedButton("Excelを選択", on_click=pick_excel_click)], alignment="center"),

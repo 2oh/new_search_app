@@ -737,3 +737,15 @@ feat: show zero-quantity rows and mark them as non-output (v2.9.0.5)
 
 v2.9.0.6
 fix: fully reset view state when reloading Excel file (v2.9.0.6)
+
+
+2025/12/4
+
+「設定ボタンの位置を調整する」
+
+v2.9.0.7
+feat: center-align the settings button in the UI (v2.9.0.7)
+
+
+問題点：
+・設定時に「設定を保存した」のメッセージがでない。
