@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ（v2.9.0.7）
+#  Excel–PDF結合アプリ（v2.9.0.8）
 # ======================================================
 
 import flet as ft
@@ -216,7 +216,7 @@ def main(page: ft.Page):
         page.window_maximized = True
     except Exception:
         pass
-    
+
     # ---- 設定ファイル処理 ----
     def load_config():
         if os.path.exists(CONFIG_FILE):
@@ -240,8 +240,8 @@ def main(page: ft.Page):
         })
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
-        page.snack_bar = ft.SnackBar(ft.Text("設定を保存しました。"))
-        page.snack_bar.open = True
+
+        page.open(ft.SnackBar(ft.Text("設定を保存しました。")))
         page.update()
 
     config = load_config()
@@ -329,15 +329,12 @@ def main(page: ft.Page):
         table_header.controls = []
         message.value = ""
         page.update()
-    # 🔼 ここまで追加 🔼
 
-    # 🔽🔽 ここを追加 🔽🔽
     def on_sheet_change(e):
         # シート変更時に抽出結果を初期化
         reset_extract_view()
 
     sheet_dropdown.on_change = on_sheet_change
-    # 🔼🔼 ここまで追加 🔼🔼
 
     file_picker = ft.FilePicker(on_result=lambda e: pick_excel_result(e))
     page.overlay.append(file_picker)
