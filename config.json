@@ -2,10 +2,9 @@
   "search_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\pdf_output",
   "output_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\pdf_output",
   "search_mode": "構成部品表",
-  "excel_folder": "",
+  "excel_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\xlsx_folder\\test4.xlsx",
   "pdf_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\pdf_folder",
   "target_columns": [
-    "品番",
-    "PG名"
+    "oooo"
   ]
 }

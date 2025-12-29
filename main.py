@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ（v2.9.0.8）
+#  Excel–PDF結合アプリ（v2.9.0.9）
 # ======================================================
 
 import flet as ft
@@ -545,7 +545,14 @@ def main(page: ft.Page):
     save_button = ft.ElevatedButton("設定を保存", on_click=save_config)
 
     layout = ft.Column([
-        ft.Text("⚙️ 設定", size=20, weight="bold"),
+        ft.Row(
+            [
+                ft.Text("⚙️ 設定", size=20, weight="bold"),
+                save_button,
+            ],
+            alignment="spaceBetween",
+            vertical_alignment="center",
+        ),
         ft.Row([
             search_folder_field,
             ft.ElevatedButton("フォルダを選択", on_click=pick_search_folder)
@@ -555,7 +562,6 @@ def main(page: ft.Page):
             ft.ElevatedButton("フォルダを選択", on_click=pick_output_folder)
         ]),
         mode_row,
-        ft.Row([save_button], alignment="center"),
         ft.Divider(),
         ft.Text("🔍 Excel検索モード", size=20, weight="bold"),
         ft.Row([excel_folder_field, ft.ElevatedButton("Excelを選択", on_click=pick_excel_click)], alignment="center"),
