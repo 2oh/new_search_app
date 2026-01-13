@@ -291,17 +291,14 @@ def main(page: ft.Page):
     # ---- 検索モード行 ----
     def update_mode_fields():
         if mode_dropdown.value == "構成部品表":
-            # expandではなく固定幅にする
-            target_col_field.expand = False
-            target_col_field.width = 450  # ← 半分くらいの幅に調整（必要に応じて増減OK）
+            # 構成部品表モードでは「抽出対象列」は仕様上固定のため表示しない
             mode_row.controls = [
-                mode_dropdown,
-                target_col_field
+                mode_dropdown
             ]
         else:
             manual_field = ft.TextField(
                 label="検索文字列（手動入力）",
-                width=450  # ← 同じ幅で統一
+                width=450
             )
             mode_row.controls = [
                 mode_dropdown,
