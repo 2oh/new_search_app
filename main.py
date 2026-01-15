@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ（v2.9.0.9）
+#  Excel–PDF結合アプリ（v2.9.0.11）
 # ======================================================
 
 import flet as ft
@@ -291,10 +291,11 @@ def main(page: ft.Page):
     # ---- 検索モード行 ----
     def update_mode_fields():
         if mode_dropdown.value == "構成部品表":
-            # 構成部品表モードでは「抽出対象列」は仕様上固定のため表示しない
             mode_row.controls = [
-                mode_dropdown
+                mode_dropdown,
+                target_col_field
             ]
+            set_excel_ui_enabled(True)
         else:
             manual_field = ft.TextField(
                 label="検索文字列（手動入力）",
@@ -304,6 +305,8 @@ def main(page: ft.Page):
                 mode_dropdown,
                 manual_field
             ]
+            set_excel_ui_enabled(False)
+
         page.update()
 
     mode_row = ft.Row(
@@ -316,6 +319,7 @@ def main(page: ft.Page):
     selected_excel_path = ""
     sheet_dropdown = ft.Dropdown(label="シート選択", width=300)
     message = ft.Text("")
+    mode_notice = ft.Text("")
     table = ft.DataTable(columns=[ft.DataColumn(ft.Text("項目"))], rows=[])
     table_header = ft.Row([], alignment="center")
 
@@ -418,6 +422,12 @@ def main(page: ft.Page):
             message.value = "Excelファイルとシートを選択してください。"
             page.update()
             return
+
+        if mode_dropdown.value != "構成部品表":
+            message.value = "通常モードは未実装です。"
+            page.update()
+            return
+
         try:
             df_raw = pd.read_excel(selected_excel_path, sheet_name=sheet_dropdown.value, header=None)
             merged_info = get_merged_cells_info(selected_excel_path, sheet_dropdown.value)
@@ -537,6 +547,26 @@ def main(page: ft.Page):
         page.snack_bar.open = True
         page.update()
 
+    pick_excel_btn = ft.ElevatedButton("Excelを選択", on_click=pick_excel_click)
+    extract_btn = ft.ElevatedButton("抽出実行", on_click=on_extract_click)
+
+    def set_excel_ui_enabled(enabled: bool):
+        excel_folder_field.disabled = not enabled
+        pick_excel_btn.disabled = not enabled
+        sheet_dropdown.disabled = not enabled
+        sheet_dropdown.opacity = 1.0 if enabled else 0.5
+        extract_btn.disabled = not enabled
+
+        if not enabled:
+            reset_extract_view()
+            mode_notice.value = "通常モードでは構成部品表選択は無効です。"
+        else:
+            mode_notice.value = ""
+
+        # 保険（効かない環境があるので）
+        sheet_dropdown.update()
+        page.update()
+
     # ---- レイアウト ----
     excel_folder_field = ft.TextField(label="選択中のExcelファイル", expand=True)
     save_button = ft.ElevatedButton("設定を保存", on_click=save_config)
@@ -560,9 +590,10 @@ def main(page: ft.Page):
         ]),
         mode_row,
         ft.Divider(),
-        ft.Text("🔍 Excel検索モード", size=20, weight="bold"),
-        ft.Row([excel_folder_field, ft.ElevatedButton("Excelを選択", on_click=pick_excel_click)], alignment="center"),
-        ft.Row([sheet_dropdown, ft.ElevatedButton("抽出実行", on_click=on_extract_click)], alignment="center"),
+        ft.Text("🔍 構成部品表選択", size=20, weight="bold"),
+        mode_notice,
+        ft.Row([excel_folder_field, pick_excel_btn], alignment="center"),
+        ft.Row([sheet_dropdown, extract_btn], alignment="center"),
         ft.Divider(),
         table_header,
         message,
