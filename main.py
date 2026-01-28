@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ（v2.9.0.11）
+#  Excel–PDF結合アプリ（v2.9.0.12）
 # ======================================================
 
 import flet as ft
@@ -291,9 +291,9 @@ def main(page: ft.Page):
     # ---- 検索モード行 ----
     def update_mode_fields():
         if mode_dropdown.value == "構成部品表":
+            # ✅ 構成部品表モードでは target_col_field を表示しない
             mode_row.controls = [
-                mode_dropdown,
-                target_col_field
+                mode_dropdown
             ]
             set_excel_ui_enabled(True)
         else:
@@ -310,7 +310,7 @@ def main(page: ft.Page):
         page.update()
 
     mode_row = ft.Row(
-        [mode_dropdown, target_col_field],
+        [mode_dropdown],
         alignment="spaceBetween"
     )
     mode_dropdown.on_change = lambda e: update_mode_fields()
