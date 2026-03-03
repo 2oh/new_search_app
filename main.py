@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ（v2.9.0.12）
+#  Excel–PDF結合アプリ（v2.9.0.13）
 # ======================================================
 
 import flet as ft
@@ -418,11 +418,20 @@ def main(page: ft.Page):
 
     # ---- 抽出処理 ----
     def on_extract_click(e):
-        if not selected_excel_path or not sheet_dropdown.value:
-            message.value = "Excelファイルとシートを選択してください。"
+        # 1) Excel 未選択
+        if not selected_excel_path:
+            message.value = "Excelファイルを選択してください。"
             page.update()
             return
 
+        # 2) シート未選択（プレースホルダ含む）
+        sheet_val = sheet_dropdown.value
+        if (not sheet_val) or (sheet_val == "（シートを選択してください）"):
+            message.value = "シートを選択してください。"
+            page.update()
+            return
+
+        # 3) モードチェック
         if mode_dropdown.value != "構成部品表":
             message.value = "通常モードは未実装です。"
             page.update()
