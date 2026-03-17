@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ（v2.9.0.13）
+#  Excel–PDF結合アプリ（v2.9.0.14）
 # ======================================================
 
 import flet as ft
@@ -344,7 +344,7 @@ def main(page: ft.Page):
         file_picker.pick_files(allowed_extensions=["xlsx", "xls"])
 
     def pick_excel_result(e: ft.FilePickerResultEvent):
-        nonlocal selected_excel_path, sheet_dropdown
+        nonlocal selected_excel_path  # sheet_dropdown は作り直さないので nonlocal 不要でもOK
 
         if not e.files:
             return
@@ -360,27 +360,14 @@ def main(page: ft.Page):
             xls = pd.ExcelFile(selected_excel_path)
             sheet_names = xls.sheet_names
 
-            # ★ 既存 Dropdown を完全に削除
-            parent = sheet_dropdown.parent
-            parent.controls.remove(sheet_dropdown)
-
-            # ★ 新しい Dropdown を作成（初期値はプレースホルダ）
-            sheet_dropdown = ft.Dropdown(
-                label="シート選択",
-                width=300,
-                options=[
-                    ft.dropdown.Option("（シートを選択してください）"),
-                    *[ft.dropdown.Option(name) for name in sheet_names]
-                ],
-                value="（シートを選択してください）"
-            )
-
-            # ★ on_change を再設定
-            sheet_dropdown.on_change = on_sheet_change
-
-            # ★ レイアウトに戻す
-            parent.controls.insert(0, sheet_dropdown)
-            parent.update()
+            # ✅ Dropdownを作り直さず、options/valueだけ更新する
+            sheet_dropdown.options = [
+                ft.dropdown.Option("（シートを選択してください）"),
+                *[ft.dropdown.Option(name) for name in sheet_names]
+            ]
+            sheet_dropdown.value = "（シートを選択してください）"
+            sheet_dropdown.on_change = on_sheet_change  # 念のため（維持）
+            sheet_dropdown.update()
 
             page.snack_bar = ft.SnackBar(ft.Text("シートを選択してください。"))
             page.snack_bar.open = True
@@ -567,6 +554,8 @@ def main(page: ft.Page):
         extract_btn.disabled = not enabled
 
         if not enabled:
+            # ✅ 通常モードへ切替 → シート選択をプレースホルダに戻す
+            sheet_dropdown.value = "（シートを選択してください）"
             reset_extract_view()
             mode_notice.value = "通常モードでは構成部品表選択は無効です。"
         else:
