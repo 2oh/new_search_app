@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ（v2.9.0.14）
+#  Excel–PDF結合アプリ（v2.9.0.15）
 # ======================================================
 
 import flet as ft
@@ -460,7 +460,12 @@ def main(page: ft.Page):
                     header_row_index,
                     detected_columns["数量"]
                 )
-                df["数量セル色"] = qty_colors[: len(df)]
+
+                # ✅ df.index（元の行位置）で色リストを引く → フィルタ後でもズレない
+                def color_by_df_index(i: int) -> str:
+                    return qty_colors[i] if 0 <= i < len(qty_colors) else ""
+
+                df["数量セル色"] = [color_by_df_index(i) for i in df.index]
             else:
                 df["数量セル色"] = ""
 
@@ -602,4 +607,5 @@ def main(page: ft.Page):
     update_mode_fields()
 
 
-ft.app(target=main)
+if __name__ == "__main__":
+    ft.app(target=main)

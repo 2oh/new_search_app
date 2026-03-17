@@ -879,6 +879,15 @@ B1/B2
 	ふたたび構成部品表に戻すと、シートAが選ばれたまま
 という状態になりえます。
 
+git commit -m "refactor: keep sheet dropdown instance and reset on normal mode (C1)(v2.9.0.14)"
+
+
+４）数量セル色ズレ修正（重要）															D
+
+・まずpytestを入れる
+
+python -m pip install pytest
+
 
 -----------------------------------------------------------------------------------
 ・検索モードの詳細部は、検索モードの真横に持ってきたい
