@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ（v2.9.0.15）
+#  Excel–PDF結合アプリ（v2.9.0.16）
 # ======================================================
 
 import flet as ft
@@ -506,21 +506,41 @@ def main(page: ft.Page):
                 table.columns = [ft.DataColumn(ft.Text(c)) for c in df.columns]
                 table.rows = []
 
+                def format_quantity_for_display(v) -> str:
+                    if pd.isna(v):
+                        return ""
+                    s = str(v).strip()
+                    if s == "" or s.lower() in ("nan", "none"):
+                        return ""
+
+                    # "1.0" のような「整数の小数表現」だけを "1" に戻す
+                    try:
+                        x = float(s.replace(",", ""))
+                        if x.is_integer():
+                            return str(int(x))
+                    except ValueError:
+                        pass
+
+                    # "各1", "2/3", "1.5" などはそのまま
+                    return s
+
+
                 for _, row in df.iterrows():
                     cells = []
                     for c, v in row.items():
-                        if pd.isna(v) or str(v).strip().lower() in ("nan", "none"):
-                            display_value = ""
+                        if c == "数量":
+                            display_value = format_quantity_for_display(v)
                         else:
-                            display_value = str(v)
+                            if pd.isna(v) or str(v).strip().lower() in ("nan", "none"):
+                                display_value = ""
+                            else:
+                                display_value = str(v)
 
                         if c == "出力対象":
                             cells.append(ft.DataCell(ft.Checkbox(value=bool(v))))
-                        elif c == "検索用文字列":
-                            # 編集なしの通常テキスト表示に変更
-                            cells.append(ft.DataCell(ft.Text(display_value)))
                         else:
                             cells.append(ft.DataCell(ft.Text(display_value)))
+
                     table.rows.append(ft.DataRow(cells=cells))
 
 

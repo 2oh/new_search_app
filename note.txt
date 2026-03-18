@@ -888,6 +888,14 @@ git commit -m "refactor: keep sheet dropdown instance and reset on normal mode (
 
 python -m pip install pytest
 
+git commit -m "fix: align quantity cell colors with filtered rows (D1)(v2.9.0.15)"
+
+
+数量が小数点表示になっている
+
+
+2026/3/18
+
 
 -----------------------------------------------------------------------------------
 ・検索モードの詳細部は、検索モードの真横に持ってきたい
