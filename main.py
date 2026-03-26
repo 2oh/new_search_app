@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.1)
+#  Excel–PDF結合アプリ (v0.9.2)
 # ======================================================
 
 import flet as ft
@@ -540,7 +540,33 @@ def main(page: ft.Page):
                                 display_value = str(v)
 
                         if c == "出力対象":
-                            cells.append(ft.DataCell(ft.Checkbox(value=bool(v))))
+                            cells.append(
+                                ft.DataCell(
+                                    ft.Checkbox(value=bool(v))
+                                )
+                            )
+
+                        elif c == "検索用文字列":
+                            cells.append(
+                                ft.DataCell(
+                                    ft.Container(
+                                        width=100,
+                                        padding=2,
+                                        bgcolor=ft.Colors.YELLOW_100,
+                                        border_radius=6,
+                                        content=ft.TextField(
+                                            value=display_value,
+                                            dense=True,
+                                            text_size=14,
+                                            color=ft.Colors.BLACK,
+                                            content_padding=ft.padding.symmetric(horizontal=8, vertical=6),
+                                            border=ft.InputBorder.NONE,
+                                            bgcolor=ft.Colors.TRANSPARENT,
+                                        )
+                                    )
+                                )
+                            )
+
                         else:
                             cells.append(ft.DataCell(ft.Text(display_value)))
 
