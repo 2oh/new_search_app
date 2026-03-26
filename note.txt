@@ -1410,6 +1410,18 @@ git commit -m "Separate original and editable search keywords in BOM mode(v0.9.1
 ２．検索用文字列はtextfieldにする
 
 テキストフィールドになったが、列によっては文字列がサイズ内に収まっていない
+・サイズとフィールドの色関係を調整した
+
+git commit -m "Make search keyword field editable in BOM results table(v0.9.2)"
+
+
+３．PDF用出力部分の整理
+
+・値取得の関数化
+・結果として、PDF用出力に編集した検索文字列も出力
+
+git commit -m "Read edited search keyword values from BOM results table(v0.9.3)"
+
 
 -----------------------------------------------------------------------------------
 ・検索モードの詳細部は、検索モードの真横に持ってきたい

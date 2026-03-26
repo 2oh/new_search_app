@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.2)
+#  Excel–PDF結合アプリ (v0.9.3)
 # ======================================================
 
 import flet as ft
@@ -585,15 +585,30 @@ def main(page: ft.Page):
                     c.content.value = value
         page.update()
 
+    def get_cell_value(control):
+        if isinstance(control, ft.Text):
+            return control.value
+        if isinstance(control, ft.TextField):
+            return control.value
+        if isinstance(control, ft.Checkbox):
+            return control.value
+        if isinstance(control, ft.Container):
+            return get_cell_value(control.content)
+        return None
+
+
     def on_pdf_export(e):
         selected_rows = []
         for r in table.rows:
             last_cell = r.cells[-1].content
             if isinstance(last_cell, ft.Checkbox) and last_cell.value:
-                row_values = [c.content.value if isinstance(c.content, ft.Text) else c.content.value for c in r.cells]
+                row_values = [get_cell_value(c.content) for c in r.cells]
                 selected_rows.append(row_values)
+
         print("出力対象行:", selected_rows)
-        page.snack_bar = ft.SnackBar(ft.Text(f"{len(selected_rows)} 件を出力対象として選択しました（ダミー出力）。"))
+        page.snack_bar = ft.SnackBar(
+            ft.Text(f"{len(selected_rows)} 件を出力対象として選択しました（ダミー出力）。")
+        )
         page.snack_bar.open = True
         page.update()
 
