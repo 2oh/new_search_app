@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ（v0.9.0）
+#  Excel–PDF結合アプリ (v0.9.1)
 # ======================================================
 
 import flet as ft
@@ -446,11 +446,14 @@ def main(page: ft.Page):
                     s = s[:idx_slash]
                 return s.strip()
 
-            # --- 品番 or PG名 のどちらか優先で生成（ラベル固定）
-            df["検索用文字列"] = df.apply(
+            # --- 品番 or PG名 のどちらか優先で生成（元値を保持）
+            df["元検索文字列"] = df.apply(
                 lambda row: create_search_keyword(row.get("品番")) or create_search_keyword(row.get("PG名")),
                 axis=1
             )
+
+            # --- 実際に検索に使う文字列（初期値は元検索文字列と同じ）
+            df["検索用文字列"] = df["元検索文字列"]
 
             qty_colors = []
             if "数量" in detected_columns:
