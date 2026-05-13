@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.3)
+#  Excel–PDF結合アプリ (v0.9.4)
 # ======================================================
 
 import flet as ft
@@ -212,6 +212,11 @@ def main(page: ft.Page):
 
     sheet_dropdown = None
 
+    # DataTable状態管理用
+    current_df = pd.DataFrame()
+    search_text_fields = {}
+    output_checkboxes = {}
+
     try:
         page.window_maximized = True
     except Exception:
@@ -323,8 +328,88 @@ def main(page: ft.Page):
     table = ft.DataTable(columns=[ft.DataColumn(ft.Text("項目"))], rows=[])
     table_header = ft.Row([], alignment="center")
 
+    def format_quantity_for_display(v) -> str:
+        if pd.isna(v):
+            return ""
+        s = str(v).strip()
+        if s == "" or s.lower() in ("nan", "none"):
+            return ""
+
+        # "1.0" のような整数の小数表現だけ "1" に戻す
+        try:
+            x = float(s.replace(",", ""))
+            if x.is_integer():
+                return str(int(x))
+        except ValueError:
+            pass
+
+        return s
+
+    def render_table_from_df(df: pd.DataFrame):
+        nonlocal current_df
+
+        current_df = df.copy()
+
+        search_text_fields.clear()
+        output_checkboxes.clear()
+
+        table.columns = [ft.DataColumn(ft.Text(c)) for c in df.columns]
+        table.rows = []
+
+        for idx, row in df.iterrows():
+            cells = []
+
+            for c, v in row.items():
+                if c == "数量":
+                    display_value = format_quantity_for_display(v)
+                else:
+                    if pd.isna(v) or str(v).strip().lower() in ("nan", "none"):
+                        display_value = ""
+                    else:
+                        display_value = str(v)
+
+                if c == "出力対象":
+                    checkbox = ft.Checkbox(value=bool(v))
+                    output_checkboxes[idx] = checkbox
+                    cells.append(ft.DataCell(checkbox))
+
+                elif c == "検索用文字列":
+                    text_field = ft.TextField(
+                        value=display_value,
+                        dense=True,
+                        text_size=14,
+                        color=ft.Colors.BLACK,
+                        content_padding=ft.padding.symmetric(horizontal=8, vertical=6),
+                        border=ft.InputBorder.NONE,
+                        bgcolor=ft.Colors.TRANSPARENT,
+                    )
+                    search_text_fields[idx] = text_field
+
+                    cells.append(
+                        ft.DataCell(
+                            ft.Container(
+                                width=100,
+                                padding=2,
+                                bgcolor=ft.Colors.YELLOW_100,
+                                border_radius=6,
+                                content=text_field,
+                            )
+                        )
+                    )
+
+                else:
+                    cells.append(ft.DataCell(ft.Text(display_value)))
+
+            table.rows.append(ft.DataRow(cells=cells))
+
     # 🔽 抽出結果エリアの初期化関数を追加 🔽
     def reset_extract_view():
+        nonlocal current_df
+
+        current_df = pd.DataFrame()
+        search_text_fields.clear()
+        output_checkboxes.clear()
+
         table.rows = []
         table.columns = [ft.DataColumn(ft.Text("項目"))]
         table_header.controls = []
@@ -506,71 +591,7 @@ def main(page: ft.Page):
                 export_btn = ft.ElevatedButton("PDF出力実行（プレースホルダ）", on_click=on_pdf_export)
                 table_header.controls = [select_all_btn, deselect_all_btn, export_btn]
 
-                table.columns = [ft.DataColumn(ft.Text(c)) for c in df.columns]
-                table.rows = []
-
-                def format_quantity_for_display(v) -> str:
-                    if pd.isna(v):
-                        return ""
-                    s = str(v).strip()
-                    if s == "" or s.lower() in ("nan", "none"):
-                        return ""
-
-                    # "1.0" のような「整数の小数表現」だけを "1" に戻す
-                    try:
-                        x = float(s.replace(",", ""))
-                        if x.is_integer():
-                            return str(int(x))
-                    except ValueError:
-                        pass
-
-                    # "各1", "2/3", "1.5" などはそのまま
-                    return s
-
-
-                for _, row in df.iterrows():
-                    cells = []
-                    for c, v in row.items():
-                        if c == "数量":
-                            display_value = format_quantity_for_display(v)
-                        else:
-                            if pd.isna(v) or str(v).strip().lower() in ("nan", "none"):
-                                display_value = ""
-                            else:
-                                display_value = str(v)
-
-                        if c == "出力対象":
-                            cells.append(
-                                ft.DataCell(
-                                    ft.Checkbox(value=bool(v))
-                                )
-                            )
-
-                        elif c == "検索用文字列":
-                            cells.append(
-                                ft.DataCell(
-                                    ft.Container(
-                                        width=100,
-                                        padding=2,
-                                        bgcolor=ft.Colors.YELLOW_100,
-                                        border_radius=6,
-                                        content=ft.TextField(
-                                            value=display_value,
-                                            dense=True,
-                                            text_size=14,
-                                            color=ft.Colors.BLACK,
-                                            content_padding=ft.padding.symmetric(horizontal=8, vertical=6),
-                                            border=ft.InputBorder.NONE,
-                                            bgcolor=ft.Colors.TRANSPARENT,
-                                        )
-                                    )
-                                )
-                            )
-
-                        else:
-                            cells.append(ft.DataCell(ft.Text(display_value)))
-
-                    table.rows.append(ft.DataRow(cells=cells))
+                render_table_from_df(df)
 
 
             page.update()
@@ -579,10 +600,8 @@ def main(page: ft.Page):
             page.update()
 
     def toggle_all(value: bool):
-        for r in table.rows:
-            for c in r.cells:
-                if isinstance(c.content, ft.Checkbox):
-                    c.content.value = value
+        for checkbox in output_checkboxes.values():
+            checkbox.value = value
         page.update()
 
     def get_cell_value(control):
@@ -599,6 +618,9 @@ def main(page: ft.Page):
 
     def on_pdf_export(e):
         selected_rows = []
+
+        print("[DEBUG] on_pdf_export called")
+
         for r in table.rows:
             last_cell = r.cells[-1].content
             if isinstance(last_cell, ft.Checkbox) and last_cell.value:
@@ -606,10 +628,15 @@ def main(page: ft.Page):
                 selected_rows.append(row_values)
 
         print("出力対象行:", selected_rows)
-        page.snack_bar = ft.SnackBar(
-            ft.Text(f"{len(selected_rows)} 件を出力対象として選択しました（ダミー出力）。")
+
+        message.value = f"{len(selected_rows)} 件を出力対象として選択しました（ダミー出力）。"
+
+        page.open(
+            ft.SnackBar(
+                ft.Text(f"{len(selected_rows)} 件を出力対象として選択しました（ダミー出力）。")
+            )
         )
-        page.snack_bar.open = True
+
         page.update()
 
     pick_excel_btn = ft.ElevatedButton("Excelを選択", on_click=pick_excel_click)
