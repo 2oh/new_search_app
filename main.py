@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.4)
+#  Excel–PDF結合アプリ (v0.9.5)
 # ======================================================
 
 import flet as ft
@@ -353,15 +353,21 @@ def main(page: ft.Page):
         search_text_fields.clear()
         output_checkboxes.clear()
 
-        table.columns = [ft.DataColumn(ft.Text(c)) for c in df.columns]
+        hidden_columns = {"候補PDFパス一覧"}
+        display_columns = [c for c in df.columns if c not in hidden_columns]
+
+        table.columns = [ft.DataColumn(ft.Text(c)) for c in display_columns]
         table.rows = []
 
         for idx, row in df.iterrows():
             cells = []
 
-            for c, v in row.items():
+            for c in display_columns:
+                v = row.get(c, "")
                 if c == "数量":
                     display_value = format_quantity_for_display(v)
+                elif c == "先頭候補PDF":
+                    display_value = os.path.basename(str(v)) if str(v).strip() else ""
                 else:
                     if pd.isna(v) or str(v).strip().lower() in ("nan", "none"):
                         display_value = ""
@@ -579,6 +585,11 @@ def main(page: ft.Page):
 
             df["出力対象"] = df.apply(decide_output_target, axis=1)
 
+            # PDF候補情報の初期列
+            df["候補PDF数"] = 0
+            df["先頭候補PDF"] = ""
+            df["候補PDFパス一覧"] = [[] for _ in range(len(df))]
+
             if df.empty:
                 message.value = "抽出結果がありません。"
                 table.rows = []
@@ -621,13 +632,11 @@ def main(page: ft.Page):
 
         print("[DEBUG] on_pdf_export called")
 
-        for r in table.rows:
-            last_cell = r.cells[-1].content
-            if isinstance(last_cell, ft.Checkbox) and last_cell.value:
-                row_values = [get_cell_value(c.content) for c in r.cells]
-                selected_rows.append(row_values)
+        for idx, checkbox in output_checkboxes.items():
+            if checkbox.value:
+                selected_rows.append(idx)
 
-        print("出力対象行:", selected_rows)
+        print("出力対象行index:", selected_rows)
 
         message.value = f"{len(selected_rows)} 件を出力対象として選択しました（ダミー出力）。"
 
