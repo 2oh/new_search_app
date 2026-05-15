@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.5)
+#  Excel–PDF結合アプリ (v0.9.6)
 # ======================================================
 
 import flet as ft
@@ -7,6 +7,7 @@ import pandas as pd
 import os
 import json
 import re
+from pathlib import Path
 from openpyxl import load_workbook
 
 CONFIG_FILE = "config.json"
@@ -24,6 +25,42 @@ def normalize(text: str) -> str:
     s = re.sub(r"[／/⁄・\.\s　\-＿_]", "", s)
     return s
 
+def normalize_filename_match(text: str) -> str:
+    """PDFファイル名検索用の軽い正規化"""
+    if text is None:
+        return ""
+
+    s = str(text).strip().lower()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
+def collect_pdf_files(root_folder: str) -> list[Path]:
+    """指定フォルダ配下のPDFを再帰的に集める"""
+    if not root_folder or not os.path.isdir(root_folder):
+        return []
+
+    root = Path(root_folder)
+    return [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
+
+
+def find_pdf_candidates_by_filename(search_text: str, pdf_files: list[Path]) -> list[str]:
+    """検索文字列を使ってPDFファイル名を部分一致検索する"""
+    needle = normalize_filename_match(search_text)
+
+    if not needle:
+        return []
+
+    hits = []
+
+    for pdf_path in pdf_files:
+        stem_norm = normalize_filename_match(pdf_path.stem)
+        name_norm = normalize_filename_match(pdf_path.name)
+
+        if needle in stem_norm or needle in name_norm:
+            hits.append(str(pdf_path))
+
+    return hits
 
 # ========= Excel列検出 =========
 def detect_columns(file_path: str, sheet_name: str, header_row_index: int, target_columns=None):
@@ -599,7 +636,8 @@ def main(page: ft.Page):
 
                 select_all_btn = ft.ElevatedButton("全選択", on_click=lambda e: toggle_all(True))
                 deselect_all_btn = ft.ElevatedButton("全解除", on_click=lambda e: toggle_all(False))
-                export_btn = ft.ElevatedButton("PDF出力実行（プレースホルダ）", on_click=on_pdf_export)
+                # export_btn = ft.ElevatedButton("PDF出力実行（プレースホルダ）", on_click=on_pdf_export)
+                export_btn = ft.ElevatedButton("PDF候補抽出", on_click=on_pdf_export)
                 table_header.controls = [select_all_btn, deselect_all_btn, export_btn]
 
                 render_table_from_df(df)
@@ -628,21 +666,69 @@ def main(page: ft.Page):
 
 
     def on_pdf_export(e):
-        selected_rows = []
+        nonlocal current_df
 
-        print("[DEBUG] on_pdf_export called")
+        if current_df is None or current_df.empty:
+            message.value = "抽出結果がありません。"
+            page.open(ft.SnackBar(ft.Text("抽出結果がありません。")))
+            page.update()
+            return
+
+        pdf_root = search_folder_field.value.strip()
+
+        if not pdf_root or not os.path.isdir(pdf_root):
+            message.value = "検索先フォルダが正しくありません。"
+            page.open(ft.SnackBar(ft.Text("検索先フォルダが正しくありません。")))
+            page.update()
+            return
+
+        # DataTable上の最新の検索用文字列・出力対象チェックを current_df に反映
+        for idx, text_field in search_text_fields.items():
+            if idx in current_df.index:
+                current_df.at[idx, "検索用文字列"] = (text_field.value or "").strip()
 
         for idx, checkbox in output_checkboxes.items():
-            if checkbox.value:
-                selected_rows.append(idx)
+            if idx in current_df.index:
+                current_df.at[idx, "出力対象"] = bool(checkbox.value)
 
-        print("出力対象行index:", selected_rows)
+        pdf_files = collect_pdf_files(pdf_root)
 
-        message.value = f"{len(selected_rows)} 件を出力対象として選択しました（ダミー出力）。"
+        if not pdf_files:
+            message.value = "検索先フォルダ配下にPDFが見つかりませんでした。"
+            page.open(ft.SnackBar(ft.Text("検索先フォルダ配下にPDFが見つかりませんでした。")))
+            page.update()
+            return
+
+        # 各行ごとにPDF候補を抽出
+        for idx, row in current_df.iterrows():
+            search_text = row.get("検索用文字列", "")
+            candidates = find_pdf_candidates_by_filename(search_text, pdf_files)
+
+            current_df.at[idx, "候補PDF数"] = len(candidates)
+            current_df.at[idx, "先頭候補PDF"] = candidates[0] if candidates else ""
+            current_df.at[idx, "候補PDFパス一覧"] = candidates
+
+        # 更新後のDataFrameで表を再描画
+        render_table_from_df(current_df)
+
+        matched_count = int((current_df["候補PDF数"].fillna(0) > 0).sum())
+        selected_count = int(current_df["出力対象"].fillna(False).sum())
+
+        print("===== PDF候補抽出結果 =====")
+        for idx, row in current_df.iterrows():
+            print(
+                f"[{idx}] "
+                f"出力対象={row.get('出力対象', False)}, "
+                f"検索用文字列={row.get('検索用文字列', '')!r}, "
+                f"候補PDF数={row.get('候補PDF数', 0)}, "
+                f"先頭候補PDF={row.get('先頭候補PDF', '')!r}"
+            )
+
+        message.value = f"PDF候補抽出完了: 一致あり {matched_count}件 / 出力対象 {selected_count}件"
 
         page.open(
             ft.SnackBar(
-                ft.Text(f"{len(selected_rows)} 件を出力対象として選択しました（ダミー出力）。")
+                ft.Text(f"PDF候補抽出完了: 一致あり {matched_count}件 / 出力対象 {selected_count}件")
             )
         )
 

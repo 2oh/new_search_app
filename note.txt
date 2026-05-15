@@ -1442,6 +1442,7 @@ git commit -m "Read edited search keyword values from BOM results table(v0.9.3)"
 
 2026/5/12
 
+ここからやることを改めて確認
 以下の３コミットに分ける
 
 1. 表の状態をちゃんと保持できるようにする
@@ -1535,6 +1536,28 @@ on_extract_click() でそれらを初期化
 
 
 git commit -m "Add PDF candidate columns to extracted results(v0.9.5)"
+
+
+2026/5/15
+
+3. 編集後の検索用文字列で PDF候補抽出を実装する
+
+ここで初めて本体です。
+
+このコミットに入れるもの:
+
+collect_pdf_files()
+find_pdf_candidates_by_filename()
+on_pdf_export() の実装変更
+Table上の最新 検索用文字列 を同期
+各行ごとの PDF ファイル名部分一致検索
+候補数・先頭候補の反映
+
+ここは責務が明確で、
+「検索機能を追加したコミット」 として非常に見やすいです。
+
+
+
 
 -----------------------------------------------------------------------------------
 ・検索モードの詳細部は、検索モードの真横に持ってきたい
