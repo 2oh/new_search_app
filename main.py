@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.6)
+#  Excel–PDF結合アプリ (v0.9.7)
 # ======================================================
 
 import flet as ft
@@ -403,7 +403,7 @@ def main(page: ft.Page):
                 v = row.get(c, "")
                 if c == "数量":
                     display_value = format_quantity_for_display(v)
-                elif c == "先頭候補PDF":
+                elif c in ("先頭候補PDF", "採用PDFパス"):
                     display_value = os.path.basename(str(v)) if str(v).strip() else ""
                 else:
                     if pd.isna(v) or str(v).strip().lower() in ("nan", "none"):
@@ -626,6 +626,7 @@ def main(page: ft.Page):
             df["候補PDF数"] = 0
             df["先頭候補PDF"] = ""
             df["候補PDFパス一覧"] = [[] for _ in range(len(df))]
+            df["採用PDFパス"] = ""
 
             if df.empty:
                 message.value = "抽出結果がありません。"
@@ -708,11 +709,18 @@ def main(page: ft.Page):
             current_df.at[idx, "先頭候補PDF"] = candidates[0] if candidates else ""
             current_df.at[idx, "候補PDFパス一覧"] = candidates
 
+            # 候補が1件だけなら自動採用。0件・複数件は未確定扱い。
+            if len(candidates) == 1:
+                current_df.at[idx, "採用PDFパス"] = candidates[0]
+            else:
+                current_df.at[idx, "採用PDFパス"] = ""
+
         # 更新後のDataFrameで表を再描画
         render_table_from_df(current_df)
 
         matched_count = int((current_df["候補PDF数"].fillna(0) > 0).sum())
         selected_count = int(current_df["出力対象"].fillna(False).sum())
+        adopted_count = int(current_df["採用PDFパス"].fillna("").astype(str).str.strip().ne("").sum())
 
         print("===== PDF候補抽出結果 =====")
         for idx, row in current_df.iterrows():
@@ -721,14 +729,22 @@ def main(page: ft.Page):
                 f"出力対象={row.get('出力対象', False)}, "
                 f"検索用文字列={row.get('検索用文字列', '')!r}, "
                 f"候補PDF数={row.get('候補PDF数', 0)}, "
-                f"先頭候補PDF={row.get('先頭候補PDF', '')!r}"
+                f"先頭候補PDF={row.get('先頭候補PDF', '')!r}, "
+                f"採用PDFパス={row.get('採用PDFパス', '')!r}"
             )
 
-        message.value = f"PDF候補抽出完了: 一致あり {matched_count}件 / 出力対象 {selected_count}件"
+        result_message = (
+            f"PDF候補抽出完了: "
+            f"一致あり {matched_count}件 / "
+            f"採用 {adopted_count}件 / "
+            f"出力対象 {selected_count}件"
+        )
+
+        message.value = result_message
 
         page.open(
             ft.SnackBar(
-                ft.Text(f"PDF候補抽出完了: 一致あり {matched_count}件 / 出力対象 {selected_count}件")
+                ft.Text(result_message)
             )
         )
 
