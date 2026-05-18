@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.7)
+#  Excel–PDF結合アプリ (v0.9.8)
 # ======================================================
 
 import flet as ft
@@ -665,6 +665,24 @@ def main(page: ft.Page):
             return get_cell_value(control.content)
         return None
 
+    def get_export_ready_df(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        実際にPDF出力に回せる行だけを抽出する。
+
+        条件:
+        - 出力対象 が True
+        - 採用PDFパス が空でない
+        """
+        if df is None or df.empty:
+            return pd.DataFrame()
+
+        if "出力対象" not in df.columns or "採用PDFパス" not in df.columns:
+            return pd.DataFrame()
+
+        output_target = df["出力対象"].fillna(False).astype(bool)
+        adopted_pdf_exists = df["採用PDFパス"].fillna("").astype(str).str.strip().ne("")
+
+        return df[output_target & adopted_pdf_exists].copy()
 
     def on_pdf_export(e):
         nonlocal current_df
@@ -722,6 +740,9 @@ def main(page: ft.Page):
         selected_count = int(current_df["出力対象"].fillna(False).sum())
         adopted_count = int(current_df["採用PDFパス"].fillna("").astype(str).str.strip().ne("").sum())
 
+        export_ready_df = get_export_ready_df(current_df)
+        export_ready_count = len(export_ready_df)
+
         print("===== PDF候補抽出結果 =====")
         for idx, row in current_df.iterrows():
             print(
@@ -733,11 +754,23 @@ def main(page: ft.Page):
                 f"採用PDFパス={row.get('採用PDFパス', '')!r}"
             )
 
+        print("===== 出力可能行 =====")
+        if export_ready_df.empty:
+            print("出力可能な行はありません。")
+        else:
+            for idx, row in export_ready_df.iterrows():
+                print(
+                    f"[{idx}] "
+                    f"検索用文字列={row.get('検索用文字列', '')!r}, "
+                    f"採用PDFパス={row.get('採用PDFパス', '')!r}"
+                )
+
         result_message = (
             f"PDF候補抽出完了: "
             f"一致あり {matched_count}件 / "
             f"採用 {adopted_count}件 / "
-            f"出力対象 {selected_count}件"
+            f"出力対象 {selected_count}件 / "
+            f"出力可能 {export_ready_count}件"
         )
 
         message.value = result_message

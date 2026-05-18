@@ -1495,6 +1495,9 @@ Table上の最新 検索用文字列 を同期
 
 2026/5/13
 
+Commit 1: 表の状態管理を整理
+
+
 1. 表の状態をちゃんと保持できるようにする
 
 目的は、DataTable上で編集した値やチェック状態を、後で確実に読めるようにすることです。
@@ -1519,6 +1522,9 @@ git commit -m "Refactor DataTable state management(v0.9.4)"
 
 2026/5/14
 
+Commit 2: PDF候補列を追加
+
+
 2. 抽出結果に PDF候補列の入れ物を追加する
 
 目的は、後でPDF検索結果を載せるための器を先に作ることです。
@@ -1540,6 +1546,9 @@ git commit -m "Add PDF candidate columns to extracted results(v0.9.5)"
 
 2026/5/15
 
+Commit 3: ファイル名部分一致検索
+
+
 3. 編集後の検索用文字列で PDF候補抽出を実装する
 
 ここで初めて本体です。
@@ -1560,12 +1569,56 @@ Table上の最新 検索用文字列 を同期
 git commit -m "Implement filename-based PDF candidate search(v0.9.6)" 
 
 
+2026/5/17
+
+Commit 4: 採用PDFパスを追加
+
+git commit -m "Add selected PDF path for candidate resolution(V0.9.7)"
+
+
+
+2026/5/1@
+
+Commit 5: Add export-ready filtering
+出力可能なPDF行を抽出する処理を追加
+
+
+git commit -m "Add export-ready filtering(V0.9.8)"
+
+
+
+
+
+
+
+
+
+
+
+
+Commit 6: Add PDF merge utility
+Commit 7: Implement PDF export from adopted PDFs
+Commit 8: Improve export validation and messages
+Commit 9: Handle multiple PDF candidates
+Commit 10: Add manual selection for PDF candidates
+
+
+
+
+-----------------------------------------
+・入力フィールドの色を少し優しめに
+・ウインドウを最大で表示
+・設定と構成部品選択欄をなるべく小さくして固定フィールドとし、表示フィールドを広くとる
+・表示フィールドのみスクロールするように
+・○△情報を表示するようにする
+・文字を選択可能とする
 
 
 -----------------------------------------------------------------------------------
 ・検索モードの詳細部は、検索モードの真横に持ってきたい
 ・設定を保存ボタンは右端に持ってきたい（以前のように検索モード列と同じではなく、今の行で）
 ・通常検索について、（現システムと違い）拡張子を検索文字列にふくまないようにしたい
+・通常検索について、現在の結果を保持し、次の検索結果が追加される仕組みが欲しい。
 ・excel検索モードは、構成部品表選択、としたい
 ・「通常モードではexcel抽出は無効です」は、構成部品表選択の中に表示したい	
 
