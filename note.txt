@@ -1582,21 +1582,24 @@ git commit -m "Add selected PDF path for candidate resolution(V0.9.7)"
 Commit 5: Add export-ready filtering
 出力可能なPDF行を抽出する処理を追加
 
-
 git commit -m "Add export-ready filtering(V0.9.8)"
 
 
-
-
-
-
-
-
-
-
-
-
 Commit 6: Add PDF merge utility
+PDF結合用のユーティリティ関数を追加
+
+
+
+
+
+
+
+
+
+
+
+
+
 Commit 7: Implement PDF export from adopted PDFs
 Commit 8: Improve export validation and messages
 Commit 9: Handle multiple PDF candidates

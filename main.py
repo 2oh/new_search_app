@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.8)
+#  Excel–PDF結合アプリ (v0.9.9)
 # ======================================================
 
 import flet as ft
@@ -61,6 +61,74 @@ def find_pdf_candidates_by_filename(search_text: str, pdf_files: list[Path]) -> 
             hits.append(str(pdf_path))
 
     return hits
+
+def merge_pdfs(pdf_paths: list[str], output_path: str) -> str:
+    """
+    複数のPDFを1つに結合して保存する。
+
+    Parameters
+    ----------
+    pdf_paths:
+        結合するPDFファイルのパス一覧。
+        この順番で結合される。
+
+    output_path:
+        出力PDFの保存先パス。
+
+    Returns
+    -------
+    str
+        作成されたPDFファイルのパス。
+
+    Raises
+    ------
+    ValueError:
+        pdf_paths が空、または output_path が空の場合。
+
+    FileNotFoundError:
+        入力PDFが存在しない場合。
+    """
+    if not pdf_paths:
+        raise ValueError("結合対象のPDFがありません。")
+
+    if not output_path or not str(output_path).strip():
+        raise ValueError("出力先PDFパスが指定されていません。")
+
+    # pypdf が未インストールの場合でも、アプリ起動時には落ちないように関数内でimportする
+    try:
+        from pypdf import PdfReader, PdfWriter
+    except ImportError as ex:
+        raise ImportError(
+            "pypdf がインストールされていません。'pip install pypdf' を実行してください。"
+        ) from ex
+
+    writer = PdfWriter()
+
+    for pdf_path in pdf_paths:
+        path = Path(pdf_path)
+
+        if not path.is_file():
+            raise FileNotFoundError(f"PDFファイルが見つかりません: {pdf_path}")
+
+        reader = PdfReader(str(path))
+
+        # パスワードなしで開ける暗号化PDFなら試す
+        if reader.is_encrypted:
+            try:
+                reader.decrypt("")
+            except Exception:
+                raise ValueError(f"暗号化されたPDFを開けません: {pdf_path}")
+
+        for page in reader.pages:
+            writer.add_page(page)
+
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output, "wb") as f:
+        writer.write(f)
+
+    return str(output)
 
 # ========= Excel列検出 =========
 def detect_columns(file_path: str, sheet_name: str, header_row_index: int, target_columns=None):
