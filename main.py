@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.9)
+#  Excel–PDF結合アプリ (v0.9.10)
 # ======================================================
 
 import flet as ft
@@ -706,7 +706,8 @@ def main(page: ft.Page):
                 select_all_btn = ft.ElevatedButton("全選択", on_click=lambda e: toggle_all(True))
                 deselect_all_btn = ft.ElevatedButton("全解除", on_click=lambda e: toggle_all(False))
                 # export_btn = ft.ElevatedButton("PDF出力実行（プレースホルダ）", on_click=on_pdf_export)
-                export_btn = ft.ElevatedButton("PDF候補抽出", on_click=on_pdf_export)
+                # export_btn = ft.ElevatedButton("PDF候補抽出", on_click=on_pdf_export)
+                export_btn = ft.ElevatedButton("PDF候補抽出・出力", on_click=on_pdf_export)
                 table_header.controls = [select_all_btn, deselect_all_btn, export_btn]
 
                 render_table_from_df(df)
@@ -751,6 +752,35 @@ def main(page: ft.Page):
         adopted_pdf_exists = df["採用PDFパス"].fillna("").astype(str).str.strip().ne("")
 
         return df[output_target & adopted_pdf_exists].copy()
+
+    def build_output_pdf_path(output_folder: str) -> str:
+        """
+        出力先フォルダから、結合PDFの保存パスを作る。
+        同名ファイルがある場合は _001, _002... を付ける。
+        """
+        if not output_folder or not output_folder.strip():
+            raise ValueError("出力先フォルダが指定されていません。")
+
+        output_dir = Path(output_folder)
+
+        if not output_dir.exists():
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+        if not output_dir.is_dir():
+            raise ValueError("出力先フォルダが正しくありません。")
+
+        base_name = "merged_output"
+        candidate = output_dir / f"{base_name}.pdf"
+
+        if not candidate.exists():
+            return str(candidate)
+
+        for i in range(1, 1000):
+            candidate = output_dir / f"{base_name}_{i:03d}.pdf"
+            if not candidate.exists():
+                return str(candidate)
+
+        raise ValueError("出力ファイル名を作成できませんでした。")
 
     def on_pdf_export(e):
         nonlocal current_df
@@ -811,6 +841,31 @@ def main(page: ft.Page):
         export_ready_df = get_export_ready_df(current_df)
         export_ready_count = len(export_ready_df)
 
+        output_pdf_path = ""
+
+        if export_ready_df.empty:
+            output_result_message = "出力可能なPDFがありません。"
+        else:
+            try:
+                output_pdf_path = build_output_pdf_path(output_folder_field.value.strip())
+
+                pdf_paths = (
+                    export_ready_df["採用PDFパス"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                    .tolist()
+                )
+
+                pdf_paths = [p for p in pdf_paths if p]
+
+                merge_pdfs(pdf_paths, output_pdf_path)
+
+                output_result_message = f"PDFを出力しました: {os.path.basename(output_pdf_path)}"
+
+            except Exception as ex:
+                output_result_message = f"PDF出力エラー: {ex}"
+
         print("===== PDF候補抽出結果 =====")
         for idx, row in current_df.iterrows():
             print(
@@ -833,12 +888,16 @@ def main(page: ft.Page):
                     f"採用PDFパス={row.get('採用PDFパス', '')!r}"
                 )
 
+        if output_pdf_path:
+            print(f"出力PDF: {output_pdf_path}")
+
         result_message = (
             f"PDF候補抽出完了: "
             f"一致あり {matched_count}件 / "
             f"採用 {adopted_count}件 / "
             f"出力対象 {selected_count}件 / "
-            f"出力可能 {export_ready_count}件"
+            f"出力可能 {export_ready_count}件\n"
+            f"{output_result_message}"
         )
 
         message.value = result_message

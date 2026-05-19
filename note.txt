@@ -1577,7 +1577,7 @@ git commit -m "Add selected PDF path for candidate resolution(V0.9.7)"
 
 
 
-2026/5/1@
+2026/5/18
 
 Commit 5: Add export-ready filtering
 出力可能なPDF行を抽出する処理を追加
@@ -1588,19 +1588,22 @@ git commit -m "Add export-ready filtering(V0.9.8)"
 Commit 6: Add PDF merge utility
 PDF結合用のユーティリティ関数を追加
 
+git commit -m "Add PDF merge utility(v0.9.9)"
 
 
 
 
 
-
-
-
-
-
-
+2026/5/19
 
 Commit 7: Implement PDF export from adopted PDFs
+採用PDFパスを使って結合PDFを出力
+
+git commit -m "Implement PDF export from adopted PDFs(v0.9.10)"
+
+
+
+
 Commit 8: Improve export validation and messages
 Commit 9: Handle multiple PDF candidates
 Commit 10: Add manual selection for PDF candidates
@@ -1615,7 +1618,12 @@ Commit 10: Add manual selection for PDF candidates
 ・表示フィールドのみスクロールするように
 ・○△情報を表示するようにする
 ・文字を選択可能とする
+・PDF候補抽出とPDF出力実行でボタンを分ける
 
+・候補は縦に表示して、それぞれチェックボックスを設け、初期値で一番上にチェックが入って入ればいいかも
+・つまり、現状で言うと、出力対象より右側が複数行表示可能とする必要
+・その方がパスを表示するスペースが取れそう。
+・以前、タブと言ったが、大変そうなら上記な感じで、マウスオーバーでプレビューでもいいかも
 
 -----------------------------------------------------------------------------------
 ・検索モードの詳細部は、検索モードの真横に持ってきたい
