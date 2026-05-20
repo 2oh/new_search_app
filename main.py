@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.10)
+#  Excel–PDF結合アプリ (v0.9.11)
 # ======================================================
 
 import flet as ft
@@ -705,10 +705,15 @@ def main(page: ft.Page):
 
                 select_all_btn = ft.ElevatedButton("全選択", on_click=lambda e: toggle_all(True))
                 deselect_all_btn = ft.ElevatedButton("全解除", on_click=lambda e: toggle_all(False))
-                # export_btn = ft.ElevatedButton("PDF出力実行（プレースホルダ）", on_click=on_pdf_export)
-                # export_btn = ft.ElevatedButton("PDF候補抽出", on_click=on_pdf_export)
-                export_btn = ft.ElevatedButton("PDF候補抽出・出力", on_click=on_pdf_export)
-                table_header.controls = [select_all_btn, deselect_all_btn, export_btn]
+                search_pdf_btn = ft.ElevatedButton("PDF候補抽出", on_click=on_pdf_candidate_search)
+                export_pdf_btn = ft.ElevatedButton("PDF出力実行", on_click=on_pdf_export)
+
+                table_header.controls = [
+                    select_all_btn,
+                    deselect_all_btn,
+                    search_pdf_btn,
+                    export_pdf_btn,
+                ]
 
                 render_table_from_df(df)
 
@@ -782,7 +787,24 @@ def main(page: ft.Page):
 
         raise ValueError("出力ファイル名を作成できませんでした。")
 
-    def on_pdf_export(e):
+    def sync_table_state_to_current_df():
+        """
+        DataTable上の最新の検索用文字列・出力対象チェックを current_df に反映する。
+        """
+        nonlocal current_df
+
+        if current_df is None or current_df.empty:
+            return
+
+        for idx, text_field in search_text_fields.items():
+            if idx in current_df.index:
+                current_df.at[idx, "検索用文字列"] = (text_field.value or "").strip()
+
+        for idx, checkbox in output_checkboxes.items():
+            if idx in current_df.index:
+                current_df.at[idx, "出力対象"] = bool(checkbox.value)
+
+    def on_pdf_candidate_search(e):
         nonlocal current_df
 
         if current_df is None or current_df.empty:
@@ -799,14 +821,7 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # DataTable上の最新の検索用文字列・出力対象チェックを current_df に反映
-        for idx, text_field in search_text_fields.items():
-            if idx in current_df.index:
-                current_df.at[idx, "検索用文字列"] = (text_field.value or "").strip()
-
-        for idx, checkbox in output_checkboxes.items():
-            if idx in current_df.index:
-                current_df.at[idx, "出力対象"] = bool(checkbox.value)
+        sync_table_state_to_current_df()
 
         pdf_files = collect_pdf_files(pdf_root)
 
@@ -831,40 +846,21 @@ def main(page: ft.Page):
             else:
                 current_df.at[idx, "採用PDFパス"] = ""
 
-        # 更新後のDataFrameで表を再描画
         render_table_from_df(current_df)
 
         matched_count = int((current_df["候補PDF数"].fillna(0) > 0).sum())
         selected_count = int(current_df["出力対象"].fillna(False).sum())
-        adopted_count = int(current_df["採用PDFパス"].fillna("").astype(str).str.strip().ne("").sum())
+        adopted_count = int(
+            current_df["採用PDFパス"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .ne("")
+            .sum()
+        )
 
         export_ready_df = get_export_ready_df(current_df)
         export_ready_count = len(export_ready_df)
-
-        output_pdf_path = ""
-
-        if export_ready_df.empty:
-            output_result_message = "出力可能なPDFがありません。"
-        else:
-            try:
-                output_pdf_path = build_output_pdf_path(output_folder_field.value.strip())
-
-                pdf_paths = (
-                    export_ready_df["採用PDFパス"]
-                    .fillna("")
-                    .astype(str)
-                    .str.strip()
-                    .tolist()
-                )
-
-                pdf_paths = [p for p in pdf_paths if p]
-
-                merge_pdfs(pdf_paths, output_pdf_path)
-
-                output_result_message = f"PDFを出力しました: {os.path.basename(output_pdf_path)}"
-
-            except Exception as ex:
-                output_result_message = f"PDF出力エラー: {ex}"
 
         print("===== PDF候補抽出結果 =====")
         for idx, row in current_df.iterrows():
@@ -888,17 +884,76 @@ def main(page: ft.Page):
                     f"採用PDFパス={row.get('採用PDFパス', '')!r}"
                 )
 
-        if output_pdf_path:
-            print(f"出力PDF: {output_pdf_path}")
-
         result_message = (
             f"PDF候補抽出完了: "
             f"一致あり {matched_count}件 / "
             f"採用 {adopted_count}件 / "
             f"出力対象 {selected_count}件 / "
-            f"出力可能 {export_ready_count}件\n"
-            f"{output_result_message}"
+            f"出力可能 {export_ready_count}件"
         )
+
+        message.value = result_message
+
+        page.open(
+            ft.SnackBar(
+                ft.Text(result_message)
+            )
+        )
+
+        page.update()
+
+    def on_pdf_export(e):
+        nonlocal current_df
+
+        if current_df is None or current_df.empty:
+            message.value = "抽出結果がありません。"
+            page.open(ft.SnackBar(ft.Text("抽出結果がありません。")))
+            page.update()
+            return
+
+        sync_table_state_to_current_df()
+
+        export_ready_df = get_export_ready_df(current_df)
+        export_ready_count = len(export_ready_df)
+
+        if export_ready_df.empty:
+            message.value = "出力可能なPDFがありません。先にPDF候補抽出を実行してください。"
+            page.open(
+                ft.SnackBar(
+                    ft.Text("出力可能なPDFがありません。先にPDF候補抽出を実行してください。")
+                )
+            )
+            page.update()
+            return
+
+        try:
+            output_pdf_path = build_output_pdf_path(output_folder_field.value.strip())
+
+            pdf_paths = (
+                export_ready_df["採用PDFパス"]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .tolist()
+            )
+
+            pdf_paths = [p for p in pdf_paths if p]
+
+            merge_pdfs(pdf_paths, output_pdf_path)
+
+            result_message = (
+                f"PDFを出力しました: {os.path.basename(output_pdf_path)} "
+                f"（出力PDF数: {export_ready_count}件）"
+            )
+
+            print("===== PDF出力 =====")
+            print(f"出力PDF: {output_pdf_path}")
+            print("===== 結合対象PDF =====")
+            for p in pdf_paths:
+                print(p)
+
+        except Exception as ex:
+            result_message = f"PDF出力エラー: {ex}"
 
         message.value = result_message
 
