@@ -1607,12 +1607,30 @@ git commit -m "Implement PDF export from adopted PDFs(v0.9.10)"
 Separate PDF candidate search and export actions
 PDF候補抽出とPDF出力実行を別ボタンに分離
 
-
-v0.9.11
-
+git commit -m "Separate PDF candidate search and export actions(v0.9.11)"
 
 
-Commit 8: Improve export validation and messages
+Improve export validation and messages
+PDF出力前チェックとメッセージ表示を改善
+1. 出力先フォルダが指定されているか
+2. 出力対象なのに採用PDFパスがない行があるか
+3. 出力成功・失敗メッセージが分かりやすいか
+
+
+
+
+git commit -m "Improve export validation and messages(v0.9.12)"
+
+
+毎回、on_pdf_export() の全体イメージを出してもらえること
+あと、日本語でのコミットメッセージの意味も出してもらえることが
+とても助かります！
+
+
+
+
+
+
 Commit 9: Handle multiple PDF candidates
 Commit 10: Add manual selection for PDF candidates
 

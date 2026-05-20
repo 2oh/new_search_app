@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.11)
+#  Excel–PDF結合アプリ (v0.9.12)
 # ======================================================
 
 import flet as ft
@@ -758,6 +758,21 @@ def main(page: ft.Page):
 
         return df[output_target & adopted_pdf_exists].copy()
 
+    def get_output_target_without_adopted_pdf_df(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        出力対象にチェックが入っているが、採用PDFパスが空の行を抽出する。
+        """
+        if df is None or df.empty:
+            return pd.DataFrame()
+
+        if "出力対象" not in df.columns or "採用PDFパス" not in df.columns:
+            return pd.DataFrame()
+
+        output_target = df["出力対象"].fillna(False).astype(bool)
+        adopted_pdf_missing = df["採用PDFパス"].fillna("").astype(str).str.strip().eq("")
+
+        return df[output_target & adopted_pdf_missing].copy()
+
     def build_output_pdf_path(output_folder: str) -> str:
         """
         出力先フォルダから、結合PDFの保存パスを作る。
@@ -913,21 +928,46 @@ def main(page: ft.Page):
 
         sync_table_state_to_current_df()
 
+        output_folder = output_folder_field.value.strip()
+
+        if not output_folder:
+            message.value = "出力先フォルダを指定してください。"
+            page.open(ft.SnackBar(ft.Text("出力先フォルダを指定してください。")))
+            page.update()
+            return
+
+        if os.path.exists(output_folder) and not os.path.isdir(output_folder):
+            message.value = "出力先フォルダが正しくありません。"
+            page.open(ft.SnackBar(ft.Text("出力先フォルダが正しくありません。")))
+            page.update()
+            return
+
         export_ready_df = get_export_ready_df(current_df)
         export_ready_count = len(export_ready_df)
 
+        missing_pdf_df = get_output_target_without_adopted_pdf_df(current_df)
+        missing_pdf_count = len(missing_pdf_df)
+
         if export_ready_df.empty:
-            message.value = "出力可能なPDFがありません。先にPDF候補抽出を実行してください。"
-            page.open(
-                ft.SnackBar(
-                    ft.Text("出力可能なPDFがありません。先にPDF候補抽出を実行してください。")
+            if missing_pdf_count > 0:
+                result_message = (
+                    "出力可能なPDFがありません。"
+                    f"出力対象のうち {missing_pdf_count} 件は採用PDFが未確定です。"
+                    "PDF候補抽出を実行するか、検索用文字列を見直してください。"
                 )
-            )
+            else:
+                result_message = (
+                    "出力可能なPDFがありません。"
+                    "出力対象にチェックが入っている行、または採用PDFパスを確認してください。"
+                )
+
+            message.value = result_message
+            page.open(ft.SnackBar(ft.Text(result_message)))
             page.update()
             return
 
         try:
-            output_pdf_path = build_output_pdf_path(output_folder_field.value.strip())
+            output_pdf_path = build_output_pdf_path(output_folder)
 
             pdf_paths = (
                 export_ready_df["採用PDFパス"]
@@ -943,14 +983,27 @@ def main(page: ft.Page):
 
             result_message = (
                 f"PDFを出力しました: {os.path.basename(output_pdf_path)} "
-                f"（出力PDF数: {export_ready_count}件）"
+                f"（結合対象: {export_ready_count}件）"
             )
+
+            if missing_pdf_count > 0:
+                result_message += f"\n注意: 出力対象のうち {missing_pdf_count} 件は採用PDFが未確定のため除外しました。"
 
             print("===== PDF出力 =====")
             print(f"出力PDF: {output_pdf_path}")
             print("===== 結合対象PDF =====")
             for p in pdf_paths:
                 print(p)
+
+            if missing_pdf_count > 0:
+                print("===== 出力対象だが採用PDF未確定の行 =====")
+                for idx, row in missing_pdf_df.iterrows():
+                    print(
+                        f"[{idx}] "
+                        f"検索用文字列={row.get('検索用文字列', '')!r}, "
+                        f"候補PDF数={row.get('候補PDF数', 0)}, "
+                        f"先頭候補PDF={row.get('先頭候補PDF', '')!r}"
+                    )
 
         except Exception as ex:
             result_message = f"PDF出力エラー: {ex}"
