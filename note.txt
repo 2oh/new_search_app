@@ -1616,9 +1616,6 @@ PDF出力前チェックとメッセージ表示を改善
 2. 出力対象なのに採用PDFパスがない行があるか
 3. 出力成功・失敗メッセージが分かりやすいか
 
-
-
-
 git commit -m "Improve export validation and messages(v0.9.12)"
 
 
@@ -1627,9 +1624,15 @@ git commit -m "Improve export validation and messages(v0.9.12)"
 とても助かります！
 
 
+2026/5/21
+
+Handle multiple PDF candidates
+複数のPDF候補がある行の扱いを整理する
 
 
 
+
+(v0.9.13)
 
 Commit 9: Handle multiple PDF candidates
 Commit 10: Add manual selection for PDF candidates
