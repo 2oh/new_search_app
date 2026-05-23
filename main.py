@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.13)
+#  Excel–PDF結合アプリ (v0.9.14)
 # ======================================================
 
 import flet as ft
@@ -450,6 +450,50 @@ def main(page: ft.Page):
 
         return s
 
+    def on_select_pdf_candidate(row_index):
+        """
+        複数候補のPDFを確認するための仮処理。
+        今回は候補一覧をコンソール表示するだけ。
+        将来的にはここから候補選択UIにつなげる。
+        """
+        if current_df is None or current_df.empty:
+            page.open(ft.SnackBar(ft.Text("抽出結果がありません。")))
+            page.update()
+            return
+
+        if row_index not in current_df.index:
+            page.open(ft.SnackBar(ft.Text("対象行が見つかりません。")))
+            page.update()
+            return
+
+        row = current_df.loc[row_index]
+        candidates = row.get("候補PDFパス一覧", [])
+
+        if not isinstance(candidates, list):
+            candidates = []
+
+        print("===== PDF候補確認 =====")
+        print(f"行index: {row_index}")
+        print(f"検索用文字列: {row.get('検索用文字列', '')!r}")
+        print(f"候補状態: {row.get('候補状態', '')!r}")
+        print(f"候補PDF数: {row.get('候補PDF数', 0)}")
+
+        if not candidates:
+            print("候補PDFはありません。")
+            page.open(ft.SnackBar(ft.Text("候補PDFはありません。")))
+            page.update()
+            return
+
+        for i, candidate_path in enumerate(candidates, start=1):
+            print(f"{i}. {candidate_path}")
+
+        page.open(
+            ft.SnackBar(
+                ft.Text(f"{len(candidates)} 件の候補PDFをコンソールに表示しました。")
+            )
+        )
+        page.update()
+
     def render_table_from_df(df: pd.DataFrame):
         nonlocal current_df
 
@@ -461,6 +505,10 @@ def main(page: ft.Page):
         hidden_columns = {"候補PDFパス一覧"}
         display_columns = [c for c in df.columns if c not in hidden_columns]
 
+        # DataFrameには持たせず、画面表示専用の列として追加する
+        if "候補確認" not in display_columns:
+            display_columns.append("候補確認")
+
         table.columns = [ft.DataColumn(ft.Text(c)) for c in display_columns]
         table.rows = []
 
@@ -469,6 +517,22 @@ def main(page: ft.Page):
 
             for c in display_columns:
                 v = row.get(c, "")
+
+                if c == "候補確認":
+                    if row.get("候補状態") == "複数候補":
+                        cells.append(
+                            ft.DataCell(
+                                ft.ElevatedButton(
+                                    "候補確認",
+                                    on_click=lambda e, row_index=idx: on_select_pdf_candidate(row_index)
+                                )
+                            )
+                        )
+                    else:
+                        cells.append(ft.DataCell(ft.Text("")))
+
+                    continue
+
                 if c == "数量":
                     display_value = format_quantity_for_display(v)
                 elif c in ("先頭候補PDF", "採用PDFパス"):
