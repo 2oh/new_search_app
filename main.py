@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.15)
+#  Excel–PDF結合アプリ (v0.9.16)
 # ======================================================
 
 import flet as ft
@@ -452,14 +452,18 @@ def main(page: ft.Page):
 
     def on_select_pdf_candidate(row_index):
         """
-        複数候補のPDFを確認するための仮処理。
-        今回は候補一覧をコンソール表示するだけ。
-        将来的にはここから候補選択UIにつなげる。
+        複数候補のPDFから、採用するPDFを1つ選択する。
+        ラジオボタンで候補を表示し、選択したPDFを採用PDFパスに反映する。
         """
+        nonlocal current_df
+
         if current_df is None or current_df.empty:
             page.open(ft.SnackBar(ft.Text("抽出結果がありません。")))
             page.update()
             return
+
+        # 候補確認を開く前に、現在の画面状態を current_df に反映する
+        sync_table_state_to_current_df()
 
         if row_index not in current_df.index:
             page.open(ft.SnackBar(ft.Text("対象行が見つかりません。")))
@@ -472,26 +476,90 @@ def main(page: ft.Page):
         if not isinstance(candidates, list):
             candidates = []
 
-        print("===== PDF候補確認 =====")
-        print(f"行index: {row_index}")
-        print(f"検索用文字列: {row.get('検索用文字列', '')!r}")
-        print(f"候補状態: {row.get('候補状態', '')!r}")
-        print(f"候補PDF数: {row.get('候補PDF数', 0)}")
-
         if not candidates:
-            print("候補PDFはありません。")
             page.open(ft.SnackBar(ft.Text("候補PDFはありません。")))
             page.update()
             return
 
-        for i, candidate_path in enumerate(candidates, start=1):
-            print(f"{i}. {candidate_path}")
+        current_adopted_pdf = str(row.get("採用PDFパス", "") or "").strip()
 
-        page.open(
-            ft.SnackBar(
-                ft.Text(f"{len(candidates)} 件の候補PDFをコンソールに表示しました。")
+        selected_pdf = ft.RadioGroup(
+            value=current_adopted_pdf if current_adopted_pdf in candidates else None,
+            content=ft.Column(
+                controls=[
+                    ft.Radio(
+                        value=pdf_path,
+                        label=os.path.basename(pdf_path)
+                    )
+                    for pdf_path in candidates
+                ],
+                scroll="auto",
+                height=300,
             )
         )
+
+        def apply_selected_pdf(e):
+            selected_path = selected_pdf.value
+
+            if not selected_path:
+                page.open(ft.SnackBar(ft.Text("採用するPDFを選択してください。")))
+                page.update()
+                return
+
+            # 採用処理の直前にも、画面上の最新状態を current_df に反映する
+            sync_table_state_to_current_df()
+
+            current_df.at[row_index, "採用PDFパス"] = selected_path
+            current_df.at[row_index, "候補状態"] = "手動採用"
+
+            # 候補数や先頭候補はそのまま残す
+            # 採用PDFパスだけを手動選択したものに更新する
+            render_table_from_df(current_df)
+
+            dialog.open = False
+
+            page.open(
+                ft.SnackBar(
+                    ft.Text(f"採用PDFを選択しました: {os.path.basename(selected_path)}")
+                )
+            )
+
+            print("===== PDF候補 手動採用 =====")
+            print(f"行index: {row_index}")
+            print(f"検索用文字列: {row.get('検索用文字列', '')!r}")
+            print(f"採用PDFパス: {selected_path}")
+
+            page.update()
+
+        def close_dialog(e):
+            dialog.open = False
+            page.update()
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("PDF候補を選択"),
+            content=ft.Container(
+                width=600,
+                height=420,
+                content=ft.Column(
+                    controls=[
+                        ft.Text(f"検索用文字列: {row.get('検索用文字列', '')}"),
+                        ft.Text(f"候補PDF数: {len(candidates)}"),
+                        ft.Divider(),
+                        selected_pdf,
+                    ],
+                    tight=True,
+                    scroll="auto",
+                )
+            ),
+            actions=[
+                ft.TextButton("キャンセル", on_click=close_dialog),
+                ft.ElevatedButton("採用", on_click=apply_selected_pdf),
+            ],
+            actions_alignment="end",
+        )
+
+        page.open(dialog)
         page.update()
 
     def update_duplicate_search_text_info(df: pd.DataFrame) -> pd.DataFrame:
@@ -557,7 +625,7 @@ def main(page: ft.Page):
                 v = row.get(c, "")
 
                 if c == "候補確認":
-                    if row.get("候補状態") == "複数候補":
+                    if row.get("候補状態") in ("複数候補", "手動採用"):
                         cells.append(
                             ft.DataCell(
                                 ft.ElevatedButton(

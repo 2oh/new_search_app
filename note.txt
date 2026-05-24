@@ -1649,8 +1649,22 @@ git commit -m "Mark duplicate search texts(v0.9.15)"
 
 
 
+Add manual selection for PDF candidates
+PDF候補から採用するファイルを手動選択できるようにする
 
-Commit 10: Add manual selection for PDF candidates
+候補PDF一覧をラジオボタンで表示
+↓
+1つ選ぶ
+↓
+「採用」ボタンを押す
+↓
+採用PDFパス に反映
+↓
+候補状態 を「手動採用」にする
+↓
+表を再描画
+
+(v0.9.16)
 
 
 
