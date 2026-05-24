@@ -1640,6 +1640,15 @@ PDF候補を確認するためのボタンを追加
 git commit -m "Add PDF candidate review button(v0.9.14)"
 
 
+2026/5/24
+
+Mark duplicate search texts
+重複している検索用文字列を分かるように表示する
+
+git commit -m "Mark duplicate search texts(v0.9.15)"
+
+
+
 
 Commit 10: Add manual selection for PDF candidates
 

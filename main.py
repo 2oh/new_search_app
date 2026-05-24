@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.14)
+#  Excel–PDF結合アプリ (v0.9.15)
 # ======================================================
 
 import flet as ft
@@ -494,6 +494,44 @@ def main(page: ft.Page):
         )
         page.update()
 
+    def update_duplicate_search_text_info(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        検索用文字列の重複状況を表示用列に反映する。
+        同じ検索用文字列が複数行ある場合は「N件重複」と表示する。
+        空欄の検索用文字列は重複判定しない。
+        """
+        if df is None or df.empty:
+            return df
+
+        if "検索用文字列" not in df.columns:
+            return df
+
+        df = df.copy()
+
+        search_texts = df["検索用文字列"].fillna("").astype(str).str.strip()
+
+        # 初期値は空欄
+        df["検索文字列重複"] = ""
+
+        # 空欄は重複判定から除外
+        non_empty = search_texts.ne("")
+
+        if not non_empty.any():
+            return df
+
+        counts = search_texts[non_empty].value_counts()
+
+        duplicate_texts = counts[counts >= 2]
+
+        if duplicate_texts.empty:
+            return df
+
+        for search_text, count in duplicate_texts.items():
+            mask = non_empty & search_texts.eq(search_text)
+            df.loc[mask, "検索文字列重複"] = f"{count}件重複"
+
+        return df
+
     def render_table_from_df(df: pd.DataFrame):
         nonlocal current_df
 
@@ -761,6 +799,9 @@ def main(page: ft.Page):
             df["採用PDFパス"] = ""
             df["候補状態"] = "未検索"
 
+            # 検索用文字列の重複表示を更新
+            df = update_duplicate_search_text_info(df)
+
             if df.empty:
                 message.value = "抽出結果がありません。"
                 table.rows = []
@@ -903,6 +944,8 @@ def main(page: ft.Page):
 
         sync_table_state_to_current_df()
 
+        current_df = update_duplicate_search_text_info(current_df)
+
         pdf_files = collect_pdf_files(pdf_root)
 
         if not pdf_files:
@@ -946,6 +989,14 @@ def main(page: ft.Page):
             .sum()
         )
         multiple_count = int((current_df["候補PDF数"].fillna(0) >= 2).sum())
+        duplicate_search_text_count = int(
+            current_df["検索文字列重複"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .ne("")
+            .sum()
+        )
 
         export_ready_df = get_export_ready_df(current_df)
         export_ready_count = len(export_ready_df)
@@ -982,6 +1033,28 @@ def main(page: ft.Page):
                 for i, candidate_path in enumerate(candidates, start=1):
                     print(f"  {i}. {candidate_path}")
 
+
+        print("===== 検索用文字列 重複行 =====")
+        duplicate_df = current_df[
+            current_df["検索文字列重複"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .ne("")
+        ].copy()
+
+        if duplicate_df.empty:
+            print("検索用文字列が重複している行はありません。")
+        else:
+            for idx, row in duplicate_df.iterrows():
+                print(
+                    f"[{idx}] "
+                    f"検索用文字列={row.get('検索用文字列', '')!r}, "
+                    f"重複={row.get('検索文字列重複', '')!r}, "
+                    f"候補状態={row.get('候補状態', '')!r}, "
+                    f"採用PDFパス={row.get('採用PDFパス', '')!r}"
+                )
+
         print("===== 出力可能行 =====")
         if export_ready_df.empty:
             print("出力可能な行はありません。")
@@ -998,6 +1071,7 @@ def main(page: ft.Page):
             f"一致あり {matched_count}件 / "
             f"採用 {adopted_count}件 / "
             f"複数候補 {multiple_count}件 / "
+            f"検索文字列重複 {duplicate_search_text_count}件 / "
             f"出力対象 {selected_count}件 / "
             f"出力可能 {export_ready_count}件"
         )
@@ -1022,6 +1096,8 @@ def main(page: ft.Page):
             return
 
         sync_table_state_to_current_df()
+
+        current_df = update_duplicate_search_text_info(current_df)
 
         output_folder = output_folder_field.value.strip()
 
