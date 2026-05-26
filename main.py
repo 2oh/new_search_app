@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.16)
+#  Excel–PDF結合アプリ (v0.9.17)
 # ======================================================
 
 import flet as ft
@@ -240,6 +240,20 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
     # --- 品名列が結合されている場合への対応 ---
     cols = list(df.columns)
 
+    # --- 共通列への対応 ---
+    # 「共通」は内部処理には使わず、検索結果テーブルに表示するだけの項目。
+    # Excel上に「共通」を含む列があれば取得する。
+    common_col = next((c for c in df.columns if "共通" in str(c)), None)
+
+    if common_col:
+        sub_df["共通"] = (
+            df[common_col]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .replace({"nan": "", "None": "", "none": ""})
+        )
+
     def find_name_block_indices(cols):
         for i, c in enumerate(cols):
             if "品名" in str(c):
@@ -305,7 +319,7 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
         sub_df.drop(columns=[c for c in name_like_cols if c != "品名"], inplace=True)
 
     # ✅ 対象列のみを保持（項番・備考など除外）
-    keep_cols = [c for c in ["品番", "PG名", "品名", "数量"] if c in sub_df.columns]
+    keep_cols = [c for c in ["品番", "PG名", "品名", "共通", "数量"] if c in sub_df.columns]
     sub_df = sub_df[keep_cols]
 
     return sub_df
@@ -600,6 +614,33 @@ def main(page: ft.Page):
 
         return df
 
+    def format_adopted_pdf_for_display(pdf_path: str) -> str:
+        """
+        採用PDFパスを画面表示用に整形する。
+        検索先フォルダ配下のPDFであれば、検索先フォルダ以降の相対パスで表示する。
+        """
+        if not pdf_path or not str(pdf_path).strip():
+            return ""
+
+        path_text = str(pdf_path).strip()
+        search_root = search_folder_field.value.strip()
+
+        if not search_root:
+            return path_text
+
+        try:
+            pdf_path_obj = Path(path_text)
+            search_root_obj = Path(search_root)
+
+            relative_path = pdf_path_obj.relative_to(search_root_obj)
+            return str(relative_path)
+
+        except ValueError:
+            # 検索先フォルダ配下でない場合は、そのまま表示
+            return path_text
+        except Exception:
+            return path_text
+
     def render_table_from_df(df: pd.DataFrame):
         nonlocal current_df
 
@@ -608,14 +649,53 @@ def main(page: ft.Page):
         search_text_fields.clear()
         output_checkboxes.clear()
 
-        hidden_columns = {"候補PDFパス一覧"}
-        display_columns = [c for c in df.columns if c not in hidden_columns]
+        hidden_columns = {
+            "候補PDFパス一覧",
+            "先頭候補PDF",
+        }
+
+        preferred_order = [
+            "品番",
+            "PG名",
+            "品名",
+            "共通",
+            "元検索文字列",
+            "検索用文字列",
+            "数量",
+            "数量セル色",
+            "出力対象",
+            "候補PDF数",
+            "候補状態",
+            "検索文字列重複",
+            "採用PDFパス",
+        ]
+
+        display_columns = [
+            c for c in preferred_order
+            if c in df.columns and c not in hidden_columns
+        ]
+
+        # preferred_order に入っていない列があれば、後ろに残す
+        display_columns += [
+            c for c in df.columns
+            if c not in display_columns and c not in hidden_columns
+        ]
 
         # DataFrameには持たせず、画面表示専用の列として追加する
         if "候補確認" not in display_columns:
             display_columns.append("候補確認")
 
-        table.columns = [ft.DataColumn(ft.Text(c)) for c in display_columns]
+        def get_display_column_name(column_name: str) -> str:
+            display_name_map = {
+                "数量セル色": "セル色",
+                "採用PDFパス": "採用PDF",
+            }
+            return display_name_map.get(column_name, column_name)
+
+        table.columns = [
+            ft.DataColumn(ft.Text(get_display_column_name(c)))
+            for c in display_columns
+        ]
         table.rows = []
 
         for idx, row in df.iterrows():
@@ -641,8 +721,13 @@ def main(page: ft.Page):
 
                 if c == "数量":
                     display_value = format_quantity_for_display(v)
-                elif c in ("先頭候補PDF", "採用PDFパス"):
-                    display_value = os.path.basename(str(v)) if str(v).strip() else ""
+
+                elif c == "数量セル色":
+                    display_value = "あり" if str(v).strip() else ""
+
+                elif c == "採用PDFパス":
+                    display_value = format_adopted_pdf_for_display(v)
+
                 else:
                     if pd.isna(v) or str(v).strip().lower() in ("nan", "none"):
                         display_value = ""
