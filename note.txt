@@ -1689,11 +1689,22 @@ Refine result table columns
 git commit -m "Refine result table columns(v0.9.17)"
 
 
+Shorten result table column labels
+検索結果テーブルの列名を短くする
+
+- 「元検索文字列」を表示から外す
+- 「検索用文字列」を画面上では「検索文字列」と表示する
+- 「検索文字列重複」を画面上では「重複」と表示する
+- 「重複」を「共通」の右隣に移動する
+- 「2件重複」ではなく「2件」と表示する
+- 「候補PDF数」を画面上では「候補数」と表示する
 
 
-Commit 1
-Refine result table columns
-検索結果テーブルの表示列を整理する
+git commit -m "Shorten result table column labels(v0.9.18)"
+
+
+
+
 
 Commit 2
 Preserve manual PDF selections when possible
@@ -1740,6 +1751,11 @@ PDFプレビューの操作性を改善する
 ・設定と構成部品選択欄を（なるべく小さくして）固定フィールドと（し、表示フィールドを広くとる）する
 ・表示フィールドのみスクロールするように
 ・文字を選択可能とする
+
+
+・重複の場合に、２件目は初期値でチェックを入れない
+　そして、例えば重複欄に「２件目→」「３件目→」と入れるとか、どうだろう
+
 
 （あとて）
 ・○△情報を表示するようにする　→　他の項目追加削除と同時に

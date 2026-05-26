@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.17)
+#  Excel–PDF結合アプリ (v0.9.18)
 # ======================================================
 
 import flet as ft
@@ -610,7 +610,7 @@ def main(page: ft.Page):
 
         for search_text, count in duplicate_texts.items():
             mask = non_empty & search_texts.eq(search_text)
-            df.loc[mask, "検索文字列重複"] = f"{count}件重複"
+            df.loc[mask, "検索文字列重複"] = f"{count}件"
 
         return df
 
@@ -652,6 +652,7 @@ def main(page: ft.Page):
         hidden_columns = {
             "候補PDFパス一覧",
             "先頭候補PDF",
+            "元検索文字列",
         }
 
         preferred_order = [
@@ -659,14 +660,13 @@ def main(page: ft.Page):
             "PG名",
             "品名",
             "共通",
-            "元検索文字列",
+            "検索文字列重複",
             "検索用文字列",
             "数量",
             "数量セル色",
             "出力対象",
             "候補PDF数",
             "候補状態",
-            "検索文字列重複",
             "採用PDFパス",
         ]
 
@@ -687,6 +687,9 @@ def main(page: ft.Page):
 
         def get_display_column_name(column_name: str) -> str:
             display_name_map = {
+                "検索用文字列": "検索文字列",
+                "検索文字列重複": "重複",
+                "候補PDF数": "候補数",
                 "数量セル色": "セル色",
                 "採用PDFパス": "採用PDF",
             }
