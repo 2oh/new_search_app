@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.18)
+#  Excel–PDF結合アプリ (v0.9.19)
 # ======================================================
 
 import flet as ft
@@ -1116,6 +1116,9 @@ def main(page: ft.Page):
             candidates = find_pdf_candidates_by_filename(search_text, pdf_files)
             candidate_count = len(candidates)
 
+            previous_status = str(row.get("候補状態", "") or "").strip()
+            previous_adopted_pdf = str(row.get("採用PDFパス", "") or "").strip()
+
             current_df.at[idx, "候補PDF数"] = candidate_count
             current_df.at[idx, "先頭候補PDF"] = candidates[0] if candidates else ""
             current_df.at[idx, "候補PDFパス一覧"] = candidates
@@ -1129,8 +1132,14 @@ def main(page: ft.Page):
                 current_df.at[idx, "候補状態"] = "自動採用"
 
             else:
-                current_df.at[idx, "採用PDFパス"] = ""
-                current_df.at[idx, "候補状態"] = "複数候補"
+                # 複数候補の場合:
+                # 以前に手動採用したPDFが今回の候補にも含まれていれば、その選択を保持する
+                if previous_status == "手動採用" and previous_adopted_pdf in candidates:
+                    current_df.at[idx, "採用PDFパス"] = previous_adopted_pdf
+                    current_df.at[idx, "候補状態"] = "手動採用"
+                else:
+                    current_df.at[idx, "採用PDFパス"] = ""
+                    current_df.at[idx, "候補状態"] = "複数候補"
 
         render_table_from_df(current_df)
 

@@ -1704,11 +1704,15 @@ git commit -m "Shorten result table column labels(v0.9.18)"
 
 
 
+2026/5/27
 
-
-Commit 2
 Preserve manual PDF selections when possible
 可能な場合は手動採用したPDF選択を保持する
+
+git commit -m "Preserve manual PDF selections when possible(v0.9.19)"
+
+
+
 
 Commit 3
 Improve candidate selection dialog display
