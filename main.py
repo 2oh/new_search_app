@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.20)
+#  Excel–PDF結合アプリ (v0.9.21)
 # ======================================================
 
 import flet as ft
@@ -772,9 +772,10 @@ def main(page: ft.Page):
                     cells.append(
                         ft.DataCell(
                             ft.Container(
-                                width=100,
+                                width=110,
                                 padding=2,
-                                bgcolor=ft.Colors.YELLOW_100,
+                                bgcolor=ft.Colors.AMBER_50,
+                                border=ft.border.all(1, ft.Colors.AMBER_100),
                                 border_radius=6,
                                 content=text_field,
                             )

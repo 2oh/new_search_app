@@ -1723,11 +1723,13 @@ PDF候補選択ダイアログの表示を改善する
 git commit -m "Improve candidate selection dialog display(v0.9.20)"
 
 
-
-
-Commit 4
 Soften editable field styling
 編集可能な入力欄の色を少し優しい色に調整する
+
+
+git commit -m "Soften editable field styling(v0.9.21)"
+
+
 
 Commit 5
 Maximize window on startup
