@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.19)
+#  Excel–PDF結合アプリ (v0.9.20)
 # ======================================================
 
 import flet as ft
@@ -503,12 +503,12 @@ def main(page: ft.Page):
                 controls=[
                     ft.Radio(
                         value=pdf_path,
-                        label=os.path.basename(pdf_path)
+                        label=format_pdf_path_for_display(pdf_path)
                     )
                     for pdf_path in candidates
                 ],
                 scroll="auto",
-                height=300,
+                height=320,
             )
         )
 
@@ -534,14 +534,15 @@ def main(page: ft.Page):
 
             page.open(
                 ft.SnackBar(
-                    ft.Text(f"採用PDFを選択しました: {os.path.basename(selected_path)}")
+                    ft.Text(f"採用PDFを選択しました: {format_pdf_path_for_display(selected_path)}")
                 )
             )
 
             print("===== PDF候補 手動採用 =====")
             print(f"行index: {row_index}")
-            print(f"検索用文字列: {row.get('検索用文字列', '')!r}")
-            print(f"採用PDFパス: {selected_path}")
+            print(f"検索文字列: {row.get('検索用文字列', '')!r}")
+            print(f"採用PDF: {format_pdf_path_for_display(selected_path)}")
+            print(f"採用PDFフルパス: {selected_path}")
 
             page.update()
 
@@ -549,17 +550,29 @@ def main(page: ft.Page):
             dialog.open = False
             page.update()
 
+        current_adopted_display = (
+            format_pdf_path_for_display(current_adopted_pdf)
+            if current_adopted_pdf
+            else "未選択"
+        )
+
         dialog = ft.AlertDialog(
             modal=True,
             title=ft.Text("PDF候補を選択"),
             content=ft.Container(
-                width=600,
-                height=420,
+                width=760,
+                height=500,
                 content=ft.Column(
                     controls=[
-                        ft.Text(f"検索用文字列: {row.get('検索用文字列', '')}"),
-                        ft.Text(f"候補PDF数: {len(candidates)}"),
+                        ft.Text(
+                            f"検索文字列: {row.get('検索用文字列', '')}",
+                            weight="bold",
+                        ),
+                        ft.Text(f"候補数: {len(candidates)}"),
+                        ft.Text(f"現在の状態: {row.get('候補状態', '')}"),
+                        ft.Text(f"現在の採用PDF: {current_adopted_display}"),
                         ft.Divider(),
+                        ft.Text("採用するPDFを選択してください。"),
                         selected_pdf,
                     ],
                     tight=True,
@@ -615,8 +628,11 @@ def main(page: ft.Page):
         return df
 
     def format_adopted_pdf_for_display(pdf_path: str) -> str:
+        return format_pdf_path_for_display(pdf_path)
+
+    def format_pdf_path_for_display(pdf_path: str) -> str:
         """
-        採用PDFパスを画面表示用に整形する。
+        PDFパスを画面表示用に整形する。
         検索先フォルダ配下のPDFであれば、検索先フォルダ以降の相対パスで表示する。
         """
         if not pdf_path or not str(pdf_path).strip():
@@ -636,7 +652,6 @@ def main(page: ft.Page):
             return str(relative_path)
 
         except ValueError:
-            # 検索先フォルダ配下でない場合は、そのまま表示
             return path_text
         except Exception:
             return path_text

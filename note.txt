@@ -1712,11 +1712,18 @@ Preserve manual PDF selections when possible
 git commit -m "Preserve manual PDF selections when possible(v0.9.19)"
 
 
-
-
-Commit 3
 Improve candidate selection dialog display
 PDF候補選択ダイアログの表示を改善する
+
+- 候補PDFの表示をファイル名だけでなく、検索先フォルダ以降の相対パスで表示する
+- 現在採用中のPDFが分かるようにする
+- 検索文字列、候補数、現在の状態を整理して表示する
+- ダイアログ幅を少し広げる
+
+git commit -m "Improve candidate selection dialog display(v0.9.20)"
+
+
+
 
 Commit 4
 Soften editable field styling
