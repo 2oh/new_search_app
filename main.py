@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.21)
+#  Excel–PDF結合アプリ (v0.9.22)
 # ======================================================
 
 import flet as ft
@@ -329,17 +329,22 @@ def main(page: ft.Page):
     page.title = "Excel–PDF結合アプリ"
     page.scroll = "adaptive"
 
+    # 起動時のウィンドウ表示設定
+    try:
+        page.window.maximized = True
+        page.window.width = 1400
+        page.window.height = 900
+        page.window.min_width = 1200
+        page.window.min_height = 700
+    except Exception:
+        pass
+
     sheet_dropdown = None
 
     # DataTable状態管理用
     current_df = pd.DataFrame()
     search_text_fields = {}
     output_checkboxes = {}
-
-    try:
-        page.window_maximized = True
-    except Exception:
-        pass
 
     # ---- 設定ファイル処理 ----
     def load_config():

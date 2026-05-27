@@ -1726,14 +1726,17 @@ git commit -m "Improve candidate selection dialog display(v0.9.20)"
 Soften editable field styling
 編集可能な入力欄の色を少し優しい色に調整する
 
-
 git commit -m "Soften editable field styling(v0.9.21)"
 
 
-
-Commit 5
 Maximize window on startup
 起動時にウィンドウを最大化する
+
+git commit -m "Maximize window on startup(v0.9.22)"
+
+
+
+
 
 Commit 6
 Separate fixed controls from scrollable results
