@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.23)
+#  Excel–PDF結合アプリ (v0.9.24)
 # ======================================================
 
 import flet as ft
@@ -445,7 +445,7 @@ def main(page: ft.Page):
 
     # ---- Excel選択 ----
     selected_excel_path = ""
-    sheet_dropdown = ft.Dropdown(label="シート選択", width=300)
+    sheet_dropdown = ft.Dropdown(label="シート選択", width=420)
     message = ft.Text("")
     mode_notice = ft.Text("")
     table = ft.DataTable(columns=[ft.DataColumn(ft.Text("項目"))], rows=[])
@@ -1400,6 +1400,43 @@ def main(page: ft.Page):
     excel_folder_field = ft.TextField(label="選択中のExcelファイル", expand=True)
     save_button = ft.ElevatedButton("設定を保存", on_click=save_config)
 
+    folder_settings_row = ft.Row(
+        [
+            ft.Row(
+                [
+                    search_folder_field,
+                    ft.ElevatedButton("フォルダを選択", on_click=pick_search_folder),
+                ],
+                expand=True,
+                spacing=6,
+            ),
+            ft.Row(
+                [
+                    output_folder_field,
+                    ft.ElevatedButton("フォルダを選択", on_click=pick_output_folder),
+                ],
+                expand=True,
+                spacing=6,
+            ),
+        ],
+        spacing=12,
+    )
+
+    excel_control_row = ft.Row(
+        [
+            ft.Container(
+                content=excel_folder_field,
+                expand=2,
+            ),
+            pick_excel_btn,
+            sheet_dropdown,
+            extract_btn,
+        ],
+        alignment="center",
+        vertical_alignment="center",
+        spacing=10,
+    )
+
     fixed_controls = ft.Column(
         [
             ft.Row(
@@ -1410,25 +1447,17 @@ def main(page: ft.Page):
                 alignment="spaceBetween",
                 vertical_alignment="center",
             ),
-            ft.Row([
-                search_folder_field,
-                ft.ElevatedButton("フォルダを選択", on_click=pick_search_folder)
-            ]),
-            ft.Row([
-                output_folder_field,
-                ft.ElevatedButton("フォルダを選択", on_click=pick_output_folder)
-            ]),
+            folder_settings_row,
             mode_row,
             ft.Divider(),
             ft.Text("🔍 構成部品表選択", size=20, weight="bold"),
             mode_notice,
-            ft.Row([excel_folder_field, pick_excel_btn], alignment="center"),
-            ft.Row([sheet_dropdown, extract_btn], alignment="center"),
+            excel_control_row,
             ft.Divider(),
             table_header,
             message,
         ],
-        spacing=8,
+        spacing=6,
     )
 
     result_area = ft.Container(

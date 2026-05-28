@@ -1744,6 +1744,27 @@ Separate fixed controls from scrollable results
 git commit -m "Separate fixed controls from scrollable results(v0.9.23)"
 
 
+Compact fixed control area
+固定操作エリアをコンパクトにする
+
+
+- fixed_controls の spacing を 8 → 4 にする
+- 検索先フォルダと出力先フォルダを2列レイアウトにする
+- Excel選択、シート選択、抽出実行を1行にまとめる
+
+git commit -m "Compact fixed control area(v0.9.24)"
+
+
+
+
+
+
+2026/5/29
+
+
+Freeze result table header
+検索結果テーブルの項目タイトル行を固定する
+
 
 
 Commit 7
@@ -1765,6 +1786,11 @@ PDFプレビューの操作性を改善する
 
 
 -----------------------------------------
+（リリース）
+・アイコン
+・webかexeか
+
+
 （課題）
 ・入力フィールドの色を少し優しめに
 ・ウインドウを最大で表示
