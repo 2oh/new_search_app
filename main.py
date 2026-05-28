@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.22)
+#  Excel–PDF結合アプリ (v0.9.23)
 # ======================================================
 
 import flet as ft
@@ -327,7 +327,6 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
 # ========= メイン =========
 def main(page: ft.Page):
     page.title = "Excel–PDF結合アプリ"
-    page.scroll = "adaptive"
 
     # 起動時のウィンドウ表示設定
     try:
@@ -1401,36 +1400,58 @@ def main(page: ft.Page):
     excel_folder_field = ft.TextField(label="選択中のExcelファイル", expand=True)
     save_button = ft.ElevatedButton("設定を保存", on_click=save_config)
 
-    layout = ft.Column([
-        ft.Row(
+    fixed_controls = ft.Column(
+        [
+            ft.Row(
+                [
+                    ft.Text("⚙️ 設定", size=20, weight="bold"),
+                    save_button,
+                ],
+                alignment="spaceBetween",
+                vertical_alignment="center",
+            ),
+            ft.Row([
+                search_folder_field,
+                ft.ElevatedButton("フォルダを選択", on_click=pick_search_folder)
+            ]),
+            ft.Row([
+                output_folder_field,
+                ft.ElevatedButton("フォルダを選択", on_click=pick_output_folder)
+            ]),
+            mode_row,
+            ft.Divider(),
+            ft.Text("🔍 構成部品表選択", size=20, weight="bold"),
+            mode_notice,
+            ft.Row([excel_folder_field, pick_excel_btn], alignment="center"),
+            ft.Row([sheet_dropdown, extract_btn], alignment="center"),
+            ft.Divider(),
+            table_header,
+            message,
+        ],
+        spacing=8,
+    )
+
+    result_area = ft.Container(
+        content=ft.Column(
             [
-                ft.Text("⚙️ 設定", size=20, weight="bold"),
-                save_button,
+                table,
             ],
-            alignment="spaceBetween",
-            vertical_alignment="center",
+            scroll="auto",
+            expand=True,
         ),
-        ft.Row([
-            search_folder_field,
-            ft.ElevatedButton("フォルダを選択", on_click=pick_search_folder)
-        ]),
-        ft.Row([
-            output_folder_field,
-            ft.ElevatedButton("フォルダを選択", on_click=pick_output_folder)
-        ]),
-        mode_row,
-        ft.Divider(),
-        ft.Text("🔍 構成部品表選択", size=20, weight="bold"),
-        mode_notice,
-        ft.Row([excel_folder_field, pick_excel_btn], alignment="center"),
-        ft.Row([sheet_dropdown, extract_btn], alignment="center"),
-        ft.Divider(),
-        table_header,
-        message,
-        table
-    ], expand=True, scroll="auto")
+        expand=True,
+    )
+
+    layout = ft.Column(
+        [
+            fixed_controls,
+            result_area,
+        ],
+        expand=True,
+    )
 
     page.add(layout)
+
     update_mode_fields()
 
 

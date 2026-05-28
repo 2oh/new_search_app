@@ -1735,12 +1735,16 @@ Maximize window on startup
 git commit -m "Maximize window on startup(v0.9.22)"
 
 
+2026/5/28
 
-
-
-Commit 6
 Separate fixed controls from scrollable results
 固定操作エリアとスクロールする検索結果エリアを分離する
+
+
+git commit -m "Separate fixed controls from scrollable results(v0.9.23)"
+
+
+
 
 Commit 7
 Make result text selectable
