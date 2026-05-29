@@ -1755,21 +1755,20 @@ Compact fixed control area
 git commit -m "Compact fixed control area(v0.9.24)"
 
 
-
-
-
-
 2026/5/29
+
+Make result text selectable
+検索結果の文字列を選択できるようにする
+
+git commit -m "Make result text selectable(v0.9.25)"
+
+
 
 
 Freeze result table header
 検索結果テーブルの項目タイトル行を固定する
 
 
-
-Commit 7
-Make result text selectable
-検索結果の文字列を選択できるようにする
 
 Commit 8
 Add PDF preview utility
