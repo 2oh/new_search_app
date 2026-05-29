@@ -1763,10 +1763,26 @@ Make result text selectable
 git commit -m "Make result text selectable(v0.9.25)"
 
 
-
-
 Freeze result table header
 検索結果テーブルの項目タイトル行を固定する
+
+今は Flet 側に自然なヘッダー固定機能があるわけではなさそう
+無理に DataTable を2つに分けると構造が複雑になる
+今後プレビュー導入時に表示構造を見直す可能性が高い
+
+→　変更点が大きく、またタイトルとデータ行の幅のずれが発生し、調整が必要なのでやめる
+
+
+
+Reorder result table status columns
+検索結果テーブルの状態関連列の並びを変更する
+
+
+git commit -m "Reorder result table status columns(v0.9.26)"
+
+
+
+
 
 
 
