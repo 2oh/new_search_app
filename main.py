@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.26)
+#  Excel–PDF結合アプリ (v0.9.27)
 # ======================================================
 
 import flet as ft
@@ -11,6 +11,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 CONFIG_FILE = "config.json"
+PREVIEW_CACHE_DIR = "preview_cache"
 
 
 # ========= 共通ユーティリティ =========
@@ -129,6 +130,96 @@ def merge_pdfs(pdf_paths: list[str], output_path: str) -> str:
         writer.write(f)
 
     return str(output)
+
+def create_pdf_preview_image(
+    pdf_path: str,
+    page_number: int = 0,
+    dpi: int = 120,
+    cache_dir: str = PREVIEW_CACHE_DIR,
+) -> str:
+    """
+    PDFの指定ページをPNG画像として保存し、その画像パスを返す。
+
+    Parameters
+    ----------
+    pdf_path:
+        プレビュー対象のPDFファイルパス。
+
+    page_number:
+        0始まりのページ番号。通常は1ページ目なので0。
+
+    dpi:
+        画像化する際の解像度。大きいほどきれいだが重くなる。
+
+    cache_dir:
+        プレビュー画像の保存先フォルダ。
+
+    Returns
+    -------
+    str
+        作成されたPNG画像ファイルのパス。
+
+    Raises
+    ------
+    ValueError:
+        pdf_path が空、またはページ番号が範囲外の場合。
+
+    FileNotFoundError:
+        PDFファイルが存在しない場合。
+    """
+    if not pdf_path or not str(pdf_path).strip():
+        raise ValueError("PDFパスが指定されていません。")
+
+    pdf_file = Path(str(pdf_path).strip())
+
+    if not pdf_file.is_file():
+        raise FileNotFoundError(f"PDFファイルが見つかりません: {pdf_path}")
+
+    try:
+        import pymupdf
+    except ImportError:
+        try:
+            import fitz as pymupdf
+        except ImportError as ex:
+            raise ImportError(
+                "PyMuPDF がインストールされていません。"
+                "'python -m pip install PyMuPDF' を実行してください。"
+            ) from ex
+
+    cache_path = Path(cache_dir)
+    cache_path.mkdir(parents=True, exist_ok=True)
+
+    # ファイルパス・更新日時・ページ番号・dpi からキャッシュ名を作る
+    stat = pdf_file.stat()
+    cache_key_src = f"{pdf_file.resolve()}_{stat.st_mtime_ns}_{page_number}_{dpi}"
+    cache_key = str(abs(hash(cache_key_src)))
+    output_image = cache_path / f"preview_{cache_key}.png"
+
+    # すでに作成済みなら再利用
+    if output_image.is_file():
+        return str(output_image)
+
+    doc = None
+    try:
+        doc = pymupdf.open(str(pdf_file))
+
+        if doc.page_count == 0:
+            raise ValueError(f"PDFにページがありません: {pdf_path}")
+
+        if page_number < 0 or page_number >= doc.page_count:
+            raise ValueError(
+                f"ページ番号が範囲外です: {page_number + 1} / {doc.page_count}"
+            )
+
+        page = doc[page_number]
+        pix = page.get_pixmap(dpi=dpi)
+        pix.save(str(output_image))
+
+        return str(output_image)
+
+    finally:
+        if doc is not None:
+            doc.close()
 
 # ========= Excel列検出 =========
 def detect_columns(file_path: str, sheet_name: str, header_row_index: int, target_columns=None):

@@ -1773,22 +1773,22 @@ Freeze result table header
 →　変更点が大きく、またタイトルとデータ行の幅のずれが発生し、調整が必要なのでやめる
 
 
-
 Reorder result table status columns
 検索結果テーブルの状態関連列の並びを変更する
-
 
 git commit -m "Reorder result table status columns(v0.9.26)"
 
 
 
+2026/5/30
 
-
-
-
-Commit 8
 Add PDF preview utility
 PDFプレビュー画像を生成するユーティリティを追加する
+
+
+
+
+
 
 Commit 9
 Show PDF preview for selected candidate
