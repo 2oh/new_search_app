@@ -1798,6 +1798,15 @@ Show PDF preview in candidate dialog
 git commit -m "Show PDF preview in candidate dialog(v0.9.28)"
 
 
+Show preview for adopted PDFs
+採用済みPDFのプレビューを表示する
+
+git commit -m "Show preview for adopted PDFs(v0.9.29)"
+
+
+
+
+
 
 
 Commit 10

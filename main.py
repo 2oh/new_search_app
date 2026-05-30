@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.28)
+#  Excel–PDF結合アプリ (v0.9.29)
 # ======================================================
 
 import flet as ft
@@ -559,6 +559,80 @@ def main(page: ft.Page):
 
         return s
 
+    def on_preview_adopted_pdf(pdf_path: str):
+        """
+        採用済みPDFをプレビュー表示する。
+        自動採用・手動採用どちらでも、採用PDFパスがある行から呼び出す。
+        """
+        if not pdf_path or not str(pdf_path).strip():
+            page.open(ft.SnackBar(ft.Text("採用PDFがありません。")))
+            page.update()
+            return
+
+        preview_image = ft.Image(
+            src="",
+            width=520,
+            height=680,
+            fit=ft.ImageFit.CONTAIN,
+            visible=False,
+        )
+
+        preview_message = ft.Text("プレビューを読み込み中...")
+
+        def load_preview():
+            try:
+                preview_path = create_pdf_preview_image(
+                    pdf_path,
+                    page_number=0,
+                    dpi=120,
+                )
+                preview_image.src = preview_path
+                preview_image.visible = True
+                preview_message.value = format_pdf_path_for_display(pdf_path)
+
+            except Exception as ex:
+                preview_image.src = ""
+                preview_image.visible = False
+                preview_message.value = f"プレビュー生成エラー: {ex}"
+
+            page.update()
+
+        def close_dialog(e):
+            dialog.open = False
+            page.update()
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("採用PDFプレビュー"),
+            content=ft.Container(
+                width=620,
+                height=760,
+                content=ft.Column(
+                    controls=[
+                        preview_message,
+                        ft.Container(
+                            content=preview_image,
+                            alignment=ft.alignment.center,
+                            border=ft.border.all(1, ft.Colors.GREY_300),
+                            border_radius=6,
+                            padding=6,
+                            height=700,
+                        ),
+                    ],
+                    tight=True,
+                ),
+            ),
+            actions=[
+                ft.TextButton("閉じる", on_click=close_dialog),
+            ],
+            actions_alignment="end",
+        )
+
+        page.open(dialog)
+        page.update()
+
+        load_preview()
+
     def on_select_pdf_candidate(row_index):
         """
         複数候補のPDFから、採用するPDFを1つ選択する。
@@ -858,6 +932,9 @@ def main(page: ft.Page):
         ]
 
         # DataFrameには持たせず、画面表示専用の列として追加する
+        if "採用確認" not in display_columns:
+            display_columns.append("採用確認")
+
         if "候補確認" not in display_columns:
             display_columns.append("候補確認")
 
@@ -882,6 +959,27 @@ def main(page: ft.Page):
 
             for c in display_columns:
                 v = row.get(c, "")
+
+                if c == "採用確認":
+                    adopted_pdf_path = str(row.get("採用PDFパス", "") or "").strip()
+
+                    if adopted_pdf_path:
+                        content = ft.ElevatedButton(
+                            "プレビュー",
+                            on_click=lambda e, pdf_path=adopted_pdf_path: on_preview_adopted_pdf(pdf_path)
+                        )
+                    else:
+                        content = ft.Text("")
+
+                    cells.append(
+                        ft.DataCell(
+                            ft.Container(
+                                content=content,
+                            )
+                        )
+                    )
+
+                    continue
 
                 if c == "候補確認":
                     if row.get("候補状態") in ("複数候補", "手動採用"):
