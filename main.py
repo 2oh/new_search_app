@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.27)
+#  Excel–PDF結合アプリ (v0.9.28)
 # ======================================================
 
 import flet as ft
@@ -592,8 +592,44 @@ def main(page: ft.Page):
 
         current_adopted_pdf = str(row.get("採用PDFパス", "") or "").strip()
 
+        preview_image = ft.Image(
+            src="",
+            width=360,
+            height=460,
+            fit=ft.ImageFit.CONTAIN,
+            visible=False,
+        )
+
+        preview_message = ft.Text("候補PDFを選択するとプレビューを表示します。")
+
+        def update_preview(pdf_path: str):
+            if not pdf_path:
+                preview_image.src = ""
+                preview_image.visible = False
+                preview_message.value = "候補PDFを選択するとプレビューを表示します。"
+                page.update()
+                return
+
+            try:
+                preview_path = create_pdf_preview_image(
+                    pdf_path,
+                    page_number=0,
+                    dpi=120,
+                )
+                preview_image.src = preview_path
+                preview_image.visible = True
+                preview_message.value = format_pdf_path_for_display(pdf_path)
+
+            except Exception as ex:
+                preview_image.src = ""
+                preview_image.visible = False
+                preview_message.value = f"プレビュー生成エラー: {ex}"
+
+            page.update()
+
         selected_pdf = ft.RadioGroup(
             value=current_adopted_pdf if current_adopted_pdf in candidates else None,
+            on_change=lambda e: update_preview(e.control.value),
             content=ft.Column(
                 controls=[
                     ft.Radio(
@@ -621,8 +657,6 @@ def main(page: ft.Page):
             current_df.at[row_index, "採用PDFパス"] = selected_path
             current_df.at[row_index, "候補状態"] = "手動採用"
 
-            # 候補数や先頭候補はそのまま残す
-            # 採用PDFパスだけを手動選択したものに更新する
             render_table_from_df(current_df)
 
             dialog.open = False
@@ -655,24 +689,51 @@ def main(page: ft.Page):
             modal=True,
             title=ft.Text("PDF候補を選択"),
             content=ft.Container(
-                width=760,
-                height=500,
-                content=ft.Column(
+                width=1050,
+                height=560,
+                content=ft.Row(
                     controls=[
-                        ft.Text(
-                            f"検索文字列: {row.get('検索用文字列', '')}",
-                            weight="bold",
+                        ft.Container(
+                            width=620,
+                            content=ft.Column(
+                                controls=[
+                                    ft.Text(
+                                        f"検索文字列: {row.get('検索用文字列', '')}",
+                                        weight="bold",
+                                    ),
+                                    ft.Text(f"候補数: {len(candidates)}"),
+                                    ft.Text(f"現在の状態: {row.get('候補状態', '')}"),
+                                    ft.Text(f"現在の採用PDF: {current_adopted_display}"),
+                                    ft.Divider(),
+                                    ft.Text("採用するPDFを選択してください。"),
+                                    selected_pdf,
+                                ],
+                                tight=True,
+                                scroll="auto",
+                            ),
                         ),
-                        ft.Text(f"候補数: {len(candidates)}"),
-                        ft.Text(f"現在の状態: {row.get('候補状態', '')}"),
-                        ft.Text(f"現在の採用PDF: {current_adopted_display}"),
-                        ft.Divider(),
-                        ft.Text("採用するPDFを選択してください。"),
-                        selected_pdf,
+                        ft.VerticalDivider(),
+                        ft.Container(
+                            width=390,
+                            content=ft.Column(
+                                controls=[
+                                    ft.Text("プレビュー", weight="bold"),
+                                    preview_message,
+                                    ft.Container(
+                                        content=preview_image,
+                                        alignment=ft.alignment.center,
+                                        border=ft.border.all(1, ft.Colors.GREY_300),
+                                        border_radius=6,
+                                        padding=6,
+                                        height=490,
+                                    ),
+                                ],
+                                tight=True,
+                            ),
+                        ),
                     ],
-                    tight=True,
-                    scroll="auto",
-                )
+                    vertical_alignment="start",
+                ),
             ),
             actions=[
                 ft.TextButton("キャンセル", on_click=close_dialog),
@@ -681,8 +742,13 @@ def main(page: ft.Page):
             actions_alignment="end",
         )
 
+        initial_preview_pdf = selected_pdf.value
+
         page.open(dialog)
         page.update()
+
+        if initial_preview_pdf:
+            update_preview(initial_preview_pdf)
 
     def update_duplicate_search_text_info(df: pd.DataFrame) -> pd.DataFrame:
         """

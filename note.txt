@@ -1785,14 +1785,20 @@ git commit -m "Reorder result table status columns(v0.9.26)"
 Add PDF preview utility
 PDFプレビュー画像を生成するユーティリティを追加する
 
+git commit -m "Add PDF preview utility(v0.9.27)"
+
+
+Show PDF preview in candidate dialog
+候補選択ダイアログにPDFプレビューを表示する
+
+ラジオボタンで候補PDFを選ぶ
+↓
+そのPDFの1ページ目プレビューを表示
+
+git commit -m "Show PDF preview in candidate dialog(v0.9.28)"
 
 
 
-
-
-Commit 9
-Show PDF preview for selected candidate
-選択中のPDF候補のプレビューを表示する
 
 Commit 10
 Improve PDF preview interaction
