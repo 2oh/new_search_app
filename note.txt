@@ -1900,13 +1900,13 @@ Improve candidate preview dialog controls
 - 現在採用中PDFの表示を少し目立たせる
 - プレビュー未選択時の案内文を少し整理する
 
-
 git commit -m "Improve candidate preview dialog controls(v0.9.33)"
 
 
-2
 Reorder result table columns for v1.0
 v1.0向けに検索結果テーブルの列順を整理する
+
+git commit -m "Reorder result table columns for v1.0(v0.9.34)"
 
 3
 Disable output for duplicate search rows by default
