@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.45)
+#  Excel–PDF結合アプリ (v0.9.46)
 # ======================================================
 
 import flet as ft
@@ -1749,7 +1749,7 @@ def main(page: ft.Page):
         try:
             output_pdf_path = build_output_pdf_path(
                 output_folder,
-                excel_file_field.value.strip(),
+                selected_excel_path,
                 sheet_dropdown.value,
             )
 

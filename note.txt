@@ -2007,6 +2007,10 @@ Stop saving selected Excel path in config
 git commit -m "Stop saving selected Excel path in config(v0.9.45)"
 
 
+Use selected Excel path for output filename
+出力ファイル名の作成に、選択済みExcelパスを使う
+
+git commit -m "Use selected Excel path for output filename(v0.9.46)"
 
 
 5
