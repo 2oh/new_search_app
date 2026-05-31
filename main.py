@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.35)
+#  Excel–PDF結合アプリ (v0.9.36)
 # ======================================================
 
 import flet as ft
@@ -639,6 +639,7 @@ def main(page: ft.Page):
             page.update()
 
         def close_dialog(e):
+            render_table_from_df(current_df)
             dialog.open = False
             page.update()
 
@@ -671,7 +672,7 @@ def main(page: ft.Page):
     def on_select_pdf_candidate(row_index):
         """
         複数候補のPDFから、採用するPDFを1つ選択する。
-        ラジオボタンで候補を表示し、選択したPDFを採用PDFパスに反映する。
+        ラジオボタンで選択した内容を、即時に採用PDFパスへ反映する。
         """
         nonlocal current_df
 
@@ -680,7 +681,6 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # 候補確認を開く前に、現在の画面状態を current_df に反映する
         sync_table_state_to_current_df()
 
         if row_index not in current_df.index:
@@ -743,89 +743,70 @@ def main(page: ft.Page):
 
             page.update()
 
+        NO_ADOPTED_PDF_VALUE = "__NO_ADOPTED_PDF__"
+
+        def apply_candidate_selection(selected_value: str):
+            """
+            ラジオボタンで選択された候補を、即時に採用状態へ反映する。
+            """
+            sync_table_state_to_current_df()
+
+            if selected_value == NO_ADOPTED_PDF_VALUE:
+                current_df.at[row_index, "採用PDFパス"] = ""
+                current_df.at[row_index, "候補状態"] = "複数候補"
+
+                preview_image.src = ""
+                preview_image.visible = False
+                preview_message.value = "採用しない状態です。左の候補PDFを選ぶとプレビューを表示します。"
+
+                print("===== PDF候補 採用解除 =====")
+                print(f"行index: {row_index}")
+                print(f"検索文字列: {row.get('検索用文字列', '')!r}")
+
+                page.update()
+                return
+
+            if not selected_value:
+                return
+
+            current_df.at[row_index, "採用PDFパス"] = selected_value
+            current_df.at[row_index, "候補状態"] = "手動採用"
+
+            print("===== PDF候補 即時採用 =====")
+            print(f"行index: {row_index}")
+            print(f"検索文字列: {row.get('検索用文字列', '')!r}")
+            print(f"採用PDF: {format_pdf_path_for_display(selected_value)}")
+            print(f"採用PDFフルパス: {selected_value}")
+
+            update_preview(selected_value)
+
         selected_pdf = ft.RadioGroup(
-            value=current_adopted_pdf if current_adopted_pdf in candidates else None,
-            on_change=lambda e: update_preview(e.control.value),
+            value=current_adopted_pdf if current_adopted_pdf in candidates else NO_ADOPTED_PDF_VALUE,
+            on_change=lambda e: apply_candidate_selection(e.control.value),
             content=ft.Column(
                 controls=[
+                    *[
+                        ft.Radio(
+                            value=pdf_path,
+                            label=format_pdf_path_for_display(pdf_path)
+                        )
+                        for pdf_path in candidates
+                    ],
+                    ft.Divider(),
                     ft.Radio(
-                        value=pdf_path,
-                        label=format_pdf_path_for_display(pdf_path)
-                    )
-                    for pdf_path in candidates
+                        value=NO_ADOPTED_PDF_VALUE,
+                        label="採用しない",
+                    ),
                 ],
                 scroll="auto",
                 height=320,
             )
         )
 
-        def apply_selected_pdf(e):
-            selected_path = selected_pdf.value
-
-            if not selected_path:
-                page.open(ft.SnackBar(ft.Text("採用するPDFを選択してください。")))
-                page.update()
-                return
-
-            # 採用処理の直前にも、画面上の最新状態を current_df に反映する
-            sync_table_state_to_current_df()
-
-            current_df.at[row_index, "採用PDFパス"] = selected_path
-            current_df.at[row_index, "候補状態"] = "手動採用"
-
-            render_table_from_df(current_df)
-
-            dialog.open = False
-
-            page.open(
-                ft.SnackBar(
-                    ft.Text(f"採用PDFを選択しました: {format_pdf_path_for_display(selected_path)}")
-                )
-            )
-
-            print("===== PDF候補 手動採用 =====")
-            print(f"行index: {row_index}")
-            print(f"検索文字列: {row.get('検索用文字列', '')!r}")
-            print(f"採用PDF: {format_pdf_path_for_display(selected_path)}")
-            print(f"採用PDFフルパス: {selected_path}")
-
-            page.update()
-
-        def clear_selected_pdf(e):
-            """
-            手動採用済みのPDFを未選択に戻す。
-            複数候補行として扱い、採用PDFパスを空にする。
-            """
-            sync_table_state_to_current_df()
-
-            current_df.at[row_index, "採用PDFパス"] = ""
-            current_df.at[row_index, "候補状態"] = "複数候補"
-
-            render_table_from_df(current_df)
-
-            dialog.open = False
-
-            page.open(
-                ft.SnackBar(
-                    ft.Text("採用PDFを未選択に戻しました。")
-                )
-            )
-
-            print("===== PDF候補 採用解除 =====")
-            print(f"行index: {row_index}")
-            print(f"検索文字列: {row.get('検索用文字列', '')!r}")
-
-            page.update()
-
         def close_dialog(e):
+            render_table_from_df(current_df)
             dialog.open = False
             page.update()
-
-        current_adopted_display = (
-            format_pdf_path_for_display(current_adopted_pdf)
-            if current_adopted_pdf
-            else "未選択"
-        )
 
         dialog = ft.AlertDialog(
             modal=True,
@@ -845,19 +826,8 @@ def main(page: ft.Page):
                                     ),
                                     ft.Text(f"候補数: {len(candidates)}"),
                                     ft.Text(f"現在の状態: {row.get('候補状態', '')}"),
-                                    ft.Container(
-                                        content=ft.Text(
-                                            f"現在の採用PDF: {current_adopted_display}",
-                                            weight="bold",
-                                            color=ft.Colors.BLACK,
-                                        ),
-                                        padding=8,
-                                        border_radius=6,
-                                        bgcolor=ft.Colors.AMBER_50,
-                                        border=ft.border.all(1, ft.Colors.AMBER_200),
-                                    ),
                                     ft.Divider(),
-                                    ft.Text("採用するPDFを選択してください。"),
+                                    ft.Text("採用するPDFを選んでください。選択はすぐに反映されます。"),
                                     selected_pdf,
                                 ],
                                 tight=True,
@@ -881,9 +851,7 @@ def main(page: ft.Page):
                 ),
             ),
             actions=[
-                ft.TextButton("採用を外す", on_click=clear_selected_pdf),
-                ft.TextButton("キャンセル", on_click=close_dialog),
-                ft.ElevatedButton("このPDFを採用", on_click=apply_selected_pdf),
+                ft.ElevatedButton("OK", on_click=close_dialog),
             ],
             actions_alignment="end",
         )
@@ -893,7 +861,7 @@ def main(page: ft.Page):
         page.open(dialog)
         page.update()
 
-        if initial_preview_pdf:
+        if initial_preview_pdf and initial_preview_pdf != NO_ADOPTED_PDF_VALUE:
             update_preview(initial_preview_pdf)
 
     def update_duplicate_search_text_info(df: pd.DataFrame) -> pd.DataFrame:
