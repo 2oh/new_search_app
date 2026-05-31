@@ -1983,7 +1983,10 @@ Close Excel workbooks after reading metadata
 git commit -m "Close Excel workbooks after reading metadata(v0.9.41)"
 
 
+Remove redundant adopted PDF display helper
+重複していた採用PDF表示用ヘルパーを削除する
 
+git commit -m "Remove redundant adopted PDF display helper(v0.9.42)"
 
 5
 Add adopted PDF hover preview

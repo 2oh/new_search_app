@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.41)
+#  Excel–PDF結合アプリ (v0.9.42)
 # ======================================================
 
 import flet as ft
@@ -949,9 +949,6 @@ def main(page: ft.Page):
 
         return df
 
-    def format_adopted_pdf_for_display(pdf_path: str) -> str:
-        return format_pdf_path_for_display(pdf_path)
-
     def format_pdf_path_for_display(pdf_path: str) -> str:
         """
         PDFパスを画面表示用に整形する。
@@ -1110,7 +1107,7 @@ def main(page: ft.Page):
                     display_value = "あり" if str(v).strip() else ""
 
                 elif c == "採用PDFパス":
-                    display_value = format_adopted_pdf_for_display(v)
+                    display_value = format_pdf_path_for_display(v)
 
                 else:
                     if pd.isna(v) or str(v).strip().lower() in ("nan", "none"):
