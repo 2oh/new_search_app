@@ -1988,6 +1988,13 @@ Remove redundant adopted PDF display helper
 
 git commit -m "Remove redundant adopted PDF display helper(v0.9.42)"
 
+
+Use page.open for Excel selection dialogs
+Excel選択時のダイアログ表示に page.open を使う
+
+git commit -m "Use page.open for Excel selection dialogs(v0.9.43)"
+
+
 5
 Add adopted PDF hover preview
 採用PDF欄のホバーでプレビューを表示する

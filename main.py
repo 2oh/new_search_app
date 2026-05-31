@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.42)
+#  Excel–PDF結合アプリ (v0.9.43)
 # ======================================================
 
 import flet as ft
@@ -1230,16 +1230,27 @@ def main(page: ft.Page):
             sheet_dropdown.on_change = on_sheet_change  # 念のため（維持）
             sheet_dropdown.update()
 
-            page.snack_bar = ft.SnackBar(ft.Text("シートを選択してください。"))
-            page.snack_bar.open = True
+            page.open(ft.SnackBar(ft.Text("シートを選択してください。")))
             page.update()
 
         except PermissionError:
-            page.dialog = ft.AlertDialog(
+            dialog = ft.AlertDialog(
                 title=ft.Text("ファイル使用中"),
-                content=ft.Text("Excelファイルを閉じてください。")
+                content=ft.Text("Excelファイルを閉じてください。"),
+                actions_alignment="end",
             )
-            page.dialog.open = True
+
+            dialog.actions = [
+                ft.TextButton(
+                    "OK",
+                    on_click=lambda e: (
+                        setattr(dialog, "open", False),
+                        page.update(),
+                    ),
+                )
+            ]
+
+            page.open(dialog)
             page.update()
 
 
