@@ -2013,6 +2013,13 @@ Use selected Excel path for output filename
 git commit -m "Use selected Excel path for output filename(v0.9.46)"
 
 
+
+Make selected Excel file field read-only
+選択中のExcelファイル欄を読み取り専用にする
+
+git commit -m "Make selected Excel file field read-only(v0.9.47)"
+
+
 5
 Add adopted PDF hover preview
 採用PDF欄のホバーでプレビューを表示する

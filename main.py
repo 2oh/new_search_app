@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.46)
+#  Excel–PDF結合アプリ (v0.9.47)
 # ======================================================
 
 import flet as ft
@@ -1825,7 +1825,11 @@ def main(page: ft.Page):
         page.update()
 
     # ---- レイアウト ----
-    excel_file_field = ft.TextField(label="選択中のExcelファイル", expand=True)
+    excel_file_field = ft.TextField(
+        label="選択中のExcelファイル",
+        expand=True,
+        read_only=True,
+    )
     save_button = ft.ElevatedButton("設定を保存", on_click=save_config)
 
     folder_settings_row = ft.Row(
