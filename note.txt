@@ -1972,6 +1972,12 @@ git commit -m "Remove unused table cell value helper(v0.9.39)"
 
 
 
+Use detected quantity column for row filtering
+行フィルタに、検出済みの数量列を使う
+
+git commit -m "Use detected quantity column for row filtering(v0.9.40)"
+
+
 5
 Add adopted PDF hover preview
 採用PDF欄のホバーでプレビューを表示する

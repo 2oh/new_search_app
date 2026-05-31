@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.39)
+#  Excel–PDF結合アプリ (v0.9.40)
 # ======================================================
 
 import flet as ft
@@ -391,16 +391,22 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
             sub_df["品名"] = df[name_like_cols[0]].astype(str).fillna("").str.strip()
 
     # --- 数量フィルタ ---
-    quantity_col = next((c for c in df.columns if "数量" in str(c)), None)
-    if quantity_col:
+    # detect_columns() で検出した数量列を使う。
+    # 数量欄が完全に空（NaN / 空白）の行だけ除外し、0 は残す。
+    quantity_col = None
+    if "数量" in detected_columns:
+        quantity_col = df.columns[detected_columns["数量"]]
+
+    if quantity_col is not None:
         def keep_row(x):
-            # ✅ 数量欄が完全に空（NaN / 空白）の行だけ除外する
             if pd.isna(x):
                 return False
+
             s = str(x).strip()
+
             if s == "":
                 return False
-            # 0 かどうかはここでは判定しない（表示はする）
+
             return True
 
         sub_df = sub_df[df[quantity_col].apply(keep_row)]
