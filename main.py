@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.38)
+#  Excel–PDF結合アプリ (v0.9.39)
 # ======================================================
 
 import flet as ft
@@ -1390,17 +1390,6 @@ def main(page: ft.Page):
         for checkbox in output_checkboxes.values():
             checkbox.value = value
         page.update()
-
-    def get_cell_value(control):
-        if isinstance(control, ft.Text):
-            return control.value
-        if isinstance(control, ft.TextField):
-            return control.value
-        if isinstance(control, ft.Checkbox):
-            return control.value
-        if isinstance(control, ft.Container):
-            return get_cell_value(control.content)
-        return None
 
     def get_export_ready_df(df: pd.DataFrame) -> pd.DataFrame:
         """

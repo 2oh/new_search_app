@@ -1948,14 +1948,33 @@ Center align auxiliary result columns
 git commit -m "Center align auxiliary result columns(v0.9.38)"
 
 
+Open adopted PDF in Explorer
+採用PDFをエクスプローラーで開けるようにする
+
+採用PDF 欄をクリック
+↓
+エクスプローラーが開く
+↓
+該当PDFが選択状態になる
+
+
+いろいろ難しかった
+（やらない）
+git commit -m "Open adopted PDF in Explorer(v0.9.39)"
+（やらない）
+
+
+
+Remove unused table cell value helper
+使われていないテーブルセル値取得用ヘルパーを削除する
+
+git commit -m "Remove unused table cell value helper(v0.9.39)"
+
+
 
 5
 Add adopted PDF hover preview
 採用PDF欄のホバーでプレビューを表示する
-
-6
-Open adopted PDF in Explorer
-採用PDFをエクスプローラーで開けるようにする
 
 7
 Rename app to Drawing PDF Search Merge
