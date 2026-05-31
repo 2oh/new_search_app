@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.37)
+#  Excel–PDF結合アプリ (v0.9.38)
 # ======================================================
 
 import flet as ft
@@ -1023,6 +1023,20 @@ def main(page: ft.Page):
             }
             return display_name_map.get(column_name, column_name)
 
+        def should_center_align_column(column_name: str) -> bool:
+            center_columns = {
+                "共通",
+                "数量",
+                "数量セル色",
+                "検索文字列重複",
+                "出力対象",
+                "候補PDF数",
+                "候補状態",
+                "採用確認",
+                "候補確認",
+            }
+            return column_name in center_columns
+
         table.columns = [
             ft.DataColumn(ft.Text(get_display_column_name(c)))
             for c in display_columns
@@ -1050,6 +1064,7 @@ def main(page: ft.Page):
                         ft.DataCell(
                             ft.Container(
                                 content=content,
+                                alignment=ft.alignment.center,
                             )
                         )
                     )
@@ -1058,16 +1073,21 @@ def main(page: ft.Page):
 
                 if c == "候補確認":
                     if row.get("候補状態") in ("複数候補", "手動採用"):
-                        cells.append(
-                            ft.DataCell(
-                                ft.ElevatedButton(
-                                    "候補確認",
-                                    on_click=lambda e, row_index=idx: on_select_pdf_candidate(row_index)
-                                )
-                            )
+                        content = ft.ElevatedButton(
+                            "候補確認",
+                            on_click=lambda e, row_index=idx: on_select_pdf_candidate(row_index)
                         )
                     else:
-                        cells.append(ft.DataCell(ft.Text("")))
+                        content = ft.Text("")
+
+                    cells.append(
+                        ft.DataCell(
+                            ft.Container(
+                                content=content,
+                                alignment=ft.alignment.center,
+                            )
+                        )
+                    )
 
                     continue
 
@@ -1089,7 +1109,15 @@ def main(page: ft.Page):
                 if c == "出力対象":
                     checkbox = ft.Checkbox(value=bool(v))
                     output_checkboxes[idx] = checkbox
-                    cells.append(ft.DataCell(checkbox))
+
+                    cells.append(
+                        ft.DataCell(
+                            ft.Container(
+                                content=checkbox,
+                                alignment=ft.alignment.center,
+                            )
+                        )
+                    )
 
                 elif c == "検索用文字列":
                     text_field = ft.TextField(
@@ -1117,13 +1145,27 @@ def main(page: ft.Page):
                     )
 
                 else:
-                    cells.append(
-                        ft.DataCell(
-                            ft.SelectionArea(
-                                content=ft.Text(display_value)
-                            )
-                        )
+                    text_control = ft.Text(
+                        display_value,
+                        text_align=(
+                            ft.TextAlign.CENTER
+                            if should_center_align_column(c)
+                            else ft.TextAlign.LEFT
+                        ),
                     )
+
+                    cell_content = ft.Container(
+                        content=ft.SelectionArea(
+                            content=text_control
+                        ),
+                        alignment=(
+                            ft.alignment.center
+                            if should_center_align_column(c)
+                            else ft.alignment.center_left
+                        ),
+                    )
+
+                    cells.append(ft.DataCell(cell_content))
 
             table.rows.append(ft.DataRow(cells=cells))
 

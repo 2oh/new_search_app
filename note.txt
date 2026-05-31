@@ -1941,11 +1941,13 @@ Improve output PDF filename
 git commit -m "Improve output PDF filename(v0.9.37)"
 
 
-
-
-4
 Center align auxiliary result columns
 検索結果テーブルの補助列を中央揃えにする
+
+
+git commit -m "Center align auxiliary result columns(v0.9.38)"
+
+
 
 5
 Add adopted PDF hover preview
