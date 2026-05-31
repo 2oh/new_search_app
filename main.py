@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.31)
+#  Excel–PDF結合アプリ (v0.9.32)
 # ======================================================
 
 import flet as ft
@@ -130,6 +130,23 @@ def merge_pdfs(pdf_paths: list[str], output_path: str) -> str:
         writer.write(f)
 
     return str(output)
+
+def clear_preview_cache(cache_dir: str = PREVIEW_CACHE_DIR):
+    """
+    PDFプレビューキャッシュを全削除する。
+    アプリ起動時に呼び出し、preview_cache が増え続けるのを防ぐ。
+    """
+    cache_path = Path(cache_dir)
+
+    if not cache_path.exists():
+        return
+
+    for image_file in cache_path.glob("preview_*.png"):
+        try:
+            image_file.unlink()
+        except Exception:
+            # 削除できないファイルがあってもアプリ本体は止めない
+            pass
 
 def create_pdf_preview_image(
     pdf_path: str,
@@ -428,6 +445,9 @@ def main(page: ft.Page):
         page.window.min_height = 700
     except Exception:
         pass
+
+    # プレビューキャッシュを起動時に削除
+    clear_preview_cache()
 
     sheet_dropdown = None
 

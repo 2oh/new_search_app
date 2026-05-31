@@ -1833,7 +1833,8 @@ Clear PDF preview cache on startup
 
 - preview_cache 内の preview_*.png を起動時に削除する
 
-(v0.9.32)
+
+git commit -m "Clear PDF preview cache on startup(v0.9.32)"
 
 
 
