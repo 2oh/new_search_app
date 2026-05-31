@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.32)
+#  Excel–PDF結合アプリ (v0.9.33)
 # ======================================================
 
 import flet as ft
@@ -709,13 +709,13 @@ def main(page: ft.Page):
             visible=False,
         )
 
-        preview_message = ft.Text("候補PDFを選択すると、ここにプレビューを表示します。")
+        preview_message = ft.Text("左の候補PDFを選択すると、ここにプレビューを表示します。")
 
         def update_preview(pdf_path: str):
             if not pdf_path:
                 preview_image.src = ""
                 preview_image.visible = False
-                preview_message.value = "候補PDFを選択すると、ここにプレビューを表示します。"
+                preview_message.value = "左の候補PDFを選択すると、ここにプレビューを表示します。"
                 page.update()
                 return
 
@@ -791,6 +791,32 @@ def main(page: ft.Page):
 
             page.update()
 
+        def clear_selected_pdf(e):
+            """
+            手動採用済みのPDFを未選択に戻す。
+            複数候補行として扱い、採用PDFパスを空にする。
+            """
+            sync_table_state_to_current_df()
+
+            current_df.at[row_index, "採用PDFパス"] = ""
+            current_df.at[row_index, "候補状態"] = "複数候補"
+
+            render_table_from_df(current_df)
+
+            dialog.open = False
+
+            page.open(
+                ft.SnackBar(
+                    ft.Text("採用PDFを未選択に戻しました。")
+                )
+            )
+
+            print("===== PDF候補 採用解除 =====")
+            print(f"行index: {row_index}")
+            print(f"検索文字列: {row.get('検索用文字列', '')!r}")
+
+            page.update()
+
         def close_dialog(e):
             dialog.open = False
             page.update()
@@ -819,7 +845,17 @@ def main(page: ft.Page):
                                     ),
                                     ft.Text(f"候補数: {len(candidates)}"),
                                     ft.Text(f"現在の状態: {row.get('候補状態', '')}"),
-                                    ft.Text(f"現在の採用PDF: {current_adopted_display}"),
+                                    ft.Container(
+                                        content=ft.Text(
+                                            f"現在の採用PDF: {current_adopted_display}",
+                                            weight="bold",
+                                            color=ft.Colors.BLACK,
+                                        ),
+                                        padding=8,
+                                        border_radius=6,
+                                        bgcolor=ft.Colors.AMBER_50,
+                                        border=ft.border.all(1, ft.Colors.AMBER_200),
+                                    ),
                                     ft.Divider(),
                                     ft.Text("採用するPDFを選択してください。"),
                                     selected_pdf,
@@ -845,8 +881,9 @@ def main(page: ft.Page):
                 ),
             ),
             actions=[
+                ft.TextButton("採用を外す", on_click=clear_selected_pdf),
                 ft.TextButton("キャンセル", on_click=close_dialog),
-                ft.ElevatedButton("採用", on_click=apply_selected_pdf),
+                ft.ElevatedButton("このPDFを採用", on_click=apply_selected_pdf),
             ],
             actions_alignment="end",
         )
