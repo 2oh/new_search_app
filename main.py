@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.29)
+#  Excel–PDF結合アプリ (v0.9.30)
 # ======================================================
 
 import flet as ft
@@ -559,6 +559,20 @@ def main(page: ft.Page):
 
         return s
 
+    def create_preview_box(preview_image: ft.Image, height: int = 520) -> ft.Container:
+        """
+        PDFプレビュー画像を表示するための共通枠を作る。
+        """
+        return ft.Container(
+            content=preview_image,
+            alignment=ft.alignment.center,
+            border=ft.border.all(1, ft.Colors.GREY_500),
+            border_radius=8,
+            padding=10,
+            height=height,
+            bgcolor=ft.Colors.GREY_200,
+        )
+
     def on_preview_adopted_pdf(pdf_path: str):
         """
         採用済みPDFをプレビュー表示する。
@@ -571,8 +585,8 @@ def main(page: ft.Page):
 
         preview_image = ft.Image(
             src="",
-            width=520,
-            height=680,
+            width=760,
+            height=520,
             fit=ft.ImageFit.CONTAIN,
             visible=False,
         )
@@ -605,19 +619,12 @@ def main(page: ft.Page):
             modal=True,
             title=ft.Text("採用PDFプレビュー"),
             content=ft.Container(
-                width=620,
-                height=760,
+                width=860,
+                height=640,
                 content=ft.Column(
                     controls=[
                         preview_message,
-                        ft.Container(
-                            content=preview_image,
-                            alignment=ft.alignment.center,
-                            border=ft.border.all(1, ft.Colors.GREY_300),
-                            border_radius=6,
-                            padding=6,
-                            height=700,
-                        ),
+                        create_preview_box(preview_image, height=560),
                     ],
                     tight=True,
                 ),
@@ -668,19 +675,19 @@ def main(page: ft.Page):
 
         preview_image = ft.Image(
             src="",
-            width=360,
-            height=460,
+            width=520,
+            height=360,
             fit=ft.ImageFit.CONTAIN,
             visible=False,
         )
 
-        preview_message = ft.Text("候補PDFを選択するとプレビューを表示します。")
+        preview_message = ft.Text("候補PDFを選択すると、ここにプレビューを表示します。")
 
         def update_preview(pdf_path: str):
             if not pdf_path:
                 preview_image.src = ""
                 preview_image.visible = False
-                preview_message.value = "候補PDFを選択するとプレビューを表示します。"
+                preview_message.value = "候補PDFを選択すると、ここにプレビューを表示します。"
                 page.update()
                 return
 
@@ -763,8 +770,8 @@ def main(page: ft.Page):
             modal=True,
             title=ft.Text("PDF候補を選択"),
             content=ft.Container(
-                width=1050,
-                height=560,
+                width=1230,
+                height=520,
                 content=ft.Row(
                     controls=[
                         ft.Container(
@@ -788,19 +795,12 @@ def main(page: ft.Page):
                         ),
                         ft.VerticalDivider(),
                         ft.Container(
-                            width=390,
+                            width=560,
                             content=ft.Column(
                                 controls=[
                                     ft.Text("プレビュー", weight="bold"),
                                     preview_message,
-                                    ft.Container(
-                                        content=preview_image,
-                                        alignment=ft.alignment.center,
-                                        border=ft.border.all(1, ft.Colors.GREY_300),
-                                        border_radius=6,
-                                        padding=6,
-                                        height=490,
-                                    ),
+                                    create_preview_box(preview_image, height=390),
                                 ],
                                 tight=True,
                             ),

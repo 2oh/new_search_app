@@ -1804,6 +1804,19 @@ Show preview for adopted PDFs
 git commit -m "Show preview for adopted PDFs(v0.9.29)"
 
 
+2026/5/31
+
+Improve PDF preview layout
+PDFプレビュー表示レイアウトを改善する
+
+- プレビュー画像の表示サイズを少し調整する
+- プレビュー枠の見た目を共通化する
+- 読み込み前メッセージを少し自然にする
+- 候補選択ダイアログと採用PDFプレビューで、見た目の統一感を出す
+
+git commit -m "Improve PDF preview layout(v0.9.30)"
+
+
 
 
 
@@ -1819,6 +1832,8 @@ PDFプレビューの操作性を改善する
 （リリース）
 ・アイコン
 ・webかexeか
+・プレビューイメージ消す
+
 
 
 （課題）
