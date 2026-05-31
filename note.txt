@@ -1995,6 +1995,14 @@ Excel選択時のダイアログ表示に page.open を使う
 git commit -m "Use page.open for Excel selection dialogs(v0.9.43)"
 
 
+Rename Excel file field variable
+Excelファイル欄の変数名を変更する
+
+git commit -m "Rename Excel file field variable(v0.9.44)"
+
+
+
+
 5
 Add adopted PDF hover preview
 採用PDF欄のホバーでプレビューを表示する

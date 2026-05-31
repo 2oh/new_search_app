@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.43)
+#  Excel–PDF結合アプリ (v0.9.44)
 # ======================================================
 
 import flet as ft
@@ -484,7 +484,7 @@ def main(page: ft.Page):
 
     def save_config(e=None):
         config.update({
-            "excel_folder": excel_folder_field.value,
+            "excel_folder": excel_file_field.value,
             "pdf_folder": search_folder_field.value,
             "output_folder": output_folder_field.value,
             "search_mode": mode_dropdown.value,
@@ -1214,7 +1214,7 @@ def main(page: ft.Page):
         reset_extract_view()
 
         selected_excel_path = e.files[0].path
-        excel_folder_field.value = os.path.abspath(selected_excel_path)
+        excel_file_field.value = os.path.abspath(selected_excel_path)
         page.update()
 
         try:
@@ -1751,7 +1751,7 @@ def main(page: ft.Page):
         try:
             output_pdf_path = build_output_pdf_path(
                 output_folder,
-                excel_folder_field.value.strip(),
+                excel_file_field.value.strip(),
                 sheet_dropdown.value,
             )
 
@@ -1808,7 +1808,7 @@ def main(page: ft.Page):
     extract_btn = ft.ElevatedButton("抽出実行", on_click=on_extract_click)
 
     def set_excel_ui_enabled(enabled: bool):
-        excel_folder_field.disabled = not enabled
+        excel_file_field.disabled = not enabled
         pick_excel_btn.disabled = not enabled
         sheet_dropdown.disabled = not enabled
         sheet_dropdown.opacity = 1.0 if enabled else 0.5
@@ -1827,7 +1827,7 @@ def main(page: ft.Page):
         page.update()
 
     # ---- レイアウト ----
-    excel_folder_field = ft.TextField(label="選択中のExcelファイル", expand=True)
+    excel_file_field = ft.TextField(label="選択中のExcelファイル", expand=True)
     save_button = ft.ElevatedButton("設定を保存", on_click=save_config)
 
     folder_settings_row = ft.Row(
@@ -1855,7 +1855,7 @@ def main(page: ft.Page):
     excel_control_row = ft.Row(
         [
             ft.Container(
-                content=excel_folder_field,
+                content=excel_file_field,
                 expand=2,
             ),
             pick_excel_btn,
