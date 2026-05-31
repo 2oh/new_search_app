@@ -1817,14 +1817,31 @@ PDFプレビュー表示レイアウトを改善する
 git commit -m "Improve PDF preview layout(v0.9.30)"
 
 
+Improve PDF preview messages and actions
+PDFプレビューの表示メッセージと操作ボタンを改善する
+
+- プレビュー読み込み中メッセージを出す
+- プレビュー生成エラーの文言を少し親切にする
+- 採用PDFプレビューに「再読み込み」ボタンを追加する
+
+git commit -m "Improve PDF preview messages and actions(v0.9.31)"
+
+
+
+Clear PDF preview cache on startup
+起動時にPDFプレビューキャッシュを削除する
+
+- preview_cache 内の preview_*.png を起動時に削除する
+
+(v0.9.32)
 
 
 
 
 
-Commit 10
-Improve PDF preview interaction
-PDFプレビューの操作性を改善する
+
+
+
 
 
 
@@ -1833,6 +1850,7 @@ PDFプレビューの操作性を改善する
 ・アイコン
 ・webかexeか
 ・プレビューイメージ消す
+・「図面PDF検索結合」
 
 
 

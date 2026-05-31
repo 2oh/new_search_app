@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.30)
+#  Excel–PDF結合アプリ (v0.9.31)
 # ======================================================
 
 import flet as ft
@@ -594,6 +594,10 @@ def main(page: ft.Page):
         preview_message = ft.Text("プレビューを読み込み中...")
 
         def load_preview():
+            preview_image.visible = False
+            preview_message.value = "プレビューを読み込んでいます..."
+            page.update()
+
             try:
                 preview_path = create_pdf_preview_image(
                     pdf_path,
@@ -607,7 +611,10 @@ def main(page: ft.Page):
             except Exception as ex:
                 preview_image.src = ""
                 preview_image.visible = False
-                preview_message.value = f"プレビュー生成エラー: {ex}"
+                preview_message.value = (
+                    "プレビューを生成できませんでした。"
+                    f" PDFにアクセスできない、または形式に問題がある可能性があります。詳細: {ex}"
+                )
 
             page.update()
 
@@ -630,6 +637,7 @@ def main(page: ft.Page):
                 ),
             ),
             actions=[
+                ft.TextButton("再読み込み", on_click=lambda e: load_preview()),
                 ft.TextButton("閉じる", on_click=close_dialog),
             ],
             actions_alignment="end",
@@ -691,6 +699,10 @@ def main(page: ft.Page):
                 page.update()
                 return
 
+            preview_image.visible = False
+            preview_message.value = "プレビューを読み込んでいます..."
+            page.update()
+
             try:
                 preview_path = create_pdf_preview_image(
                     pdf_path,
@@ -704,7 +716,10 @@ def main(page: ft.Page):
             except Exception as ex:
                 preview_image.src = ""
                 preview_image.visible = False
-                preview_message.value = f"プレビュー生成エラー: {ex}"
+                preview_message.value = (
+                    "プレビューを生成できませんでした。"
+                    f" PDFにアクセスできない、または形式に問題がある可能性があります。詳細: {ex}"
+                )
 
             page.update()
 
