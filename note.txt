@@ -1971,11 +1971,18 @@ Remove unused table cell value helper
 git commit -m "Remove unused table cell value helper(v0.9.39)"
 
 
-
 Use detected quantity column for row filtering
 行フィルタに、検出済みの数量列を使う
 
 git commit -m "Use detected quantity column for row filtering(v0.9.40)"
+
+
+Close Excel workbooks after reading metadata
+メタデータ読み取り後にExcelブックを閉じる
+
+git commit -m "Close Excel workbooks after reading metadata(v0.9.41)"
+
+
 
 
 5
