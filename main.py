@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.34)
+#  Excel–PDF結合アプリ (v0.9.35)
 # ======================================================
 
 import flet as ft
@@ -899,7 +899,11 @@ def main(page: ft.Page):
     def update_duplicate_search_text_info(df: pd.DataFrame) -> pd.DataFrame:
         """
         検索用文字列の重複状況を表示用列に反映する。
-        同じ検索用文字列が複数行ある場合は「N件重複」と表示する。
+
+        同じ検索用文字列が複数行ある場合:
+        - 1件目: 「1件目」
+        - 2件目以降: 「2件目→」「3件目→」...
+        
         空欄の検索用文字列は重複判定しない。
         """
         if df is None or df.empty:
@@ -929,8 +933,38 @@ def main(page: ft.Page):
             return df
 
         for search_text, count in duplicate_texts.items():
-            mask = non_empty & search_texts.eq(search_text)
-            df.loc[mask, "検索文字列重複"] = f"{count}件"
+            matching_indices = df.index[non_empty & search_texts.eq(search_text)].tolist()
+
+            for position, idx in enumerate(matching_indices, start=1):
+                if position == 1:
+                    df.at[idx, "検索文字列重複"] = "1件目"
+                else:
+                    df.at[idx, "検索文字列重複"] = f"{position}件目→"
+
+        return df
+
+    def apply_duplicate_output_defaults(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        検索用文字列が重複している場合、2件目以降を初期出力対象外にする。
+
+        - 重複なし: 既存の出力対象を維持
+        - 1件目: 出力対象を維持
+        - 2件目以降: 出力対象を False にする
+        """
+        if df is None or df.empty:
+            return df
+
+        if "検索文字列重複" not in df.columns or "出力対象" not in df.columns:
+            return df
+
+        df = df.copy()
+
+        duplicate_info = df["検索文字列重複"].fillna("").astype(str).str.strip()
+
+        # 「2件目→」「3件目→」など、矢印付きの行を初期OFFにする
+        second_or_later = duplicate_info.str.endswith("→")
+
+        df.loc[second_or_later, "出力対象"] = False
 
         return df
 
@@ -985,8 +1019,8 @@ def main(page: ft.Page):
             "共通",
             "数量",
             "数量セル色",
-            "出力対象",
             "検索文字列重複",
+            "出力対象",
             "候補PDF数",
             "候補状態",
             "採用PDFパス",
@@ -1310,6 +1344,9 @@ def main(page: ft.Page):
 
             # 検索用文字列の重複表示を更新
             df = update_duplicate_search_text_info(df)
+
+            # 重複している検索用文字列の2件目以降は初期出力対象外にする
+            df = apply_duplicate_output_defaults(df)
 
             if df.empty:
                 message.value = "抽出結果がありません。"

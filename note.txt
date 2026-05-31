@@ -1908,9 +1908,15 @@ v1.0向けに検索結果テーブルの列順を整理する
 
 git commit -m "Reorder result table columns for v1.0(v0.9.34)"
 
-3
+
+
 Disable output for duplicate search rows by default
 重複している検索行の2件目以降を初期出力対象外にする
+
+
+git commit -m "Disable output for duplicate search rows by default(v0.9.35)"
+
+
 
 4
 Center align auxiliary result columns
@@ -1965,9 +1971,11 @@ Add normal search mode
 
 -----------------------------------------
 
-
-
 （課題）
+・やはりタイトル行は固定にしたい
+
+
+（大きな流れ）
 まず「構成部品表モード」が完成したら1.0.0とするべきか、それとも「通常」モードが出来てからににするべきか、というのがまず一つあります。 そして、「構成部品表モード」としての、残り作業は以下と認識しています。
 ・今回提案していただいているImprove candidate preview dialog controls 
 ・重複の場合に、２件目は初期値でチェックを入れない。そして、例えば重複欄に「２件目→」「３件目→」と入れるとか 
