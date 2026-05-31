@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.36)
+#  Excel–PDF結合アプリ (v0.9.37)
 # ======================================================
 
 import flet as ft
@@ -7,6 +7,7 @@ import pandas as pd
 import os
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
 
@@ -1393,9 +1394,31 @@ def main(page: ft.Page):
 
         return df[output_target & adopted_pdf_missing].copy()
 
-    def build_output_pdf_path(output_folder: str) -> str:
+    def sanitize_filename_part(text: str) -> str:
+        """
+        Windowsのファイル名に使えない文字を置換する。
+        """
+        if text is None:
+            return ""
+
+        text = str(text).strip()
+
+        invalid_chars = r'\/:*?"<>|'
+
+        for ch in invalid_chars:
+            text = text.replace(ch, "_")
+
+        text = " ".join(text.split())
+
+        return text
+
+    def build_output_pdf_path(output_folder: str, excel_path: str, sheet_name: str) -> str:
         """
         出力先フォルダから、結合PDFの保存パスを作る。
+
+        形式:
+        Excelファイル名_シート名_YYYYMMDD_HHMM.pdf
+
         同名ファイルがある場合は _001, _002... を付ける。
         """
         if not output_folder or not output_folder.strip():
@@ -1409,7 +1432,16 @@ def main(page: ft.Page):
         if not output_dir.is_dir():
             raise ValueError("出力先フォルダが正しくありません。")
 
-        base_name = "merged_output"
+        now_text = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        excel_stem = Path(excel_path).stem if excel_path else "Excel"
+        sheet_text = sheet_name if sheet_name else "Sheet"
+
+        excel_stem = sanitize_filename_part(excel_stem)
+        sheet_text = sanitize_filename_part(sheet_text)
+
+        base_name = f"{excel_stem}_{sheet_text}_{now_text}"
+
         candidate = output_dir / f"{base_name}.pdf"
 
         if not candidate.exists():
@@ -1661,7 +1693,11 @@ def main(page: ft.Page):
             return
 
         try:
-            output_pdf_path = build_output_pdf_path(output_folder)
+            output_pdf_path = build_output_pdf_path(
+                output_folder,
+                excel_folder_field.value.strip(),
+                sheet_dropdown.value,
+            )
 
             pdf_paths = (
                 export_ready_df["採用PDFパス"]

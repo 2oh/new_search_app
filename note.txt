@@ -1929,8 +1929,17 @@ OKで閉じる
 git commit -m "Simplify candidate selection dialog(v0.9.36)"
 
 
-ファイル名
-エクセル名＋シート名＋連番、連番管理が必要になるから×
+Improve output PDF filename
+出力PDFファイル名を分かりやすく改善する
+
+- Excelファイル名を取得
+- シート名を取得
+- 現在日時を YYYYMMDD_HHMM で付ける
+- ファイル名に使えない文字を置換
+- 出力PDF名をその形式にする
+
+git commit -m "Improve output PDF filename(v0.9.37)"
+
 
 
 
