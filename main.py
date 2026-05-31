@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.44)
+#  Excel–PDF結合アプリ (v0.9.45)
 # ======================================================
 
 import flet as ft
@@ -475,7 +475,6 @@ def main(page: ft.Page):
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         return {
-            "excel_folder": "",
             "pdf_folder": "",
             "output_folder": "",
             "search_mode": "構成部品表",
@@ -484,7 +483,6 @@ def main(page: ft.Page):
 
     def save_config(e=None):
         config.update({
-            "excel_folder": excel_file_field.value,
             "pdf_folder": search_folder_field.value,
             "output_folder": output_folder_field.value,
             "search_mode": mode_dropdown.value,

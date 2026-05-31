@@ -2001,6 +2001,12 @@ Excelファイル欄の変数名を変更する
 git commit -m "Rename Excel file field variable(v0.9.44)"
 
 
+Stop saving selected Excel path in config
+選択中のExcelパスを設定ファイルに保存しないようにする
+
+git commit -m "Stop saving selected Excel path in config(v0.9.45)"
+
+
 
 
 5
