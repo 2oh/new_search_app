@@ -2059,8 +2059,10 @@ Gate column detection debug logs
 git commit -m "Gate column detection debug logs(v0.9.51)"
 
 
+Gate PDF operation debug logs
+PDF操作まわりのデバッグログをDEBUGフラグで制御する
 
-
+git commit -m "Gate PDF operation debug logs(v0.9.52)"
 
 
 

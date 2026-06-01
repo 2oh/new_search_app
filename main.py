@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.51)
+#  図面PDF検索結合 (v0.9.52)
 # ======================================================
 
 import flet as ft
@@ -775,9 +775,9 @@ def main(page: ft.Page):
                 preview_image.visible = False
                 preview_message.value = "採用しない状態です。左の候補PDFを選ぶとプレビューを表示します。"
 
-                print("===== PDF候補 採用解除 =====")
-                print(f"行index: {row_index}")
-                print(f"検索文字列: {row.get('検索用文字列', '')!r}")
+                debug_print("===== PDF候補 採用解除 =====")
+                debug_print(f"行index: {row_index}")
+                debug_print(f"検索文字列: {row.get('検索用文字列', '')!r}")
 
                 page.update()
                 return
@@ -788,11 +788,11 @@ def main(page: ft.Page):
             current_df.at[row_index, "採用PDFパス"] = selected_value
             current_df.at[row_index, "候補状態"] = "手動採用"
 
-            print("===== PDF候補 即時採用 =====")
-            print(f"行index: {row_index}")
-            print(f"検索文字列: {row.get('検索用文字列', '')!r}")
-            print(f"採用PDF: {format_pdf_path_for_display(selected_value)}")
-            print(f"採用PDFフルパス: {selected_value}")
+            debug_print("===== PDF候補 即時採用 =====")
+            debug_print(f"行index: {row_index}")
+            debug_print(f"検索文字列: {row.get('検索用文字列', '')!r}")
+            debug_print(f"採用PDF: {format_pdf_path_for_display(selected_value)}")
+            debug_print(f"採用PDFフルパス: {selected_value}")
 
             update_preview(selected_value)
 
@@ -1631,9 +1631,9 @@ def main(page: ft.Page):
         export_ready_df = get_export_ready_df(current_df)
         export_ready_count = len(export_ready_df)
 
-        print("===== PDF候補抽出結果 =====")
+        debug_print("===== PDF候補抽出結果 =====")
         for idx, row in current_df.iterrows():
-            print(
+            debug_print(
                 f"[{idx}] "
                 f"出力対象={row.get('出力対象', False)}, "
                 f"検索用文字列={row.get('検索用文字列', '')!r}, "
@@ -1643,14 +1643,14 @@ def main(page: ft.Page):
                 f"採用PDFパス={row.get('採用PDFパス', '')!r}"
             )
 
-        print("===== 複数候補行 =====")
+        debug_print("===== 複数候補行 =====")
         multiple_df = current_df[current_df["候補PDF数"].fillna(0) >= 2].copy()
 
         if multiple_df.empty:
-            print("複数候補の行はありません。")
+            debug_print("複数候補の行はありません。")
         else:
             for idx, row in multiple_df.iterrows():
-                print(
+                debug_print(
                     f"[{idx}] "
                     f"検索用文字列={row.get('検索用文字列', '')!r}, "
                     f"候補PDF数={row.get('候補PDF数', 0)}"
@@ -1661,10 +1661,10 @@ def main(page: ft.Page):
                     candidates = []
 
                 for i, candidate_path in enumerate(candidates, start=1):
-                    print(f"  {i}. {candidate_path}")
+                    debug_print(f"  {i}. {candidate_path}")
 
 
-        print("===== 検索用文字列 重複行 =====")
+        debug_print("===== 検索用文字列 重複行 =====")
         duplicate_df = current_df[
             current_df["検索文字列重複"]
             .fillna("")
@@ -1674,10 +1674,10 @@ def main(page: ft.Page):
         ].copy()
 
         if duplicate_df.empty:
-            print("検索用文字列が重複している行はありません。")
+            debug_print("検索用文字列が重複している行はありません。")
         else:
             for idx, row in duplicate_df.iterrows():
-                print(
+                debug_print(
                     f"[{idx}] "
                     f"検索用文字列={row.get('検索用文字列', '')!r}, "
                     f"重複={row.get('検索文字列重複', '')!r}, "
@@ -1685,12 +1685,12 @@ def main(page: ft.Page):
                     f"採用PDFパス={row.get('採用PDFパス', '')!r}"
                 )
 
-        print("===== 出力可能行 =====")
+        debug_print("===== 出力可能行 =====")
         if export_ready_df.empty:
-            print("出力可能な行はありません。")
+            debug_print("出力可能な行はありません。")
         else:
             for idx, row in export_ready_df.iterrows():
-                print(
+                debug_print(
                     f"[{idx}] "
                     f"検索用文字列={row.get('検索用文字列', '')!r}, "
                     f"採用PDFパス={row.get('採用PDFパス', '')!r}"
@@ -1794,16 +1794,16 @@ def main(page: ft.Page):
             if missing_pdf_count > 0:
                 result_message += f"\n注意: 出力対象のうち {missing_pdf_count} 件は採用PDFが未確定のため除外しました。"
 
-            print("===== PDF出力 =====")
-            print(f"出力PDF: {output_pdf_path}")
-            print("===== 結合対象PDF =====")
+            debug_print("===== PDF出力 =====")
+            debug_print(f"出力PDF: {output_pdf_path}")
+            debug_print("===== 結合対象PDF =====")
             for p in pdf_paths:
-                print(p)
+                debug_print(p)
 
             if missing_pdf_count > 0:
-                print("===== 出力対象だが採用PDF未確定の行 =====")
+                debug_print("===== 出力対象だが採用PDF未確定の行 =====")
                 for idx, row in missing_pdf_df.iterrows():
-                    print(
+                    debug_print(
                         f"[{idx}] "
                         f"検索用文字列={row.get('検索用文字列', '')!r}, "
                         f"候補PDF数={row.get('候補PDF数', 0)}, "
