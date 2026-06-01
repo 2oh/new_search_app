@@ -2026,6 +2026,17 @@ Excelモードを無効にしたとき、Excel選択状態をリセットする
 git commit -m "Reset Excel selection when disabling Excel mode(v0.9.48)"
 
 
+1. Extract sheet placeholder constant
+2. 表示列・配置の最終確認
+3. アプリ名を「図面PDF検索結合」に変更
+4. デバッグprint整理
+5. ホバープレビューを v1.0 に入れるか判断
+6. 入れるなら小さく実装、難しければ v1.1 に回す
+7. リリース前チェック
+8. PyInstallerでEXE化
+9. 別PC・NAS環境で動作確認
+10. v1.0タグ or リリース用コミット
+
 
 2026/6/1
 
@@ -2036,6 +2047,10 @@ Extract sheet placeholder constant
 git commit -m "Extract sheet placeholder constant(v0.9.49)"
 
 
+Rename app to drawing PDF search merger
+アプリ名を「図面PDF検索結合」に変更する
+
+git commit -m "Rename app to drawing PDF search merger(v0.9.50)"
 
 
 
