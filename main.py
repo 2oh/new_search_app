@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.50)
+#  図面PDF検索結合 (v0.9.51)
 # ======================================================
 
 import flet as ft
@@ -13,7 +13,11 @@ from openpyxl import load_workbook
 
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
+DEBUG = False
 
+def debug_print(*args, **kwargs):
+    if DEBUG:
+        print(*args, **kwargs)
 
 # ========= 共通ユーティリティ =========
 def normalize(text: str) -> str:
@@ -246,28 +250,28 @@ def detect_columns(file_path: str, sheet_name: str, header_row_index: int, targe
 
     df = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row_index)
 
-    print(f"\n[DEBUG] ===== detect_columns start =====")
-    print(f"[DEBUG] header_row_index = {header_row_index}")
-    print(f"[DEBUG] df.columns = {list(df.columns)}")
+    debug_print(f"\n[DEBUG] ===== detect_columns start =====")
+    debug_print(f"[DEBUG] header_row_index = {header_row_index}")
+    debug_print(f"[DEBUG] df.columns = {list(df.columns)}")
 
     detected = {}
     normalized_cols = [normalize(c) for c in df.columns]
-    print(f"[DEBUG] normalized_cols = {normalized_cols}")
+    debug_print(f"[DEBUG] normalized_cols = {normalized_cols}")
 
     for target in target_columns:
         norm_target = normalize(target)
-        print(f"[DEBUG] Searching for '{target}' (normalized='{norm_target}')")
+        debug_print(f"[DEBUG] Searching for '{target}' (normalized='{norm_target}')")
         for i, col in enumerate(normalized_cols):
             if norm_target in col or col in norm_target:
-                print(f"[DEBUG]  -> matched '{df.columns[i]}' (normalized='{col}')")
+                debug_print(f"[DEBUG]  -> matched '{df.columns[i]}' (normalized='{col}')")
                 detected[target] = i
                 break
             if norm_target.startswith("pg") and ("pg" in col or "ｐｇ" in col):
-                print(f"[DEBUG]  -> matched (special rule) '{df.columns[i]}' (normalized='{col}')")
+                debug_print(f"[DEBUG]  -> matched (special rule) '{df.columns[i]}' (normalized='{col}')")
                 detected[target] = i
                 break
-    print(f"[DEBUG] detect_columns detected={detected}")
-    print(f"[DEBUG] ===== detect_columns end =====\n")
+    debug_print(f"[DEBUG] detect_columns detected={detected}")
+    debug_print(f"[DEBUG] ===== detect_columns end =====\n")
 
     return detected
 

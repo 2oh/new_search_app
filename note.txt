@@ -2053,6 +2053,11 @@ Rename app to drawing PDF search merger
 git commit -m "Rename app to drawing PDF search merger(v0.9.50)"
 
 
+Gate column detection debug logs
+列検出のデバッグログをDEBUGフラグで制御する
+
+git commit -m "Gate column detection debug logs(v0.9.51)"
+
 
 
 
