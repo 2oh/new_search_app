@@ -2027,7 +2027,13 @@ git commit -m "Reset Excel selection when disabling Excel mode(v0.9.48)"
 
 
 
+2026/6/1
 
+
+Extract sheet placeholder constant
+シート選択のプレースホルダ文字列を定数化する
+
+git commit -m "Extract sheet placeholder constant(v0.9.49)"
 
 
 

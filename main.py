@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.48)
+#  Excel–PDF結合アプリ (v0.9.49)
 # ======================================================
 
 import flet as ft
@@ -567,6 +567,7 @@ def main(page: ft.Page):
 
     # ---- Excel選択 ----
     selected_excel_path = ""
+    SHEET_PLACEHOLDER = "（シートを選択してください）"
     sheet_dropdown = ft.Dropdown(label="シート選択", width=420)
     message = ft.Text("")
     mode_notice = ft.Text("")
@@ -1200,9 +1201,9 @@ def main(page: ft.Page):
         excel_file_field.value = ""
 
         sheet_dropdown.options = [
-            ft.dropdown.Option("（シートを選択してください）")
+            ft.dropdown.Option(SHEET_PLACEHOLDER)
         ]
-        sheet_dropdown.value = "（シートを選択してください）"
+        sheet_dropdown.value = SHEET_PLACEHOLDER
 
         reset_extract_view()
 
@@ -1237,10 +1238,10 @@ def main(page: ft.Page):
 
             # ✅ Dropdownを作り直さず、options/valueだけ更新する
             sheet_dropdown.options = [
-                ft.dropdown.Option("（シートを選択してください）"),
+                ft.dropdown.Option(SHEET_PLACEHOLDER),
                 *[ft.dropdown.Option(name) for name in sheet_names]
             ]
-            sheet_dropdown.value = "（シートを選択してください）"
+            sheet_dropdown.value = SHEET_PLACEHOLDER
             sheet_dropdown.on_change = on_sheet_change  # 念のため（維持）
             sheet_dropdown.update()
 
@@ -1304,7 +1305,7 @@ def main(page: ft.Page):
 
         # 2) シート未選択（プレースホルダ含む）
         sheet_val = sheet_dropdown.value
-        if (not sheet_val) or (sheet_val == "（シートを選択してください）"):
+        if (not sheet_val) or (sheet_val == SHEET_PLACEHOLDER):
             message.value = "シートを選択してください。"
             page.update()
             return
