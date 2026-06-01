@@ -2020,6 +2020,26 @@ Make selected Excel file field read-only
 git commit -m "Make selected Excel file field read-only(v0.9.47)"
 
 
+Reset Excel selection when disabling Excel mode
+Excelモードを無効にしたとき、Excel選択状態をリセットする
+
+git commit -m "Reset Excel selection when disabling Excel mode(v0.9.48)"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 5
 Add adopted PDF hover preview
 採用PDF欄のホバーでプレビューを表示する

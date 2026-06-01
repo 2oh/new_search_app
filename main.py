@@ -1,5 +1,5 @@
 # ======================================================
-#  Excel–PDF結合アプリ (v0.9.47)
+#  Excel–PDF結合アプリ (v0.9.48)
 # ======================================================
 
 import flet as ft
@@ -1190,6 +1190,22 @@ def main(page: ft.Page):
         message.value = ""
         page.update()
 
+    def reset_excel_selection():
+        """
+        選択中のExcelファイルとシート選択を初期化する。
+        """
+        nonlocal selected_excel_path
+
+        selected_excel_path = ""
+        excel_file_field.value = ""
+
+        sheet_dropdown.options = [
+            ft.dropdown.Option("（シートを選択してください）")
+        ]
+        sheet_dropdown.value = "（シートを選択してください）"
+
+        reset_extract_view()
+
     def on_sheet_change(e):
         # シート変更時に抽出結果を初期化
         reset_extract_view()
@@ -1813,9 +1829,7 @@ def main(page: ft.Page):
         extract_btn.disabled = not enabled
 
         if not enabled:
-            # ✅ 通常モードへ切替 → シート選択をプレースホルダに戻す
-            sheet_dropdown.value = "（シートを選択してください）"
-            reset_extract_view()
+            reset_excel_selection()
             mode_notice.value = "通常モードでは構成部品表選択は無効です。"
         else:
             mode_notice.value = ""
