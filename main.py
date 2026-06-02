@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.52)
+#  図面PDF検索結合 (v0.9.53)
 # ======================================================
 
 import flet as ft
@@ -246,7 +246,7 @@ def create_pdf_preview_image(
 # ========= Excel列検出 =========
 def detect_columns(file_path: str, sheet_name: str, header_row_index: int, target_columns=None):
     if target_columns is None:
-        target_columns = ["品番", "PG名", "品名", "数量"]
+        target_columns = ["品番", "PG名", "品名", "材料", "数量"]
 
     df = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row_index)
 
@@ -349,7 +349,7 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
     df = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row_index)
 
     col_items = []
-    for key in ["品番", "PG名", "品名", "数量"]:
+    for key in ["品番", "PG名", "品名", "材料", "数量"]:
         if key in detected_columns:
             col_name = df.columns[detected_columns[key]]
             col_items.append(col_name)
@@ -429,6 +429,8 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
         rename_map[df.columns[detected_columns["PG名"]]] = "PG名"
     if "品名" in detected_columns:
         rename_map[df.columns[detected_columns["品名"]]] = "品名"
+    if "材料" in detected_columns:
+        rename_map[df.columns[detected_columns["材料"]]] = "材料"
     if "数量" in detected_columns:
         rename_map[df.columns[detected_columns["数量"]]] = "数量"
 
@@ -444,7 +446,7 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
         sub_df.drop(columns=[c for c in name_like_cols if c != "品名"], inplace=True)
 
     # ✅ 対象列のみを保持（項番・備考など除外）
-    keep_cols = [c for c in ["品番", "PG名", "品名", "共通", "数量"] if c in sub_df.columns]
+    keep_cols = [c for c in ["品番", "PG名", "品名", "材料", "共通", "数量"] if c in sub_df.columns]
     sub_df = sub_df[keep_cols]
 
     return sub_df
@@ -996,6 +998,7 @@ def main(page: ft.Page):
             "品番",
             "PG名",
             "品名",
+            "材料",
             "検索用文字列",
             "共通",
             "数量",

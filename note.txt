@@ -2065,6 +2065,74 @@ PDF操作まわりのデバッグログをDEBUGフラグで制御する
 git commit -m "Gate PDF operation debug logs(v0.9.52)"
 
 
+Ignore preview cache files
+プレビューキャッシュファイルをGit管理対象から除外する
+
+git commit -m "Ignore preview cache files"
+
+
+
+2026/6/2
+①　表示項目に「材料」を追加したい。「材料」は元エクセルに「材料」として項目があります。これを取り込んで表示したい。
+
+②　候補確認ダイアログにて、検索文字列に加えて、「品名」と「材料」を表示したい
+
+③メッセージ欄の表示が多い気がする。メッセージ欄への表示ではなく、例えば、
+検索文字列欄、出力対象欄、採用PDF欄等にバッジで件数表示とかはどうか。スナックバーとの表示内容重複も気になっているので、何か提案してもらえると嬉しい
+
+④　③に関連して、一番左に「項番」として連番を表示するのはありかもしれない。
+
+⑤　windowsエクスプローラーのように、カーソルによる上下移動は可能か？（これは参考までに）
+
+⑥　「重複」について、今まで検索対象文字列の重複について扱ってきたが、確かに文字列が重複していると、同じPDFを複数持ってくることになるが、それ以外のケースでも同じPDFを持ってくるケースがあり、これは、検索文字列がAとBとあった場合に、PDF側のファイル名が、A＿B.pdfだったりした場合である。運用上、このケースも多く想定されるため、今までやっていた検索文字列の重複チェックはやめて、採用PDFの重複チェックを行いたい。そして、採用PDFが重複した場合は、重複表示の上、出力対象チェックを外したい
+
+以上、今更でも申し訳ありませんが、ご検討ください
+
+
+
+A. 材料列を追加
+Add material column to extracted results
+材料 を抽出対象に追加
+表示列に追加
+
+Add material column to extracted results
+抽出結果に材料列を追加する
+
+git commit -m "Add material column to extracted results(v0.9.53)"
+
+
+
+
+
+
+B. 候補確認ダイアログに 品名・材料 を表示
+Show item details in candidate dialog
+候補確認ダイアログに 品名 / 材料 を表示
+
+C. 検索文字列重複 → 採用PDF重複 に方針変更
+Use adopted PDF duplicates for output defaults
+検索文字列重複チェックを廃止
+採用PDF重複チェックを追加
+重複PDFの2件目以降を出力対象OF
+
+E. 項番列を追加
+Add row number to result table
+項番 表示列を追加
+
+D. メッセージ欄と件数表示の整理
+Summarize result counts with badges
+長いメッセージを短くする
+件数をバッジ表示にする
+SnackBarとの重複を減らす
+
+F. カーソル上下移動は将来課題
+やらない
+
+G. その後にホバープレビュー
+
+
+
+
 
 
 
