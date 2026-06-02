@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.53)
+#  図面PDF検索結合 (v0.9.54)
 # ======================================================
 
 import flet as ft
@@ -707,6 +707,12 @@ def main(page: ft.Page):
             return
 
         row = current_df.loc[row_index]
+
+        def format_dialog_value(value) -> str:
+            if pd.isna(value) or str(value).strip().lower() in ("nan", "none"):
+                return ""
+            return str(value).strip()
+
         candidates = row.get("候補PDFパス一覧", [])
 
         if not isinstance(candidates, list):
@@ -839,11 +845,13 @@ def main(page: ft.Page):
                             content=ft.Column(
                                 controls=[
                                     ft.Text(
-                                        f"検索文字列: {row.get('検索用文字列', '')}",
+                                        f"検索文字列: {format_dialog_value(row.get('検索用文字列', ''))}",
                                         weight="bold",
                                     ),
+                                    ft.Text(f"品名: {format_dialog_value(row.get('品名', ''))}"),
+                                    ft.Text(f"材料: {format_dialog_value(row.get('材料', ''))}"),
                                     ft.Text(f"候補数: {len(candidates)}"),
-                                    ft.Text(f"現在の状態: {row.get('候補状態', '')}"),
+                                    ft.Text(f"現在の状態: {format_dialog_value(row.get('候補状態', ''))}"),
                                     ft.Divider(),
                                     ft.Text("採用するPDFを選んでください。選択はすぐに反映されます。"),
                                     selected_pdf,

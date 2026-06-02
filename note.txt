@@ -2101,13 +2101,16 @@ Add material column to extracted results
 git commit -m "Add material column to extracted results(v0.9.53)"
 
 
-
-
-
-
 B. 候補確認ダイアログに 品名・材料 を表示
 Show item details in candidate dialog
 候補確認ダイアログに 品名 / 材料 を表示
+
+Show item details in candidate dialog
+候補確認ダイアログに品名・材料などの詳細を表示する
+
+git commit -m "Show item details in candidate dialog(v0.9.54)"
+
+
 
 C. 検索文字列重複 → 採用PDF重複 に方針変更
 Use adopted PDF duplicates for output defaults
