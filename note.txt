@@ -2126,21 +2126,26 @@ git commit -m "Show item details in candidate dialog(v0.9.54)"
 
 1
 Rename adopted PDF display to output PDF
+採用PDFの画面表示名を出力PDFに変更する
+
 表示名 採用PDF → 出力PDF
 内部列名 採用PDFパス はまだ変えない
 画面表示だけ変更
 
-採用PDFの画面表示名を出力PDFに変更する
-
 git commit -m "Rename adopted PDF display to output PDF(v0.9.55)"
-
 
 
 2
 Merge candidate status into output PDF column
+候補状態を出力PDF列に統合する
+
 候補状態 列を表示から外す
 出力PDF 列に、PDFがあるときはファイル名/相対パス
 PDFがないときは 未検索 / 未検出 / 複数候補 を表示
+
+git commit -m "Merge candidate status into output PDF column(v0.9.56)"
+
+
 
 3
 Move candidate action next to candidate count

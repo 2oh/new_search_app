@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.55)
+#  図面PDF検索結合 (v0.9.56)
 # ======================================================
 
 import flet as ft
@@ -1000,6 +1000,7 @@ def main(page: ft.Page):
             "候補PDFパス一覧",
             "先頭候補PDF",
             "元検索文字列",
+            "候補状態",
         }
 
         preferred_order = [
@@ -1014,7 +1015,6 @@ def main(page: ft.Page):
             "検索文字列重複",
             "出力対象",
             "候補PDF数",
-            "候補状態",
             "採用PDFパス",
         ]
 
@@ -1121,7 +1121,12 @@ def main(page: ft.Page):
                     display_value = "あり" if str(v).strip() else ""
 
                 elif c == "採用PDFパス":
-                    display_value = format_pdf_path_for_display(v)
+                    adopted_pdf_path = str(row.get("採用PDFパス", "") or "").strip()
+
+                    if adopted_pdf_path:
+                        display_value = format_pdf_path_for_display(adopted_pdf_path)
+                    else:
+                        display_value = str(row.get("候補状態", "") or "").strip()
 
                 else:
                     if pd.isna(v) or str(v).strip().lower() in ("nan", "none"):
@@ -1168,8 +1173,24 @@ def main(page: ft.Page):
                     )
 
                 else:
+                    text_color = None
+
+                    if c == "採用PDFパス":
+                        adopted_pdf_path = str(row.get("採用PDFパス", "") or "").strip()
+                        candidate_status = str(row.get("候補状態", "") or "").strip()
+
+                        if adopted_pdf_path:
+                            text_color = None
+                        elif candidate_status == "未検出":
+                            text_color = ft.Colors.RED_700
+                        elif candidate_status == "複数候補":
+                            text_color = ft.Colors.ORANGE_800
+                        else:
+                            text_color = ft.Colors.GREY_600
+
                     text_control = ft.Text(
                         display_value,
+                        color=text_color,
                         text_align=(
                             ft.TextAlign.CENTER
                             if should_center_align_column(c)
