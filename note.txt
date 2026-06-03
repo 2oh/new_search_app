@@ -2112,6 +2112,46 @@ git commit -m "Show item details in candidate dialog(v0.9.54)"
 
 
 
+
+
+2026/6/3
+
+
+・「採用PDF」を「出力PDF」に名称変更
+・「候補状態」表示を廃止して「出力PDF」に統合し、「候補状態」が「自動採用」「手動採用」の場合は「出力PDF」にファイル名を表示、それ以外の場合は「出力PDF」に「候補状態」を表示
+・「採用確認」を「プレビュー」にし、現在のプレビューボタンは、「プレビュー」ではなく、シンプルなアイコン表示にする
+・「候補確認」を「候補数」の右に
+・加えて、この状態で、さらに新しい考え方の「重複」をどこに表示するかを、検討してほしい
+
+
+1
+Rename adopted PDF display to output PDF
+表示名 採用PDF → 出力PDF
+内部列名 採用PDFパス はまだ変えない
+画面表示だけ変更
+
+採用PDFの画面表示名を出力PDFに変更する
+
+git commit -m "Rename adopted PDF display to output PDF(v0.9.55)"
+
+
+
+2
+Merge candidate status into output PDF column
+候補状態 列を表示から外す
+出力PDF 列に、PDFがあるときはファイル名/相対パス
+PDFがないときは 未検索 / 未検出 / 複数候補 を表示
+
+3
+Move candidate action next to candidate count
+候補確認 を 候補数 の右へ移動
+
+4
+Rename preview action column
+採用確認 → プレビュー
+ボタンをアイコン化
+
+
 C. 検索文字列重複 → 採用PDF重複 に方針変更
 Use adopted PDF duplicates for output defaults
 検索文字列重複チェックを廃止
