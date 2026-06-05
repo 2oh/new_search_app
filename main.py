@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.57)
+#  図面PDF検索結合 (v0.9.58)
 # ======================================================
 
 import flet as ft
@@ -1011,6 +1011,7 @@ def main(page: ft.Page):
             "数量",
             "数量セル色",
             "縦結合",
+            "出力可否",
             "検索用文字列",
             "共通",
             "検索文字列重複",
@@ -1053,6 +1054,7 @@ def main(page: ft.Page):
                 "数量",
                 "数量セル色",
                 "縦結合",
+                "出力可否",
                 "検索文字列重複",
                 "出力対象",
                 "候補PDF数",
@@ -1188,6 +1190,12 @@ def main(page: ft.Page):
                             text_color = ft.Colors.ORANGE_800
                         else:
                             text_color = ft.Colors.GREY_600
+
+                    elif c == "出力可否":
+                        if str(display_value).strip() == "不可":
+                            text_color = ft.Colors.RED_700
+                        else:
+                            text_color = ft.Colors.GREEN_700
 
                     text_control = ft.Text(
                         display_value,
@@ -1459,15 +1467,33 @@ def main(page: ft.Page):
                 except ValueError:
                     return False
 
-            # 出力対象判定：色付き or 数量ゼロ → False
-            def decide_output_target(row):
-                colored = bool(row.get("数量セル色"))
+            def decide_output_eligibility(row):
+                """
+                Excel上の条件から、自動出力処理の対象にしてよいかを判定する。
+
+                不可条件:
+                - 数量が0
+                - 数量セル色あり
+                - 縦結合あり
+                """
                 zero_qty = False
+
                 if "数量" in df.columns:
                     zero_qty = is_zero_quantity(row.get("数量"))
-                return not (colored or zero_qty)
 
-            df["出力対象"] = df.apply(decide_output_target, axis=1)
+                colored = bool(str(row.get("数量セル色", "") or "").strip())
+                vertically_merged = bool(str(row.get("縦結合", "") or "").strip())
+
+                if zero_qty or colored or vertically_merged:
+                    return "不可"
+
+                return "可"
+
+            df["出力可否"] = df.apply(decide_output_eligibility, axis=1)
+
+            # この時点では、まだ出力PDFが確定していないため、出力対象はすべてOFF。
+            # PDF候補抽出後、出力可否が「可」かつ出力PDFが確定した行だけONにする。
+            df["出力対象"] = False
 
             # PDF候補情報の初期列
             df["候補PDF数"] = 0

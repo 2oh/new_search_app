@@ -2169,12 +2169,14 @@ Add vertical merge flag to extracted results
 git commit -m "Add vertical merge flag to extracted results(v0.9.57)"
 
 
-
-
-
 2. 出力可否列を追加
 Add output eligibility column
 出力可否列を追加する
+
+git commit -m "Add output eligibility column(v0.9.58)"
+
+
+
 
 3. 出力可否不可の行を検索・候補抽出対象外にする
 Skip ineligible rows during PDF search
