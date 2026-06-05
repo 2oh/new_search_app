@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.56)
+#  図面PDF検索結合 (v0.9.57)
 # ======================================================
 
 import flet as ft
@@ -1008,10 +1008,11 @@ def main(page: ft.Page):
             "PG名",
             "品名",
             "材料",
-            "検索用文字列",
-            "共通",
             "数量",
             "数量セル色",
+            "縦結合",
+            "検索用文字列",
+            "共通",
             "検索文字列重複",
             "出力対象",
             "候補PDF数",
@@ -1051,10 +1052,10 @@ def main(page: ft.Page):
                 "共通",
                 "数量",
                 "数量セル色",
+                "縦結合",
                 "検索文字列重複",
                 "出力対象",
                 "候補PDF数",
-                "候補状態",
                 "採用確認",
                 "候補確認",
             }
@@ -1316,6 +1317,42 @@ def main(page: ft.Page):
         finally:
             wb.close()
 
+    def get_vertically_merged_data_row_indices(merged_cells_info, header_row_index: int) -> set[int]:
+        """
+        ヘッダ行より下で、縦方向にまたがる結合セルを含むDataFrame上の行indexを返す。
+
+        戻り値のindexは、pd.read_excel(..., header=header_row_index) で作った
+        DataFrameのindexに対応する。
+
+        横方向だけの結合セルは対象外。
+        """
+        merged_row_indices = set()
+
+        # Excel上のデータ開始行。
+        # header_row_index は 0始まり、openpyxlの行番号は1始まり。
+        # pandasで header=header_row_index とした場合、
+        # DataFrame index 0 は Excel上の header_row_index + 2 行目に対応する。
+        data_start_excel_row = header_row_index + 2
+
+        for crange in merged_cells_info:
+            # 横結合だけなら対象外
+            if crange.min_row == crange.max_row:
+                continue
+
+            # ヘッダ行以前の結合は対象外
+            if crange.max_row < data_start_excel_row:
+                continue
+
+            start_excel_row = max(crange.min_row, data_start_excel_row)
+            end_excel_row = crange.max_row
+
+            for excel_row in range(start_excel_row, end_excel_row + 1):
+                df_index = excel_row - data_start_excel_row
+                if df_index >= 0:
+                    merged_row_indices.add(df_index)
+
+        return merged_row_indices
+
     def detect_header_row(df, merged_cells_info):
         merged_a_rows = set()
         for crange in merged_cells_info:
@@ -1359,6 +1396,11 @@ def main(page: ft.Page):
             detected_columns = detect_columns(selected_excel_path, sheet_dropdown.value, header_row_index)
             df = extract_data_from_excel(selected_excel_path, sheet_dropdown.value, detected_columns, header_row_index)
 
+            vertical_merge_indices = get_vertically_merged_data_row_indices(
+                merged_info,
+                header_row_index,
+            )
+
             def create_search_keyword(text):
                 if pd.isna(text):
                     return ""
@@ -1399,6 +1441,11 @@ def main(page: ft.Page):
                 df["数量セル色"] = [color_by_df_index(i) for i in df.index]
             else:
                 df["数量セル色"] = ""
+
+            df["縦結合"] = [
+                "あり" if i in vertical_merge_indices else ""
+                for i in df.index
+            ]
 
             # 数量ゼロ判定（0, "0", "0.0", " 0 " などを想定）
             def is_zero_quantity(v):
