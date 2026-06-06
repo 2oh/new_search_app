@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.58)
+#  図面PDF検索結合 (v0.9.59)
 # ======================================================
 
 import flet as ft
@@ -597,6 +597,20 @@ def main(page: ft.Page):
 
         return s
 
+    def is_zero_quantity(v) -> bool:
+        if pd.isna(v):
+            return False
+
+        s = str(v).strip()
+
+        if s == "":
+            return False
+
+        try:
+            return float(s.replace(",", "")) == 0.0
+        except ValueError:
+            return False
+
     def create_preview_box(preview_image: ft.Image, height: int = 520) -> ft.Container:
         """
         PDFプレビュー画像を表示するための共通枠を作る。
@@ -1118,7 +1132,7 @@ def main(page: ft.Page):
                     continue
 
                 if c == "数量":
-                    display_value = format_quantity_for_display(v)
+                    display_value = "ゼロ" if is_zero_quantity(v) else ""
 
                 elif c == "数量セル色":
                     display_value = "あり" if str(v).strip() else ""
@@ -1454,18 +1468,6 @@ def main(page: ft.Page):
                 "あり" if i in vertical_merge_indices else ""
                 for i in df.index
             ]
-
-            # 数量ゼロ判定（0, "0", "0.0", " 0 " などを想定）
-            def is_zero_quantity(v):
-                if pd.isna(v):
-                    return False
-                s = str(v).strip()
-                if s == "":
-                    return False
-                try:
-                    return float(s.replace(",", "")) == 0.0
-                except ValueError:
-                    return False
 
             def decide_output_eligibility(row):
                 """

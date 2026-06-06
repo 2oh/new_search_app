@@ -2176,6 +2176,15 @@ Add output eligibility column
 git commit -m "Add output eligibility column(v0.9.58)"
 
 
+2026/6/6
+
+Show only zero quantity marker
+数量欄にはゼロ判定だけを表示する
+
+git commit -m "how only zero quantity marker(v0.9.59)"
+
+
+
 
 
 3. 出力可否不可の行を検索・候補抽出対象外にする
