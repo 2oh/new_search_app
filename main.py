@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.59)
+#  図面PDF検索結合 (v0.9.60)
 # ======================================================
 
 import flet as ft
@@ -611,6 +611,12 @@ def main(page: ft.Page):
         except ValueError:
             return False
 
+    def is_output_ineligible(row) -> bool:
+        """
+        出力可否が「不可」の行かどうかを返す。
+        """
+        return str(row.get("出力可否", "") or "").strip() == "不可"
+
     def create_preview_box(preview_image: ft.Image, height: int = 520) -> ft.Container:
         """
         PDFプレビュー画像を表示するための共通枠を作る。
@@ -1083,16 +1089,42 @@ def main(page: ft.Page):
         ]
         table.rows = []
 
+        ineligible_blank_columns = {
+            "検索用文字列",
+            "共通",
+            "検索文字列重複",
+            "出力対象",
+            "候補PDF数",
+            "候補確認",
+            "採用PDFパス",
+            "採用確認",
+        }
+
         for idx, row in df.iterrows():
             cells = []
 
             for c in display_columns:
                 v = row.get(c, "")
 
+                if is_output_ineligible(row) and c in ineligible_blank_columns:
+                    cells.append(
+                        ft.DataCell(
+                            ft.Container(
+                                content=ft.Text(""),
+                                alignment=(
+                                    ft.alignment.center
+                                    if should_center_align_column(c)
+                                    else ft.alignment.center_left
+                                ),
+                            )
+                        )
+                    )
+                    continue
+
                 if c == "採用確認":
                     adopted_pdf_path = str(row.get("採用PDFパス", "") or "").strip()
 
-                    if adopted_pdf_path:
+                    if adopted_pdf_path and not is_output_ineligible(row):
                         content = ft.ElevatedButton(
                             "プレビュー",
                             on_click=lambda e, pdf_path=adopted_pdf_path: on_preview_adopted_pdf(pdf_path)
@@ -1112,7 +1144,7 @@ def main(page: ft.Page):
                     continue
 
                 if c == "候補確認":
-                    if row.get("候補状態") in ("複数候補", "手動採用"):
+                    if (not is_output_ineligible(row)) and row.get("候補状態") in ("複数候補", "手動採用"):
                         content = ft.ElevatedButton(
                             "候補確認",
                             on_click=lambda e, row_index=idx: on_select_pdf_candidate(row_index)
@@ -1145,6 +1177,12 @@ def main(page: ft.Page):
                     else:
                         display_value = str(row.get("候補状態", "") or "").strip()
 
+                elif c == "候補PDF数":
+                    if pd.isna(v) or str(v).strip().lower() in ("", "nan", "none"):
+                        display_value = ""
+                    else:
+                        display_value = str(v)
+
                 else:
                     if pd.isna(v) or str(v).strip().lower() in ("nan", "none"):
                         display_value = ""
@@ -1152,42 +1190,63 @@ def main(page: ft.Page):
                         display_value = str(v)
 
                 if c == "出力対象":
-                    checkbox = ft.Checkbox(value=bool(v))
-                    output_checkboxes[idx] = checkbox
-
-                    cells.append(
-                        ft.DataCell(
-                            ft.Container(
-                                content=checkbox,
-                                alignment=ft.alignment.center,
+                    if is_output_ineligible(row):
+                        cells.append(
+                            ft.DataCell(
+                                ft.Container(
+                                    content=ft.Text(""),
+                                    alignment=ft.alignment.center,
+                                )
                             )
                         )
-                    )
+                    else:
+                        checkbox = ft.Checkbox(value=bool(v))
+                        output_checkboxes[idx] = checkbox
+
+                        cells.append(
+                            ft.DataCell(
+                                ft.Container(
+                                    content=checkbox,
+                                    alignment=ft.alignment.center,
+                                )
+                            )
+                        )
 
                 elif c == "検索用文字列":
-                    text_field = ft.TextField(
-                        value=display_value,
-                        dense=True,
-                        text_size=14,
-                        color=ft.Colors.BLACK,
-                        content_padding=ft.padding.symmetric(horizontal=8, vertical=6),
-                        border=ft.InputBorder.NONE,
-                        bgcolor=ft.Colors.TRANSPARENT,
-                    )
-                    search_text_fields[idx] = text_field
-
-                    cells.append(
-                        ft.DataCell(
-                            ft.Container(
-                                width=110,
-                                padding=2,
-                                bgcolor=ft.Colors.AMBER_50,
-                                border=ft.border.all(1, ft.Colors.AMBER_100),
-                                border_radius=6,
-                                content=text_field,
+                    if is_output_ineligible(row):
+                        cells.append(
+                            ft.DataCell(
+                                ft.Container(
+                                    width=110,
+                                    padding=2,
+                                    content=ft.Text(""),
+                                )
                             )
                         )
-                    )
+                    else:
+                        text_field = ft.TextField(
+                            value=display_value,
+                            dense=True,
+                            text_size=14,
+                            color=ft.Colors.BLACK,
+                            content_padding=ft.padding.symmetric(horizontal=8, vertical=6),
+                            border=ft.InputBorder.NONE,
+                            bgcolor=ft.Colors.TRANSPARENT,
+                        )
+                        search_text_fields[idx] = text_field
+
+                        cells.append(
+                            ft.DataCell(
+                                ft.Container(
+                                    width=110,
+                                    padding=2,
+                                    bgcolor=ft.Colors.AMBER_50,
+                                    border=ft.border.all(1, ft.Colors.AMBER_100),
+                                    border_radius=6,
+                                    content=text_field,
+                                )
+                            )
+                        )
 
                 else:
                     text_color = None
@@ -1497,12 +1556,17 @@ def main(page: ft.Page):
             # PDF候補抽出後、出力可否が「可」かつ出力PDFが確定した行だけONにする。
             df["出力対象"] = False
 
+            # 出力不可行は検索対象にしないため、検索文字列を空欄にする
+            df.loc[df["出力可否"].eq("不可"), "検索用文字列"] = ""
+
             # PDF候補情報の初期列
-            df["候補PDF数"] = 0
+            df["候補PDF数"] = ""
             df["先頭候補PDF"] = ""
             df["候補PDFパス一覧"] = [[] for _ in range(len(df))]
             df["採用PDFパス"] = ""
             df["候補状態"] = "未検索"
+
+            df.loc[df["出力可否"].eq("不可"), "候補状態"] = "出力不可"
 
             # 検索用文字列の重複表示を更新
             df = update_duplicate_search_text_info(df)
@@ -1684,6 +1748,17 @@ def main(page: ft.Page):
 
         # 各行ごとにPDF候補を抽出
         for idx, row in current_df.iterrows():
+
+            # 出力不可行はPDF検索対象外にする
+            if is_output_ineligible(row):
+                current_df.at[idx, "候補PDF数"] = ""
+                current_df.at[idx, "先頭候補PDF"] = ""
+                current_df.at[idx, "候補PDFパス一覧"] = []
+                current_df.at[idx, "採用PDFパス"] = ""
+                current_df.at[idx, "候補状態"] = "出力不可"
+                current_df.at[idx, "出力対象"] = False
+                continue
+
             search_text = row.get("検索用文字列", "")
             candidates = find_pdf_candidates_by_filename(search_text, pdf_files)
             candidate_count = len(candidates)
@@ -1715,7 +1790,12 @@ def main(page: ft.Page):
 
         render_table_from_df(current_df)
 
-        matched_count = int((current_df["候補PDF数"].fillna(0) > 0).sum())
+        candidate_counts = pd.to_numeric(
+            current_df["候補PDF数"],
+            errors="coerce"
+        ).fillna(0)
+
+        matched_count = int((candidate_counts > 0).sum())
         selected_count = int(current_df["出力対象"].fillna(False).sum())
         adopted_count = int(
             current_df["採用PDFパス"]
@@ -1725,7 +1805,7 @@ def main(page: ft.Page):
             .ne("")
             .sum()
         )
-        multiple_count = int((current_df["候補PDF数"].fillna(0) >= 2).sum())
+        multiple_count = int((candidate_counts >= 2).sum())
         duplicate_search_text_count = int(
             current_df["検索文字列重複"]
             .fillna("")
@@ -1751,7 +1831,7 @@ def main(page: ft.Page):
             )
 
         debug_print("===== 複数候補行 =====")
-        multiple_df = current_df[current_df["候補PDF数"].fillna(0) >= 2].copy()
+        multiple_df = current_df[candidate_counts >= 2].copy()
 
         if multiple_df.empty:
             debug_print("複数候補の行はありません。")

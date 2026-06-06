@@ -2184,12 +2184,18 @@ Show only zero quantity marker
 git commit -m "how only zero quantity marker(v0.9.59)"
 
 
-
-
-
 3. 出力可否不可の行を検索・候補抽出対象外にする
 Skip ineligible rows during PDF search
 出力不可行をPDF検索対象から除外する
+
+git commit -m "Skip ineligible rows during PDF search(v0.9.60)"
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+※これはちょっと大規模な修正であった
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
 
 4. 出力対象はPDF確定後にONにする仕様へ変更
 Enable output target only for ready PDFs
@@ -2241,6 +2247,9 @@ Add adopted PDF hover preview
 Rename app to Drawing PDF Search Merge
 アプリ名を「図面PDF検索結合」に変更する
 
+ツール、又はアプリ
+
+
 8
 Add application icon
 アプリアイコンを追加する
@@ -2280,6 +2289,7 @@ Add normal search mode
 
 （課題）
 ・やはりタイトル行は固定にしたい
+・ドラッグアンドドロップを実装したい
 
 
 （大きな流れ）
