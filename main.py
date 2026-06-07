@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.71)
+#  図面PDF検索結合 (v0.9.72)
 # ======================================================
 
 import flet as ft
@@ -591,8 +591,8 @@ def main(page: ft.Page):
 
     hover_preview_image = ft.Image(
         src="",
-        width=360,
-        height=460,
+        width=460,
+        height=620,
         fit=ft.ImageFit.CONTAIN,
         visible=False,
     )
@@ -600,7 +600,8 @@ def main(page: ft.Page):
     hover_preview_message = ft.Text(
         "",
         size=12,
-        color=ft.Colors.GREY_500,
+        color=ft.Colors.GREY_600,
+        text_align=ft.TextAlign.CENTER,
     )
 
     hover_preview_panel = ft.Container(
@@ -661,26 +662,28 @@ def main(page: ft.Page):
             bgcolor=ft.Colors.GREY_200,
         )
 
-    def create_hover_preview_box(preview_image: ft.Image, height: int = 500) -> ft.Container:
+    def create_hover_preview_box(preview_image: ft.Image, height: int = 620) -> ft.Container:
+        """
+        ホバープレビュー用のプレビュー枠を作る。
+        右側の余白に自然に表示するため、枠線や背景は付けない。
+        """
         return ft.Container(
             content=preview_image,
             alignment=ft.alignment.top_center,
             height=height,
-            bgcolor=ft.Colors.TRANSPARENT,
             padding=0,
+            bgcolor=ft.Colors.TRANSPARENT,
         )
 
     hover_preview_panel.content = ft.Column(
         controls=[
+            create_hover_preview_box(hover_preview_image, height=620),
             hover_preview_message,
-            create_hover_preview_box(hover_preview_image, height=500),
         ],
-        spacing=6,
-        tight=False,
+        spacing=4,
+        tight=True,
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
     )
-    hover_preview_panel.border = ft.border.all(1, ft.Colors.GREY_700)
-    hover_preview_panel.border_radius = 8
-    hover_preview_panel.bgcolor = ft.Colors.GREY_900
 
     def update_hover_preview(pdf_path: str):
         """
@@ -705,14 +708,22 @@ def main(page: ft.Page):
 
             hover_preview_image.src = preview_path
             hover_preview_image.visible = True
-            hover_preview_message.value = format_pdf_path_for_display(pdf_path)
+            hover_preview_message.value = Path(pdf_path).name
 
-        except Exception as ex:
+        except Exception:
             hover_preview_image.src = ""
             hover_preview_image.visible = False
-            hover_preview_message.value = f"プレビューを生成できませんでした: {ex}"
+            hover_preview_message.value = "プレビューを生成できませんでした。"
 
         page.update()
+
+    def clear_hover_preview():
+        """
+        ホバープレビュー画像とファイル名表示をクリアする。
+        """
+        hover_preview_image.src = ""
+        hover_preview_image.visible = False
+        hover_preview_message.value = ""
 
     def on_preview_adopted_pdf(pdf_path: str):
         """
@@ -1467,9 +1478,16 @@ def main(page: ft.Page):
                         else:
                             text_color = ft.Colors.GREEN_700
 
+                    is_hover_pdf_column = c == "採用PDFパス"
+                    adopted_pdf_path_for_hover = str(row.get("採用PDFパス", "") or "").strip()
+
                     text_control = ft.Text(
                         display_value,
-                        color=text_color,
+                        color=(
+                            ft.Colors.BLUE_700
+                            if is_hover_pdf_column and adopted_pdf_path_for_hover
+                            else text_color
+                        ),
                         text_align=(
                             ft.TextAlign.CENTER
                             if should_center_align_column(c)
@@ -1477,17 +1495,25 @@ def main(page: ft.Page):
                         ),
                     )
 
-                    adopted_pdf_path_for_hover = str(row.get("採用PDFパス", "") or "").strip()
+                    if is_hover_pdf_column:
+                        def handle_output_pdf_hover(e, pdf_path=adopted_pdf_path_for_hover, text=text_control):
+                            if not pdf_path:
+                                return
 
-                    if c == "採用PDFパス":
+                            if e.data == "true":
+                                text.color = ft.Colors.BLUE_900
+                                text.weight = ft.FontWeight.BOLD
+                                update_hover_preview(pdf_path)
+                            else:
+                                text.color = ft.Colors.BLUE_700
+                                text.weight = None
+
+                            page.update()
+
                         cell_content = ft.Container(
                             content=text_control,
                             alignment=ft.alignment.center_left,
-                            on_hover=lambda e, pdf_path=adopted_pdf_path_for_hover: (
-                                update_hover_preview(pdf_path)
-                                if e.data == "true" and pdf_path
-                                else None
-                            ),
+                            on_hover=handle_output_pdf_hover,
                         )
                     else:
                         cell_content = ft.Container(
@@ -1519,6 +1545,10 @@ def main(page: ft.Page):
         table.columns = [ft.DataColumn(ft.Text("抽出結果"))]
         table_header.controls = []
         message.value = ""
+
+        clear_hover_preview()
+        update_hover_preview_visibility()
+
         page.update()
 
     def reset_excel_selection():

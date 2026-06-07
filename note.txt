@@ -2284,12 +2284,12 @@ Add responsive hover preview panel
 git commit -m "Add responsive hover preview panel(v0.9.71)"
 
 
+Refine hover preview appearance and reset behavior
+ホバープレビューの見た目とリセット時の挙動を調整する
+
+git commit -m "Refine hover preview appearance and reset behavior(v0.9.72)"
 
 
-
-5
-Add adopted PDF hover preview
-採用PDF欄のホバーでプレビューを表示する
 
 7
 Rename app to Drawing PDF Search Merge
