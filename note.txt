@@ -2246,6 +2246,11 @@ git commit -m "Move output target near duplicate status(v0.9.65)"
 Add row number to result table
 項番 表示列を追加
 
+
+git commit -m "Add row number to result table(v0.9.66)"
+
+
+
 9. メッセージ欄と件数表示の整理
 Summarize result counts with badges
 長いメッセージを短くする

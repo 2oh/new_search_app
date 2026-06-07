@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.65)
+#  図面PDF検索結合 (v0.9.66)
 # ======================================================
 
 import flet as ft
@@ -1021,6 +1021,9 @@ def main(page: ft.Page):
         search_text_fields.clear()
         output_checkboxes.clear()
 
+        display_df = df.copy()
+        display_df.insert(0, "項番", range(1, len(display_df) + 1))
+
         hidden_columns = {
             "候補PDFパス一覧",
             "先頭候補PDF",
@@ -1029,6 +1032,7 @@ def main(page: ft.Page):
         }
 
         preferred_order = [
+            "項番",
             "品番",
             "PG名",
             "品名",
@@ -1054,12 +1058,11 @@ def main(page: ft.Page):
 
         display_columns = [
             c for c in preferred_order
-            if (c in df.columns or c in display_only_columns) and c not in hidden_columns
+            if (c in display_df.columns or c in display_only_columns) and c not in hidden_columns
         ]
 
-        # preferred_order に入っていない列があれば、後ろに残す
         display_columns += [
-            c for c in df.columns
+            c for c in display_df.columns
             if c not in display_columns and c not in hidden_columns
         ]
 
@@ -1075,6 +1078,7 @@ def main(page: ft.Page):
 
         def should_center_align_column(column_name: str) -> bool:
             center_columns = {
+                "項番",
                 "共通",
                 "数量",
                 "数量セル色",
@@ -1105,7 +1109,7 @@ def main(page: ft.Page):
             "プレビュー",
         }
 
-        for idx, row in df.iterrows():
+        for idx, row in display_df.iterrows():
             cells = []
 
             for c in display_columns:
