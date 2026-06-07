@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.70)
+#  図面PDF検索結合 (v0.9.71)
 # ======================================================
 
 import flet as ft
@@ -475,6 +475,10 @@ def main(page: ft.Page):
     search_text_fields = {}
     output_checkboxes = {}
 
+    # HOVER_PREVIEW_MIN_WIDTH = 1500
+    HOVER_PREVIEW_MIN_WIDTH = 900
+    use_hover_preview = False
+
     # ---- 設定ファイル処理 ----
     def load_config():
         if os.path.exists(CONFIG_FILE):
@@ -585,6 +589,27 @@ def main(page: ft.Page):
     )
     table_header = ft.Row([], alignment="center")
 
+    hover_preview_image = ft.Image(
+        src="",
+        width=360,
+        height=460,
+        fit=ft.ImageFit.CONTAIN,
+        visible=False,
+    )
+
+    hover_preview_message = ft.Text(
+        "",
+        size=12,
+        color=ft.Colors.GREY_500,
+    )
+
+    hover_preview_panel = ft.Container(
+        padding=0,
+        visible=False,
+        bgcolor=ft.Colors.TRANSPARENT,
+        expand=True,
+    )
+
     def format_quantity_for_display(v) -> str:
         if pd.isna(v):
             return ""
@@ -635,6 +660,59 @@ def main(page: ft.Page):
             height=height,
             bgcolor=ft.Colors.GREY_200,
         )
+
+    def create_hover_preview_box(preview_image: ft.Image, height: int = 500) -> ft.Container:
+        return ft.Container(
+            content=preview_image,
+            alignment=ft.alignment.top_center,
+            height=height,
+            bgcolor=ft.Colors.TRANSPARENT,
+            padding=0,
+        )
+
+    hover_preview_panel.content = ft.Column(
+        controls=[
+            hover_preview_message,
+            create_hover_preview_box(hover_preview_image, height=500),
+        ],
+        spacing=6,
+        tight=False,
+    )
+    hover_preview_panel.border = ft.border.all(1, ft.Colors.GREY_700)
+    hover_preview_panel.border_radius = 8
+    hover_preview_panel.bgcolor = ft.Colors.GREY_900
+
+    def update_hover_preview(pdf_path: str):
+        """
+        出力PDF欄にホバーしたとき、右側の固定プレビュー欄を更新する。
+        """
+        if not use_hover_preview:
+            return
+
+        if not pdf_path or not str(pdf_path).strip():
+            return
+
+        hover_preview_image.visible = False
+        hover_preview_message.value = "プレビューを読み込んでいます..."
+        page.update()
+
+        try:
+            preview_path = create_pdf_preview_image(
+                pdf_path,
+                page_number=0,
+                dpi=100,
+            )
+
+            hover_preview_image.src = preview_path
+            hover_preview_image.visible = True
+            hover_preview_message.value = format_pdf_path_for_display(pdf_path)
+
+        except Exception as ex:
+            hover_preview_image.src = ""
+            hover_preview_image.visible = False
+            hover_preview_message.value = f"プレビューを生成できませんでした: {ex}"
+
+        page.update()
 
     def on_preview_adopted_pdf(pdf_path: str):
         """
@@ -1399,20 +1477,35 @@ def main(page: ft.Page):
                         ),
                     )
 
-                    cell_content = ft.Container(
-                        content=ft.SelectionArea(
-                            content=text_control
-                        ),
-                        alignment=(
-                            ft.alignment.center
-                            if should_center_align_column(c)
-                            else ft.alignment.center_left
-                        ),
-                    )
+                    adopted_pdf_path_for_hover = str(row.get("採用PDFパス", "") or "").strip()
+
+                    if c == "採用PDFパス":
+                        cell_content = ft.Container(
+                            content=text_control,
+                            alignment=ft.alignment.center_left,
+                            on_hover=lambda e, pdf_path=adopted_pdf_path_for_hover: (
+                                update_hover_preview(pdf_path)
+                                if e.data == "true" and pdf_path
+                                else None
+                            ),
+                        )
+                    else:
+                        cell_content = ft.Container(
+                            content=ft.SelectionArea(
+                                content=text_control
+                            ),
+                            alignment=(
+                                ft.alignment.center
+                                if should_center_align_column(c)
+                                else ft.alignment.center_left
+                            ),
+                        )
 
                     cells.append(ft.DataCell(cell_content))
 
             table.rows.append(ft.DataRow(cells=cells))
+
+        update_hover_preview_visibility()
 
     # 🔽 抽出結果エリアの初期化関数を追加 🔽
     def reset_extract_view():
@@ -2237,7 +2330,7 @@ def main(page: ft.Page):
         spacing=6,
     )
 
-    result_area = ft.Container(
+    table_area = ft.Container(
         content=ft.Column(
             [
                 table,
@@ -2245,7 +2338,15 @@ def main(page: ft.Page):
             scroll="auto",
             expand=True,
         ),
+    )
+
+    result_area = ft.Row(
+        controls=[
+            table_area,            # 表は必要な幅だけ
+            hover_preview_panel,   # 余った幅を全部使う
+        ],
         expand=True,
+        vertical_alignment=ft.CrossAxisAlignment.START,
     )
 
     layout = ft.Column(
@@ -2256,8 +2357,36 @@ def main(page: ft.Page):
         expand=True,
     )
 
+    def update_hover_preview_visibility():
+        nonlocal use_hover_preview
+
+        page_width = page.width or 0
+        has_results = current_df is not None and not current_df.empty
+
+        new_use_hover_preview = (
+            has_results
+            and page_width >= HOVER_PREVIEW_MIN_WIDTH
+        )
+
+        if new_use_hover_preview == use_hover_preview:
+            return
+
+        use_hover_preview = new_use_hover_preview
+        hover_preview_panel.visible = use_hover_preview
+
+        if not use_hover_preview:
+            hover_preview_image.src = ""
+            hover_preview_image.visible = False
+
+    def on_page_resize(e):
+        update_hover_preview_visibility()
+        page.update()
+
+    page.on_resize = on_page_resize
+
     page.add(layout)
 
+    update_hover_preview_visibility()
     update_mode_fields()
 
 

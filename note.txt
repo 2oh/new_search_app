@@ -2274,8 +2274,16 @@ git commit -m "Refine result table labels and header badges(v0.9.69)"
 Reorder result action buttons
 結果操作ボタンの順番を変更する
 
+git commit -m "Reorder result action buttons(v0.9.70)"
 
-(v0.9.70)
+
+
+Add responsive hover preview panel
+画面幅に応じたホバープレビュー欄を追加する
+
+git commit -m "Add responsive hover preview panel(v0.9.71)"
+
+
 
 
 
