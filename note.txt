@@ -2227,14 +2227,9 @@ Use adopted PDF duplicates for output defaults
 採用PDF重複チェックを追加
 重複PDFの2件目以降を出力対象OF
 
-
 git commit -m "Use adopted PDF duplicates for output defaults(v0.9.64)"
 
 
-
-
-出力対象を重複とプレビューの間に
-４つのボタンを右端に
 
 Move output target near duplicate status
 出力対象列を重複状態の近くに移動する
@@ -2249,6 +2244,11 @@ Add row number to result table
 
 git commit -m "Add row number to result table(v0.9.66)"
 
+
+Compact initial result table layout
+初期状態を含めた結果テーブルの表示をコンパクトにする
+
+git commit -m "Compact initial result table layout(v0.9.67)"
 
 
 9. メッセージ欄と件数表示の整理

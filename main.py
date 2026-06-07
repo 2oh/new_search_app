@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.66)
+#  図面PDF検索結合 (v0.9.67)
 # ======================================================
 
 import flet as ft
@@ -577,7 +577,12 @@ def main(page: ft.Page):
     sheet_dropdown = ft.Dropdown(label="シート選択", width=420)
     message = ft.Text("")
     mode_notice = ft.Text("")
-    table = ft.DataTable(columns=[ft.DataColumn(ft.Text("項目"))], rows=[])
+    table = ft.DataTable(
+        columns=[ft.DataColumn(ft.Text("抽出結果"))],
+        rows=[],
+        column_spacing=16,
+        horizontal_margin=10,
+    )
     table_header = ft.Row([], alignment="center")
 
     def format_quantity_for_display(v) -> str:
@@ -1156,8 +1161,12 @@ def main(page: ft.Page):
                 if c == "候補確認":
                     if (not is_output_ineligible(row)) and row.get("候補状態") in ("複数候補", "手動採用"):
                         content = ft.ElevatedButton(
-                            "候補確認",
-                            on_click=lambda e, row_index=idx: on_select_pdf_candidate(row_index)
+                            "候補",
+                            tooltip="候補PDFを確認",
+                            on_click=lambda e, row_index=idx: on_select_pdf_candidate(row_index),
+                            style=ft.ButtonStyle(
+                                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                            ),
                         )
                     else:
                         content = ft.Text("")
@@ -1241,7 +1250,7 @@ def main(page: ft.Page):
                             dense=True,
                             text_size=14,
                             color=ft.Colors.BLACK,
-                            content_padding=ft.padding.symmetric(horizontal=8, vertical=6),
+                            content_padding=ft.padding.symmetric(horizontal=7, vertical=5),
                             border=ft.InputBorder.NONE,
                             bgcolor=ft.Colors.TRANSPARENT,
                         )
@@ -1250,7 +1259,7 @@ def main(page: ft.Page):
                         cells.append(
                             ft.DataCell(
                                 ft.Container(
-                                    width=110,
+                                    width=105,
                                     padding=2,
                                     bgcolor=ft.Colors.AMBER_50,
                                     border=ft.border.all(1, ft.Colors.AMBER_100),
@@ -1316,7 +1325,7 @@ def main(page: ft.Page):
         output_checkboxes.clear()
 
         table.rows = []
-        table.columns = [ft.DataColumn(ft.Text("項目"))]
+        table.columns = [ft.DataColumn(ft.Text("抽出結果"))]
         table_header.controls = []
         message.value = ""
         page.update()
