@@ -2297,6 +2297,15 @@ git commit -m "Refine hover preview layout(v0.9.73)"
 
 
 
+Polish hover preview UI
+ホバープレビュー周辺のUIを微調整する
+
+
+git commit -m "Polish hover preview UI(v0.9.74)"
+
+
+
+
 
 7
 Rename app to Drawing PDF Search Merge

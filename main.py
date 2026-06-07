@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.73)
+#  図面PDF検索結合 (v0.9.74)
 # ======================================================
 
 import flet as ft
@@ -581,8 +581,6 @@ def main(page: ft.Page):
     sheet_dropdown = ft.Dropdown(label="シート選択", width=420)
     message = ft.Text("")
     
-    hover_debug = ft.Text("", size=12, color=ft.Colors.RED_700)
-
     mode_notice = ft.Text("")
     table = ft.DataTable(
         columns=[ft.DataColumn(ft.Text("抽出結果"))],
@@ -603,7 +601,8 @@ def main(page: ft.Page):
     hover_preview_message = ft.Text(
         "",
         size=12,
-        color=ft.Colors.BLUE_GREY_700,
+        color=ft.Colors.BLUE_700,
+        weight=ft.FontWeight.BOLD,
         text_align=ft.TextAlign.CENTER,
     )
 
@@ -1117,6 +1116,8 @@ def main(page: ft.Page):
         display_df = df.copy()
         display_df.insert(0, "項番", range(1, len(display_df) + 1))
 
+        update_hover_preview_visibility()
+
         hidden_columns = {
             "候補PDFパス一覧",
             "先頭候補PDF",
@@ -1158,6 +1159,13 @@ def main(page: ft.Page):
             c for c in display_df.columns
             if c not in display_columns and c not in hidden_columns
         ]
+
+        # 余白ホバープレビューが使える画面では、クリック用プレビュー列は表示しない
+        if use_hover_preview:
+            display_columns = [
+                c for c in display_columns
+                if c != "プレビュー"
+            ]
 
         def get_display_column_name(column_name: str) -> str:
             display_name_map = {
@@ -1242,14 +1250,14 @@ def main(page: ft.Page):
                     ft.Container(
                         content=ft.Text(
                             str(count),
-                            size=11,
+                            size=12,
                             color=ft.Colors.BLACK,
                             weight=ft.FontWeight.BOLD,
                         ),
-                        padding=ft.padding.symmetric(horizontal=6, vertical=2),
-                        border_radius=10,
+                        padding=ft.padding.symmetric(horizontal=7, vertical=3),
+                        border_radius=12,
                         bgcolor=get_header_badge_color(column_name),
-                    ),
+                    )
                 ],
                 spacing=4,
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -2371,7 +2379,6 @@ def main(page: ft.Page):
             ft.Divider(),
             table_header,
             message,
-            hover_debug,
         ],
         spacing=6,
     )
@@ -2418,10 +2425,10 @@ def main(page: ft.Page):
             and page_width >= HOVER_PREVIEW_MIN_WIDTH
         )
 
-        hover_debug.value = (
-            f"width={page_width} / "
-            f"has_results={has_results} / "
-            f"threshold={HOVER_PREVIEW_MIN_WIDTH} / "
+        debug_print(
+            f"hover_preview: width={page_width}, "
+            f"has_results={has_results}, "
+            f"threshold={HOVER_PREVIEW_MIN_WIDTH}, "
             f"hover={new_use_hover_preview}"
         )
 
@@ -2436,7 +2443,6 @@ def main(page: ft.Page):
         return changed
 
     def on_page_resize(e):
-        hover_debug.value = "resize event fired"
 
         changed = update_hover_preview_visibility()
 
