@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.68)
+#  図面PDF検索結合 (v0.9.69)
 # ======================================================
 
 import flet as ft
@@ -1034,6 +1034,7 @@ def main(page: ft.Page):
             "先頭候補PDF",
             "元検索文字列",
             "候補状態",
+            "候補PDF数",
         }
 
         preferred_order = [
@@ -1048,7 +1049,6 @@ def main(page: ft.Page):
             "出力可否",
             "検索用文字列",
             "共通",
-            "候補PDF数",
             "候補確認",
             "採用PDFパス",
             "採用PDF重複",
@@ -1075,9 +1075,11 @@ def main(page: ft.Page):
             display_name_map = {
                 "検索用文字列": "検索文字列",
                 "採用PDF重複": "重複",
-                "候補PDF数": "候補数",
                 "数量セル色": "セル色",
                 "採用PDFパス": "出力PDF",
+                "出力可否": "抽出対象",
+                "出力対象": "出力",
+                "候補確認": "複数候補",
             }
             return display_name_map.get(column_name, column_name)
 
@@ -1108,27 +1110,7 @@ def main(page: ft.Page):
                 ).fillna(0)
 
                 # 候補確認が必要な件数として、複数候補だけ数える
-                counts["候補PDF数"] = int((candidate_counts >= 2).sum())
-
-            if "採用PDFパス" in df.columns:
-                counts["採用PDFパス"] = int(
-                    df["採用PDFパス"]
-                    .fillna("")
-                    .astype(str)
-                    .str.strip()
-                    .ne("")
-                    .sum()
-                )
-
-            if "採用PDF重複" in df.columns:
-                counts["採用PDF重複"] = int(
-                    df["採用PDF重複"]
-                    .fillna("")
-                    .astype(str)
-                    .str.strip()
-                    .ne("")
-                    .sum()
-                )
+                counts["候補確認"] = int((candidate_counts >= 2).sum())
 
             if "出力対象" in df.columns:
                 counts["出力対象"] = int(
@@ -1140,9 +1122,28 @@ def main(page: ft.Page):
 
             return counts
 
+        def get_header_badge_color(column_name: str):
+            color_map = {
+                "出力可否": ft.Colors.BLUE_100,
+                "候補確認": ft.Colors.ORANGE_100,
+                "出力対象": ft.Colors.GREEN_100,
+            }
+            return color_map.get(column_name, ft.Colors.GREY_300)
+
         def create_header_label(column_name: str, badge_counts: dict):
             display_name = get_display_column_name(column_name)
             count = badge_counts.get(column_name)
+
+            # 検索文字列列は、入力欄の幅に合わせて見出しを中央寄せする
+            if column_name == "検索用文字列":
+                return ft.Container(
+                    width=100,
+                    alignment=ft.alignment.center,
+                    content=ft.Text(
+                        display_name,
+                        text_align=ft.TextAlign.CENTER,
+                    ),
+                )
 
             if count is None:
                 return ft.Text(display_name)
@@ -1159,8 +1160,8 @@ def main(page: ft.Page):
                         ),
                         padding=ft.padding.symmetric(horizontal=6, vertical=2),
                         border_radius=10,
-                        bgcolor=ft.Colors.GREY_200,
-                    )
+                        bgcolor=get_header_badge_color(column_name),
+                    ),
                 ],
                 spacing=4,
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -1248,7 +1249,7 @@ def main(page: ft.Page):
                 if c == "候補確認":
                     if (not is_output_ineligible(row)) and row.get("候補状態") in ("複数候補", "手動採用"):
                         content = ft.ElevatedButton(
-                            "候補",
+                            "選択",
                             tooltip="候補PDFを確認",
                             on_click=lambda e, row_index=idx: on_select_pdf_candidate(row_index),
                             style=ft.ButtonStyle(
@@ -1274,6 +1275,16 @@ def main(page: ft.Page):
 
                 elif c == "数量セル色":
                     display_value = "あり" if str(v).strip() else ""
+
+                elif c == "出力可否":
+                    raw_value = str(v or "").strip()
+
+                    if raw_value == "可":
+                        display_value = "対象"
+                    elif raw_value == "不可":
+                        display_value = "不可"
+                    else:
+                        display_value = ""
 
                 elif c == "採用PDFパス":
                     adopted_pdf_path = str(row.get("採用PDFパス", "") or "").strip()
