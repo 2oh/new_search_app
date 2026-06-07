@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.62)
+#  図面PDF検索結合 (v0.9.63)
 # ======================================================
 
 import flet as ft
@@ -1043,12 +1043,12 @@ def main(page: ft.Page):
             "候補PDF数",
             "候補確認",
             "採用PDFパス",
-            "採用確認",
+            "プレビュー",
         ]
 
         display_only_columns = {
             "候補確認",
-            "採用確認",
+            "プレビュー",
         }
 
         display_columns = [
@@ -1082,8 +1082,8 @@ def main(page: ft.Page):
                 "検索文字列重複",
                 "出力対象",
                 "候補PDF数",
-                "採用確認",
                 "候補確認",
+                "プレビュー",
             }
             return column_name in center_columns
 
@@ -1101,7 +1101,7 @@ def main(page: ft.Page):
             "候補PDF数",
             "候補確認",
             "採用PDFパス",
-            "採用確認",
+            "プレビュー",
         }
 
         for idx, row in df.iterrows():
@@ -1125,13 +1125,14 @@ def main(page: ft.Page):
                     )
                     continue
 
-                if c == "採用確認":
+                if c == "プレビュー":
                     adopted_pdf_path = str(row.get("採用PDFパス", "") or "").strip()
 
                     if adopted_pdf_path and not is_output_ineligible(row):
-                        content = ft.ElevatedButton(
-                            "プレビュー",
-                            on_click=lambda e, pdf_path=adopted_pdf_path: on_preview_adopted_pdf(pdf_path)
+                        content = ft.IconButton(
+                            icon=ft.Icons.VISIBILITY_OUTLINED,
+                            tooltip="出力PDFをプレビュー",
+                            on_click=lambda e, pdf_path=adopted_pdf_path: on_preview_adopted_pdf(pdf_path),
                         )
                     else:
                         content = ft.Text("")

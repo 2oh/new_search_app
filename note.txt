@@ -2212,12 +2212,13 @@ Move candidate action next to candidate count
 git commit -m "Move candidate action next to candidate count(v0.9.62)"
 
 
-
-
 6
 Rename preview action column
 採用確認 → プレビュー
 ボタンをアイコン化
+
+git commit -m "Rename preview action column(v0.9.63)"
+
 
 
 7. 検索文字列重複 → 採用PDF重複 に方針変更
