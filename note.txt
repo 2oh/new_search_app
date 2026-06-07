@@ -2195,11 +2195,15 @@ git commit -m "Skip ineligible rows during PDF search(v0.9.60)"
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-
+2026/6/7
 
 4. 出力対象はPDF確定後にONにする仕様へ変更
 Enable output target only for ready PDFs
 出力PDFが確定した行だけ出力対象にする
+
+git commit -m "Enable output target only for ready PDFs(v0.9.61)"
+
+
 
 
 5

@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.60)
+#  図面PDF検索結合 (v0.9.61)
 # ======================================================
 
 import flet as ft
@@ -848,6 +848,10 @@ def main(page: ft.Page):
         )
 
         def close_dialog(e):
+            nonlocal current_df
+
+            current_df = apply_output_target_defaults(current_df)
+
             render_table_from_df(current_df)
             dialog.open = False
             page.update()
@@ -1190,7 +1194,9 @@ def main(page: ft.Page):
                         display_value = str(v)
 
                 if c == "出力対象":
-                    if is_output_ineligible(row):
+                    adopted_pdf_path = str(row.get("採用PDFパス", "") or "").strip()
+
+                    if is_output_ineligible(row) or not adopted_pdf_path:
                         cells.append(
                             ft.DataCell(
                                 ft.Container(
@@ -1606,6 +1612,36 @@ def main(page: ft.Page):
             checkbox.value = value
         page.update()
 
+    def apply_output_target_defaults(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        出力対象チェックの初期状態を更新する。
+
+        条件:
+        - 出力可否 が「可」
+        - 採用PDFパス が空でない
+
+        上記を満たす行だけ True にする。
+        それ以外は False にする。
+        """
+        if df is None or df.empty:
+            return df
+
+        if "出力対象" not in df.columns:
+            return df
+
+        df = df.copy()
+
+        if "出力可否" not in df.columns or "採用PDFパス" not in df.columns:
+            df["出力対象"] = False
+            return df
+
+        eligible = df["出力可否"].fillna("").astype(str).str.strip().eq("可")
+        has_output_pdf = df["採用PDFパス"].fillna("").astype(str).str.strip().ne("")
+
+        df["出力対象"] = eligible & has_output_pdf
+
+        return df
+
     def get_export_ready_df(df: pd.DataFrame) -> pd.DataFrame:
         """
         実際にPDF出力に回せる行だけを抽出する。
@@ -1788,6 +1824,8 @@ def main(page: ft.Page):
                     current_df.at[idx, "採用PDFパス"] = ""
                     current_df.at[idx, "候補状態"] = "複数候補"
 
+        current_df = apply_output_target_defaults(current_df)
+
         render_table_from_df(current_df)
 
         candidate_counts = pd.to_numeric(
@@ -1913,8 +1951,6 @@ def main(page: ft.Page):
             return
 
         sync_table_state_to_current_df()
-
-        current_df = update_duplicate_search_text_info(current_df)
 
         output_folder = output_folder_field.value.strip()
 
