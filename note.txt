@@ -2258,8 +2258,10 @@ Summarize result counts with badges
 SnackBarとの重複を減らす
 
 
+Show summary counts in table headers
+集計件数をテーブル見出しに表示する
 
-
+git commit -m "Show summary counts in table headers(v0.9.68)"
 
 
 5

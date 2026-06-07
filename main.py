@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.67)
+#  図面PDF検索結合 (v0.9.68)
 # ======================================================
 
 import flet as ft
@@ -1081,6 +1081,91 @@ def main(page: ft.Page):
             }
             return display_name_map.get(column_name, column_name)
 
+        def get_header_badge_counts(df: pd.DataFrame) -> dict:
+            """
+            テーブル見出し横に表示する件数を返す。
+            キーは内部列名。
+            """
+            counts = {}
+
+            if df is None or df.empty:
+                return counts
+
+            if "出力可否" in df.columns:
+                counts["出力可否"] = int(
+                    df["出力可否"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                    .eq("可")
+                    .sum()
+                )
+
+            if "候補PDF数" in df.columns:
+                candidate_counts = pd.to_numeric(
+                    df["候補PDF数"],
+                    errors="coerce",
+                ).fillna(0)
+
+                # 候補確認が必要な件数として、複数候補だけ数える
+                counts["候補PDF数"] = int((candidate_counts >= 2).sum())
+
+            if "採用PDFパス" in df.columns:
+                counts["採用PDFパス"] = int(
+                    df["採用PDFパス"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                    .ne("")
+                    .sum()
+                )
+
+            if "採用PDF重複" in df.columns:
+                counts["採用PDF重複"] = int(
+                    df["採用PDF重複"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                    .ne("")
+                    .sum()
+                )
+
+            if "出力対象" in df.columns:
+                counts["出力対象"] = int(
+                    df["出力対象"]
+                    .fillna(False)
+                    .astype(bool)
+                    .sum()
+                )
+
+            return counts
+
+        def create_header_label(column_name: str, badge_counts: dict):
+            display_name = get_display_column_name(column_name)
+            count = badge_counts.get(column_name)
+
+            if count is None:
+                return ft.Text(display_name)
+
+            return ft.Row(
+                controls=[
+                    ft.Text(display_name),
+                    ft.Container(
+                        content=ft.Text(
+                            str(count),
+                            size=11,
+                            color=ft.Colors.BLACK,
+                            weight=ft.FontWeight.BOLD,
+                        ),
+                        padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                        border_radius=10,
+                        bgcolor=ft.Colors.GREY_200,
+                    )
+                ],
+                spacing=4,
+                alignment=ft.MainAxisAlignment.CENTER,
+            )
+
         def should_center_align_column(column_name: str) -> bool:
             center_columns = {
                 "項番",
@@ -1097,8 +1182,10 @@ def main(page: ft.Page):
             }
             return column_name in center_columns
 
+        badge_counts = get_header_badge_counts(current_df)
+
         table.columns = [
-            ft.DataColumn(ft.Text(get_display_column_name(c)))
+            ft.DataColumn(create_header_label(c, badge_counts))
             for c in display_columns
         ]
         table.rows = []
@@ -1933,15 +2020,7 @@ def main(page: ft.Page):
                     f"採用PDFパス={row.get('採用PDFパス', '')!r}"
                 )
 
-        result_message = (
-            f"PDF候補抽出完了: "
-            f"一致あり {matched_count}件 / "
-            f"採用 {adopted_count}件 / "
-            f"複数候補 {multiple_count}件 / "
-            f"出力PDF重複 {duplicate_adopted_pdf_count}件 / "
-            f"出力対象 {selected_count}件 / "
-            f"出力可能 {export_ready_count}件"
-        )
+        result_message = "PDF候補抽出が完了しました。"
 
         message.value = result_message
 
