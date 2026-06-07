@@ -2204,11 +2204,15 @@ Enable output target only for ready PDFs
 git commit -m "Enable output target only for ready PDFs(v0.9.61)"
 
 
-
-
 5
 Move candidate action next to candidate count
 候補確認 を 候補数 の右へ移動
+
+
+git commit -m "Move candidate action next to candidate count(v0.9.62)"
+
+
+
 
 6
 Rename preview action column
@@ -2294,6 +2298,7 @@ Add normal search mode
 （課題）
 ・やはりタイトル行は固定にしたい
 ・ドラッグアンドドロップを実装したい
+・EXE最新版をボタン一つでアップデートしたい
 
 
 （大きな流れ）

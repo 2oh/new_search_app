@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.61)
+#  図面PDF検索結合 (v0.9.62)
 # ======================================================
 
 import flet as ft
@@ -1041,12 +1041,19 @@ def main(page: ft.Page):
             "検索文字列重複",
             "出力対象",
             "候補PDF数",
+            "候補確認",
             "採用PDFパス",
+            "採用確認",
         ]
+
+        display_only_columns = {
+            "候補確認",
+            "採用確認",
+        }
 
         display_columns = [
             c for c in preferred_order
-            if c in df.columns and c not in hidden_columns
+            if (c in df.columns or c in display_only_columns) and c not in hidden_columns
         ]
 
         # preferred_order に入っていない列があれば、後ろに残す
@@ -1054,13 +1061,6 @@ def main(page: ft.Page):
             c for c in df.columns
             if c not in display_columns and c not in hidden_columns
         ]
-
-        # DataFrameには持たせず、画面表示専用の列として追加する
-        if "採用確認" not in display_columns:
-            display_columns.append("採用確認")
-
-        if "候補確認" not in display_columns:
-            display_columns.append("候補確認")
 
         def get_display_column_name(column_name: str) -> str:
             display_name_map = {
