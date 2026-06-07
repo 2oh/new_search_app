@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.69)
+#  図面PDF検索結合 (v0.9.70)
 # ======================================================
 
 import flet as ft
@@ -1250,7 +1250,7 @@ def main(page: ft.Page):
                     if (not is_output_ineligible(row)) and row.get("候補状態") in ("複数候補", "手動採用"):
                         content = ft.ElevatedButton(
                             "選択",
-                            tooltip="候補PDFを確認",
+                            tooltip="候補PDFを選択",
                             on_click=lambda e, row_index=idx: on_select_pdf_candidate(row_index),
                             style=ft.ButtonStyle(
                                 padding=ft.padding.symmetric(horizontal=8, vertical=4),
@@ -1703,9 +1703,10 @@ def main(page: ft.Page):
                 export_pdf_btn = ft.ElevatedButton("PDF出力実行", on_click=on_pdf_export)
 
                 table_header.controls = [
+                    search_pdf_btn,
+                    ft.Container(width=80),
                     select_all_btn,
                     deselect_all_btn,
-                    search_pdf_btn,
                     export_pdf_btn,
                 ]
 

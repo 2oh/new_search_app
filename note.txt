@@ -2267,7 +2267,15 @@ git commit -m "Show summary counts in table headers(v0.9.68)"
 Refine result table labels and header badges
 結果テーブルの列名とヘッダーバッジを調整する
 
+git commit -m "Refine result table labels and header badges(v0.9.69)"
 
+
+
+Reorder result action buttons
+結果操作ボタンの順番を変更する
+
+
+(v0.9.70)
 
 
 
