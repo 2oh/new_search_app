@@ -2227,6 +2227,18 @@ Use adopted PDF duplicates for output defaults
 採用PDF重複チェックを追加
 重複PDFの2件目以降を出力対象OF
 
+
+git commit -m "Use adopted PDF duplicates for output defaults(v0.9.64)"
+
+
+
+
+出力対象を重複とプレビューの間に
+４つのボタンを右端に
+
+
+
+
 8. 項番列を追加
 Add row number to result table
 項番 表示列を追加
@@ -2236,12 +2248,6 @@ Summarize result counts with badges
 長いメッセージを短くする
 件数をバッジ表示にする
 SnackBarとの重複を減らす
-
-10. カーソル上下移動は将来課題
-やらない
-
-11. その後にホバープレビュー
-
 
 
 
@@ -2300,6 +2306,10 @@ Add normal search mode
 ・やはりタイトル行は固定にしたい
 ・ドラッグアンドドロップを実装したい
 ・EXE最新版をボタン一つでアップデートしたい
+
+（やらないつもり）
+・カーソルでの行移動
+
 
 
 （大きな流れ）

@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.63)
+#  図面PDF検索結合 (v0.9.64)
 # ======================================================
 
 import flet as ft
@@ -851,6 +851,8 @@ def main(page: ft.Page):
             nonlocal current_df
 
             current_df = apply_output_target_defaults(current_df)
+            current_df = update_adopted_pdf_duplicate_info(current_df)
+            current_df = apply_duplicate_output_defaults(current_df)
 
             render_table_from_df(current_df)
             dialog.open = False
@@ -914,56 +916,55 @@ def main(page: ft.Page):
         if initial_preview_pdf and initial_preview_pdf != NO_ADOPTED_PDF_VALUE:
             update_preview(initial_preview_pdf)
 
-    def update_duplicate_search_text_info(df: pd.DataFrame) -> pd.DataFrame:
+    def update_adopted_pdf_duplicate_info(df: pd.DataFrame) -> pd.DataFrame:
         """
-        検索用文字列の重複状況を表示用列に反映する。
+        採用PDFパスの重複状況を表示用列に反映する。
 
-        同じ検索用文字列が複数行ある場合:
+        同じ採用PDFパスが複数行に入っている場合:
         - 1件目: 「1件目」
         - 2件目以降: 「2件目→」「3件目→」...
-        
-        空欄の検索用文字列は重複判定しない。
+
+        採用PDFパスが空欄の行は重複判定しない。
         """
         if df is None or df.empty:
             return df
 
-        if "検索用文字列" not in df.columns:
+        if "採用PDFパス" not in df.columns:
             return df
 
         df = df.copy()
 
-        search_texts = df["検索用文字列"].fillna("").astype(str).str.strip()
+        adopted_paths = df["採用PDFパス"].fillna("").astype(str).str.strip()
 
         # 初期値は空欄
-        df["検索文字列重複"] = ""
+        df["採用PDF重複"] = ""
 
         # 空欄は重複判定から除外
-        non_empty = search_texts.ne("")
+        non_empty = adopted_paths.ne("")
 
         if not non_empty.any():
             return df
 
-        counts = search_texts[non_empty].value_counts()
+        counts = adopted_paths[non_empty].value_counts()
+        duplicate_paths = counts[counts >= 2]
 
-        duplicate_texts = counts[counts >= 2]
-
-        if duplicate_texts.empty:
+        if duplicate_paths.empty:
             return df
 
-        for search_text, count in duplicate_texts.items():
-            matching_indices = df.index[non_empty & search_texts.eq(search_text)].tolist()
+        for adopted_path, count in duplicate_paths.items():
+            matching_indices = df.index[non_empty & adopted_paths.eq(adopted_path)].tolist()
 
             for position, idx in enumerate(matching_indices, start=1):
                 if position == 1:
-                    df.at[idx, "検索文字列重複"] = "1件目"
+                    df.at[idx, "採用PDF重複"] = "1件目"
                 else:
-                    df.at[idx, "検索文字列重複"] = f"{position}件目→"
+                    df.at[idx, "採用PDF重複"] = f"{position}件目→"
 
         return df
 
     def apply_duplicate_output_defaults(df: pd.DataFrame) -> pd.DataFrame:
         """
-        検索用文字列が重複している場合、2件目以降を初期出力対象外にする。
+        採用PDFパスが重複している場合、2件目以降を出力対象外にする。
 
         - 重複なし: 既存の出力対象を維持
         - 1件目: 出力対象を維持
@@ -972,14 +973,14 @@ def main(page: ft.Page):
         if df is None or df.empty:
             return df
 
-        if "検索文字列重複" not in df.columns or "出力対象" not in df.columns:
+        if "採用PDF重複" not in df.columns or "出力対象" not in df.columns:
             return df
 
         df = df.copy()
 
-        duplicate_info = df["検索文字列重複"].fillna("").astype(str).str.strip()
+        duplicate_info = df["採用PDF重複"].fillna("").astype(str).str.strip()
 
-        # 「2件目→」「3件目→」など、矢印付きの行を初期OFFにする
+        # 「2件目→」「3件目→」など、矢印付きの行をOFFにする
         second_or_later = duplicate_info.str.endswith("→")
 
         df.loc[second_or_later, "出力対象"] = False
@@ -1038,11 +1039,11 @@ def main(page: ft.Page):
             "出力可否",
             "検索用文字列",
             "共通",
-            "検索文字列重複",
             "出力対象",
             "候補PDF数",
             "候補確認",
             "採用PDFパス",
+            "採用PDF重複",
             "プレビュー",
         ]
 
@@ -1065,7 +1066,7 @@ def main(page: ft.Page):
         def get_display_column_name(column_name: str) -> str:
             display_name_map = {
                 "検索用文字列": "検索文字列",
-                "検索文字列重複": "重複",
+                "採用PDF重複": "重複",
                 "候補PDF数": "候補数",
                 "数量セル色": "セル色",
                 "採用PDFパス": "出力PDF",
@@ -1079,7 +1080,7 @@ def main(page: ft.Page):
                 "数量セル色",
                 "縦結合",
                 "出力可否",
-                "検索文字列重複",
+                "採用PDF重複",
                 "出力対象",
                 "候補PDF数",
                 "候補確認",
@@ -1096,7 +1097,7 @@ def main(page: ft.Page):
         ineligible_blank_columns = {
             "検索用文字列",
             "共通",
-            "検索文字列重複",
+            "採用PDF重複",
             "出力対象",
             "候補PDF数",
             "候補確認",
@@ -1575,11 +1576,8 @@ def main(page: ft.Page):
 
             df.loc[df["出力可否"].eq("不可"), "候補状態"] = "出力不可"
 
-            # 検索用文字列の重複表示を更新
-            df = update_duplicate_search_text_info(df)
-
-            # 重複している検索用文字列の2件目以降は初期出力対象外にする
-            df = apply_duplicate_output_defaults(df)
+            # 採用PDF重複は、PDF候補抽出後に更新する
+            df["採用PDF重複"] = ""
 
             if df.empty:
                 message.value = "抽出結果がありません。"
@@ -1773,8 +1771,6 @@ def main(page: ft.Page):
 
         sync_table_state_to_current_df()
 
-        current_df = update_duplicate_search_text_info(current_df)
-
         pdf_files = collect_pdf_files(pdf_root)
 
         if not pdf_files:
@@ -1826,6 +1822,8 @@ def main(page: ft.Page):
                     current_df.at[idx, "候補状態"] = "複数候補"
 
         current_df = apply_output_target_defaults(current_df)
+        current_df = update_adopted_pdf_duplicate_info(current_df)
+        current_df = apply_duplicate_output_defaults(current_df)
 
         render_table_from_df(current_df)
 
@@ -1845,8 +1843,8 @@ def main(page: ft.Page):
             .sum()
         )
         multiple_count = int((candidate_counts >= 2).sum())
-        duplicate_search_text_count = int(
-            current_df["検索文字列重複"]
+        duplicate_adopted_pdf_count = int(
+            current_df["採用PDF重複"]
             .fillna("")
             .astype(str)
             .str.strip()
@@ -1890,9 +1888,9 @@ def main(page: ft.Page):
                     debug_print(f"  {i}. {candidate_path}")
 
 
-        debug_print("===== 検索用文字列 重複行 =====")
+        debug_print("===== 出力PDF 重複行 =====")
         duplicate_df = current_df[
-            current_df["検索文字列重複"]
+            current_df["採用PDF重複"]
             .fillna("")
             .astype(str)
             .str.strip()
@@ -1906,7 +1904,7 @@ def main(page: ft.Page):
                 debug_print(
                     f"[{idx}] "
                     f"検索用文字列={row.get('検索用文字列', '')!r}, "
-                    f"重複={row.get('検索文字列重複', '')!r}, "
+                    f"重複={row.get('採用PDF重複', '')!r}, "
                     f"候補状態={row.get('候補状態', '')!r}, "
                     f"採用PDFパス={row.get('採用PDFパス', '')!r}"
                 )
@@ -1927,7 +1925,7 @@ def main(page: ft.Page):
             f"一致あり {matched_count}件 / "
             f"採用 {adopted_count}件 / "
             f"複数候補 {multiple_count}件 / "
-            f"検索文字列重複 {duplicate_search_text_count}件 / "
+            f"出力PDF重複 {duplicate_adopted_pdf_count}件 / "
             f"出力対象 {selected_count}件 / "
             f"出力可能 {export_ready_count}件"
         )
