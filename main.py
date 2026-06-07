@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.72)
+#  図面PDF検索結合 (v0.9.73)
 # ======================================================
 
 import flet as ft
@@ -475,8 +475,8 @@ def main(page: ft.Page):
     search_text_fields = {}
     output_checkboxes = {}
 
-    # HOVER_PREVIEW_MIN_WIDTH = 1500
-    HOVER_PREVIEW_MIN_WIDTH = 900
+    HOVER_PREVIEW_MIN_WIDTH = 1500
+    # HOVER_PREVIEW_MIN_WIDTH = 900
     use_hover_preview = False
 
     # ---- 設定ファイル処理 ----
@@ -580,6 +580,9 @@ def main(page: ft.Page):
     SHEET_PLACEHOLDER = "（シートを選択してください）"
     sheet_dropdown = ft.Dropdown(label="シート選択", width=420)
     message = ft.Text("")
+    
+    hover_debug = ft.Text("", size=12, color=ft.Colors.RED_700)
+
     mode_notice = ft.Text("")
     table = ft.DataTable(
         columns=[ft.DataColumn(ft.Text("抽出結果"))],
@@ -600,12 +603,12 @@ def main(page: ft.Page):
     hover_preview_message = ft.Text(
         "",
         size=12,
-        color=ft.Colors.GREY_600,
+        color=ft.Colors.BLUE_GREY_700,
         text_align=ft.TextAlign.CENTER,
     )
 
     hover_preview_panel = ft.Container(
-        padding=0,
+        padding=ft.padding.only(left=12, right=12, top=4),
         visible=False,
         bgcolor=ft.Colors.TRANSPARENT,
         expand=True,
@@ -663,22 +666,18 @@ def main(page: ft.Page):
         )
 
     def create_hover_preview_box(preview_image: ft.Image, height: int = 620) -> ft.Container:
-        """
-        ホバープレビュー用のプレビュー枠を作る。
-        右側の余白に自然に表示するため、枠線や背景は付けない。
-        """
         return ft.Container(
             content=preview_image,
             alignment=ft.alignment.top_center,
             height=height,
-            padding=0,
+            padding=4,
             bgcolor=ft.Colors.TRANSPARENT,
         )
 
     hover_preview_panel.content = ft.Column(
         controls=[
-            create_hover_preview_box(hover_preview_image, height=620),
             hover_preview_message,
+            create_hover_preview_box(hover_preview_image, height=600),
         ],
         spacing=4,
         tight=True,
@@ -1315,7 +1314,9 @@ def main(page: ft.Page):
                 if c == "プレビュー":
                     adopted_pdf_path = str(row.get("採用PDFパス", "") or "").strip()
 
-                    if adopted_pdf_path and not is_output_ineligible(row):
+                    if use_hover_preview:
+                        content = ft.Text("")
+                    elif adopted_pdf_path and not is_output_ineligible(row):
                         content = ft.IconButton(
                             icon=ft.Icons.VISIBILITY_OUTLINED,
                             tooltip="出力PDFをプレビュー",
@@ -1480,14 +1481,22 @@ def main(page: ft.Page):
 
                     is_hover_pdf_column = c == "採用PDFパス"
                     adopted_pdf_path_for_hover = str(row.get("採用PDFパス", "") or "").strip()
+                    enable_hover_preview_for_cell = (
+                        use_hover_preview
+                        and is_hover_pdf_column
+                        and bool(adopted_pdf_path_for_hover)
+                    )
+
+                    normal_text_color = (
+                        ft.Colors.BLUE_700
+                        if enable_hover_preview_for_cell
+                        else text_color
+                    )
 
                     text_control = ft.Text(
                         display_value,
-                        color=(
-                            ft.Colors.BLUE_700
-                            if is_hover_pdf_column and adopted_pdf_path_for_hover
-                            else text_color
-                        ),
+                        color=normal_text_color,
+                        weight=ft.FontWeight.NORMAL,
                         text_align=(
                             ft.TextAlign.CENTER
                             if should_center_align_column(c)
@@ -1495,18 +1504,21 @@ def main(page: ft.Page):
                         ),
                     )
 
-                    if is_hover_pdf_column:
-                        def handle_output_pdf_hover(e, pdf_path=adopted_pdf_path_for_hover, text=text_control):
-                            if not pdf_path:
-                                return
-
+                    if enable_hover_preview_for_cell:
+                        def handle_output_pdf_hover(
+                            e,
+                            pdf_path=adopted_pdf_path_for_hover,
+                            text=text_control,
+                            normal_color=normal_text_color,
+                        ):
                             if e.data == "true":
                                 text.color = ft.Colors.BLUE_900
                                 text.weight = ft.FontWeight.BOLD
                                 update_hover_preview(pdf_path)
                             else:
-                                text.color = ft.Colors.BLUE_700
-                                text.weight = None
+                                text.color = normal_color
+                                text.weight = ft.FontWeight.NORMAL
+                                clear_hover_preview()
 
                             page.update()
 
@@ -1693,6 +1705,9 @@ def main(page: ft.Page):
 
     # ---- 抽出処理 ----
     def on_extract_click(e):
+
+        clear_hover_preview()
+
         # 1) Excel 未選択
         if not selected_excel_path:
             message.value = "Excelファイルを選択してください。"
@@ -2356,6 +2371,7 @@ def main(page: ft.Page):
             ft.Divider(),
             table_header,
             message,
+            hover_debug,
         ],
         spacing=6,
     )
@@ -2387,7 +2403,11 @@ def main(page: ft.Page):
         expand=True,
     )
 
-    def update_hover_preview_visibility():
+    def update_hover_preview_visibility() -> bool:
+        """
+        画面幅と抽出結果の有無に応じて、ホバープレビュー欄の表示状態を切り替える。
+        表示状態が変わった場合は True を返す。
+        """
         nonlocal use_hover_preview
 
         page_width = page.width or 0
@@ -2398,18 +2418,31 @@ def main(page: ft.Page):
             and page_width >= HOVER_PREVIEW_MIN_WIDTH
         )
 
-        if new_use_hover_preview == use_hover_preview:
-            return
+        hover_debug.value = (
+            f"width={page_width} / "
+            f"has_results={has_results} / "
+            f"threshold={HOVER_PREVIEW_MIN_WIDTH} / "
+            f"hover={new_use_hover_preview}"
+        )
+
+        changed = new_use_hover_preview != use_hover_preview
 
         use_hover_preview = new_use_hover_preview
         hover_preview_panel.visible = use_hover_preview
 
         if not use_hover_preview:
-            hover_preview_image.src = ""
-            hover_preview_image.visible = False
+            clear_hover_preview()
+
+        return changed
 
     def on_page_resize(e):
-        update_hover_preview_visibility()
+        hover_debug.value = "resize event fired"
+
+        changed = update_hover_preview_visibility()
+
+        if changed and current_df is not None and not current_df.empty:
+            render_table_from_df(current_df)
+
         page.update()
 
     page.on_resize = on_page_resize

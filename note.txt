@@ -2290,6 +2290,13 @@ Refine hover preview appearance and reset behavior
 git commit -m "Refine hover preview appearance and reset behavior(v0.9.72)"
 
 
+Refine hover preview layout
+ホバープレビューの配置を調整する
+
+git commit -m "Refine hover preview layout(v0.9.73)"
+
+
+
 
 7
 Rename app to Drawing PDF Search Merge
@@ -2339,6 +2346,7 @@ Add normal search mode
 ・やはりタイトル行は固定にしたい
 ・ドラッグアンドドロップを実装したい
 ・EXE最新版をボタン一つでアップデートしたい
+・画面リサイズで動的にプレビュー方式を切り替えたい
 
 （やらないつもり）
 ・カーソルでの行移動
