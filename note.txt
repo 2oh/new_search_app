@@ -2236,7 +2236,10 @@ git commit -m "Use adopted PDF duplicates for output defaults(v0.9.64)"
 出力対象を重複とプレビューの間に
 ４つのボタンを右端に
 
+Move output target near duplicate status
+出力対象列を重複状態の近くに移動する
 
+git commit -m "Move output target near duplicate status(v0.9.65)"
 
 
 8. 項番列を追加
