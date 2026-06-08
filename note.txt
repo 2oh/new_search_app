@@ -2327,6 +2327,11 @@ Rename app title to PDF merge tool
 git commit -m "Rename app title to PDF merge tool(v0.9.78)"
 
 
+Add release checklist
+リリース前チェックリスト
+
+git commit -m "Add release checklist"
+
 
 
 8
