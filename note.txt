@@ -2315,6 +2315,13 @@ Reorder result columns for item context
 git commit -m "Reorder result columns for item context(v0.9.76)"
 
 
+Relax result table spacing
+DataTable の余白を少し広げる
+
+git commit -m "Relax result table spacing(v0.9.77)"
+
+
+
 7
 Rename app to Drawing PDF Search Merge
 アプリ名を「図面PDF検索結合」に変更する

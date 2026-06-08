@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.76)
+#  図面PDF検索結合 (v0.9.77)
 # ======================================================
 
 import flet as ft
@@ -585,8 +585,8 @@ def main(page: ft.Page):
     table = ft.DataTable(
         columns=[ft.DataColumn(ft.Text("抽出結果"))],
         rows=[],
-        column_spacing=16,
-        horizontal_margin=10,
+        column_spacing=20,
+        horizontal_margin=12,
     )
     table_header = ft.Row([], alignment="center")
 
