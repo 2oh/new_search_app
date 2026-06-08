@@ -2339,6 +2339,11 @@ Add app icon for test build
 git commit -m "Add app icon for test build"
 
 
+Rename app icon
+アプリアイコンファイル名変更
+
+git commit -m "Rename app icon"
+
 
 8
 Add application icon
