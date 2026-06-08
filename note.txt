@@ -2333,6 +2333,12 @@ Add release checklist
 git commit -m "Add release checklist"
 
 
+Add app icon for test build
+アプリアイコン追加
+
+git commit -m "Add app icon for test build"
+
+
 
 8
 Add application icon
