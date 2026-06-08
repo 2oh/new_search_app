@@ -2321,12 +2321,12 @@ DataTable の余白を少し広げる
 git commit -m "Relax result table spacing(v0.9.77)"
 
 
+Rename app title to PDF merge tool
+アプリ名称変更
 
-7
-Rename app to Drawing PDF Search Merge
-アプリ名を「図面PDF検索結合」に変更する
+git commit -m "Rename app title to PDF merge tool(v0.9.78)"
 
-ツール、又はアプリ
+
 
 
 8
