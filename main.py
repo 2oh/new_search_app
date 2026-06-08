@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合 (v0.9.74)
+#  図面PDF検索結合 (v0.9.75)
 # ======================================================
 
 import flet as ft
@@ -1801,7 +1801,16 @@ def main(page: ft.Page):
                 - 数量が0
                 - 数量セル色あり
                 - 縦結合あり
+                - 品番・PG名がともに空欄
                 """
+                def is_blank_value(value) -> bool:
+                    if pd.isna(value):
+                        return True
+
+                    s = str(value).strip()
+
+                    return s == "" or s.lower() in ("nan", "none")
+
                 zero_qty = False
 
                 if "数量" in df.columns:
@@ -1810,7 +1819,12 @@ def main(page: ft.Page):
                 colored = bool(str(row.get("数量セル色", "") or "").strip())
                 vertically_merged = bool(str(row.get("縦結合", "") or "").strip())
 
-                if zero_qty or colored or vertically_merged:
+                part_number_blank = is_blank_value(row.get("品番", ""))
+                pg_name_blank = is_blank_value(row.get("PG名", ""))
+
+                missing_identifier = part_number_blank and pg_name_blank
+
+                if zero_qty or colored or vertically_merged or missing_identifier:
                     return "不可"
 
                 return "可"

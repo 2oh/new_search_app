@@ -2300,8 +2300,13 @@ git commit -m "Refine hover preview layout(v0.9.73)"
 Polish hover preview UI
 ホバープレビュー周辺のUIを微調整する
 
-
 git commit -m "Polish hover preview UI(v0.9.74)"
+
+
+Mark rows without item identifiers as ineligible
+品番・PG名がない行を抽出対象外にする
+
+git commit -m "Mark rows without item identifiers as ineligible(v0.9.75)"
 
 
 
@@ -2356,6 +2361,7 @@ Add normal search mode
 ・ドラッグアンドドロップを実装したい
 ・EXE最新版をボタン一つでアップデートしたい
 ・画面リサイズで動的にプレビュー方式を切り替えたい
+・当該エクセルを他ユーザーが開いていても、読めるようにする
 
 （やらないつもり）
 ・カーソルでの行移動
