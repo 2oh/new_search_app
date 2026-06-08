@@ -2309,7 +2309,10 @@ Mark rows without item identifiers as ineligible
 git commit -m "Mark rows without item identifiers as ineligible(v0.9.75)"
 
 
+Reorder result columns for item context
+部品内容が先に見えるように結果列の順番を変更する
 
+git commit -m "Reorder result columns for item context(v0.9.76)"
 
 
 7
