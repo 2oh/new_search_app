@@ -2303,6 +2303,10 @@ Polish hover preview UI
 git commit -m "Polish hover preview UI(v0.9.74)"
 
 
+
+2026/6/8
+
+
 Mark rows without item identifiers as ineligible
 品番・PG名がない行を抽出対象外にする
 
@@ -2345,17 +2349,74 @@ Rename app icon
 git commit -m "Rename app icon"
 
 
-8
-Add application icon
-アプリアイコンを追加する
-
-9
-Prepare release configuration
-リリース用設定を準備する
 
 10
 Build Windows executable
 Windows実行ファイルを作成する
+
+python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico main.py
+
+
+
+
+2026/6/9
+
+現地テストと結果報告、改修方針
+
+
+2026/6/10
+
+1. PDF候補抽出に進捗表示を追加
+2. PDF一覧を1回だけ作って検索する方式に変更
+
+Show progress and reuse PDF search index
+PDF候補抽出中の進捗表示を追加し、PDF検索用データを再利用する
+
+git commit -m "Show progress and reuse PDF search index(v0.9.79)"
+
+
+
+コミットしました！
+ちゃんと表示でてます、この環境では一種ですが・・・
+
+
+７５万回くらいみていたという訳ではなかった訳ですね？
+
+とすると、時間短縮効果は当初の想定ほどではないかもしれませんね、
+
+とりあえず結果を見ることですね
+
+ちなみに、windowsのdirでファイルリストを取るとかはどうなんでしょう？
+
+というか、そうしてるんですね
+
+
+
+で、ここで、もう一つ相談が出てきましたが、いいですか？
+
+
+
+
+
+
+
+3. タイトル行固定の再設計
+4. ①の見た目系をまとめて修正
+5. ライトテーマ対策
+6. 候補選択ダイアログ拡大
+7. 大品名＋小品名処理
+8. 余白プレビュー拡大策
+
+3. 出力PDF欄を2段表示にする
+4. 余白プレビューの幅を再調整
+
+
+3. 出力PDF欄を2段表示
+4. 余白プレビュー幅の再調整
+5. 見た目系・アイコン・保存ボタン位置
+
+
+
 
 11
 Tag version 1.0.0
@@ -2432,6 +2493,7 @@ Add normal search mode
 （通常検索関連）
 ・通常検索について、（現システムと違い）拡張子を検索文字列にふくまないようにしたい
 ・通常検索について、現在の結果を保持し、次の検索結果が追加される仕組みが欲しい。
+・主に通常検索で必要になると思うが、PDF「出力」だけではなく、「開く」もやりたい
 
 
 

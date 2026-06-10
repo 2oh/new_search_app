@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.78)
+#  図面PDF検索結合ツール (v0.9.79)
 # ======================================================
 
 import flet as ft
@@ -41,14 +41,27 @@ def normalize_filename_match(text: str) -> str:
     return s
 
 
-def collect_pdf_files(root_folder: str) -> list[Path]:
-    """指定フォルダ配下のPDFを再帰的に集める"""
+def collect_pdf_files(root_folder: str, progress_callback=None) -> list[Path]:
+    """
+    指定フォルダ配下のPDFを再帰的に集める。
+
+    NAS上では Path.rglob("*") + is_file() が重くなることがあるため、
+    os.walk でファイル一覧を取得する。
+    """
     if not root_folder or not os.path.isdir(root_folder):
         return []
 
-    root = Path(root_folder)
-    return [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
+    pdf_files = []
 
+    for dirpath, dirnames, filenames in os.walk(root_folder):
+        for filename in filenames:
+            if filename.lower().endswith(".pdf"):
+                pdf_files.append(Path(dirpath) / filename)
+
+                if progress_callback and len(pdf_files) % 1000 == 0:
+                    progress_callback(len(pdf_files))
+
+    return pdf_files
 
 def find_pdf_candidates_by_filename(search_text: str, pdf_files: list[Path]) -> list[str]:
     """検索文字列を使ってPDFファイル名を部分一致検索する"""
@@ -65,6 +78,46 @@ def find_pdf_candidates_by_filename(search_text: str, pdf_files: list[Path]) -> 
 
         if needle in stem_norm or needle in name_norm:
             hits.append(str(pdf_path))
+
+    return hits
+
+def build_pdf_search_index(pdf_files: list[Path]) -> list[tuple[str, str, str]]:
+    """
+    PDF検索用の簡易インデックスを作る。
+
+    Returns
+    -------
+    list[tuple[str, str, str]]
+        (PDFフルパス, 正規化済みstem, 正規化済みファイル名)
+    """
+    index = []
+
+    for pdf_path in pdf_files:
+        path_text = str(pdf_path)
+        stem_norm = normalize_filename_match(pdf_path.stem)
+        name_norm = normalize_filename_match(pdf_path.name)
+        index.append((path_text, stem_norm, name_norm))
+
+    return index
+
+
+def find_pdf_candidates_from_index(
+    search_text: str,
+    pdf_index: list[tuple[str, str, str]]
+) -> list[str]:
+    """
+    検索文字列を使って、PDF検索用インデックスから候補を探す。
+    """
+    needle = normalize_filename_match(search_text)
+
+    if not needle:
+        return []
+
+    hits = []
+
+    for path_text, stem_norm, name_norm in pdf_index:
+        if needle in stem_norm or needle in name_norm:
+            hits.append(path_text)
 
     return hits
 
@@ -2043,7 +2096,17 @@ def main(page: ft.Page):
 
         sync_table_state_to_current_df()
 
-        pdf_files = collect_pdf_files(pdf_root)
+        message.value = "PDF一覧を取得中です..."
+        page.update()
+
+        def update_pdf_collect_progress(count: int):
+            message.value = f"PDF一覧を取得中です... {count}件"
+            page.update()
+
+        pdf_files = collect_pdf_files(
+            pdf_root,
+            progress_callback=update_pdf_collect_progress
+        )
 
         if not pdf_files:
             message.value = "検索先フォルダ配下にPDFが見つかりませんでした。"
@@ -2051,8 +2114,18 @@ def main(page: ft.Page):
             page.update()
             return
 
+        message.value = f"PDF検索用データを作成中です... {len(pdf_files)}件"
+        page.update()
+
+        pdf_index = build_pdf_search_index(pdf_files)
+
+        search_target_count = len(current_df)
+
+        message.value = f"PDF候補を抽出中です... 0 / {search_target_count}"
+        page.update()
+
         # 各行ごとにPDF候補を抽出
-        for idx, row in current_df.iterrows():
+        for pos, (idx, row) in enumerate(current_df.iterrows(), start=1):
 
             # 出力不可行はPDF検索対象外にする
             if is_output_ineligible(row):
@@ -2062,10 +2135,15 @@ def main(page: ft.Page):
                 current_df.at[idx, "採用PDFパス"] = ""
                 current_df.at[idx, "候補状態"] = "出力不可"
                 current_df.at[idx, "出力対象"] = False
+
+                if pos % 5 == 0 or pos == search_target_count:
+                    message.value = f"PDF候補を抽出中です... {pos} / {search_target_count}"
+                    page.update()
+
                 continue
 
             search_text = row.get("検索用文字列", "")
-            candidates = find_pdf_candidates_by_filename(search_text, pdf_files)
+            candidates = find_pdf_candidates_from_index(search_text, pdf_index)
             candidate_count = len(candidates)
 
             previous_status = str(row.get("候補状態", "") or "").strip()
@@ -2092,6 +2170,10 @@ def main(page: ft.Page):
                 else:
                     current_df.at[idx, "採用PDFパス"] = ""
                     current_df.at[idx, "候補状態"] = "複数候補"
+
+            if pos % 5 == 0 or pos == search_target_count:
+                message.value = f"PDF候補を抽出中です... {pos} / {search_target_count}"
+                page.update()
 
         current_df = apply_output_target_defaults(current_df)
         current_df = update_adopted_pdf_duplicate_info(current_df)
