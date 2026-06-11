@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.79)
+#  図面PDF検索結合ツール (v0.9.80)
 # ======================================================
 
 import flet as ft
@@ -1177,6 +1177,7 @@ def main(page: ft.Page):
             "元検索文字列",
             "候補状態",
             "候補PDF数",
+            "縦結合",
         }
 
         preferred_order = [
@@ -1187,7 +1188,6 @@ def main(page: ft.Page):
             "PG名",
             "数量",
             "数量セル色",
-            "縦結合",
             "出力可否",
             "検索用文字列",
             "共通",
@@ -1322,7 +1322,6 @@ def main(page: ft.Page):
                 "共通",
                 "数量",
                 "数量セル色",
-                "縦結合",
                 "出力可否",
                 "採用PDF重複",
                 "出力対象",
@@ -1853,7 +1852,6 @@ def main(page: ft.Page):
                 不可条件:
                 - 数量が0
                 - 数量セル色あり
-                - 縦結合あり
                 - 品番・PG名がともに空欄
                 """
                 def is_blank_value(value) -> bool:
@@ -1870,14 +1868,13 @@ def main(page: ft.Page):
                     zero_qty = is_zero_quantity(row.get("数量"))
 
                 colored = bool(str(row.get("数量セル色", "") or "").strip())
-                vertically_merged = bool(str(row.get("縦結合", "") or "").strip())
 
                 part_number_blank = is_blank_value(row.get("品番", ""))
                 pg_name_blank = is_blank_value(row.get("PG名", ""))
 
                 missing_identifier = part_number_blank and pg_name_blank
 
-                if zero_qty or colored or vertically_merged or missing_identifier:
+                if zero_qty or colored or missing_identifier:
                     return "不可"
 
                 return "可"
