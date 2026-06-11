@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.80)
+#  図面PDF検索結合ツール (v0.9.81)
 # ======================================================
 
 import flet as ft
@@ -460,19 +460,77 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
     if "数量" in detected_columns:
         quantity_col = df.columns[detected_columns["数量"]]
 
+    # --- PG名のみの行への前行情報引き継ぎ ---
+    # Excel上で品名・材料・品番・数量・共通などが縦結合され、
+    # 2行目にPG名だけが入っているケースに対応する。
+    #
+    # 数量が空白でもPG名がある行は、直前行の情報を引き継いで
+    # 抽出対象として残す。
+    def is_blank_cell_value(value) -> bool:
+        if pd.isna(value):
+            return True
+
+        s = str(value).strip()
+
+        return s == "" or s.lower() in ("nan", "none")
+
+    pg_col = None
+    if "PG名" in detected_columns:
+        pg_col = df.columns[detected_columns["PG名"]]
+
+    def fill_from_previous_row_if_blank(target_col: str, idx, prev_idx):
+        """
+        target_col が sub_df に存在し、現在行が空白なら前行の値を引き継ぐ。
+        """
+        if target_col not in sub_df.columns:
+            return
+
+        current_value = sub_df.at[idx, target_col]
+        previous_value = sub_df.at[prev_idx, target_col]
+
+        if is_blank_cell_value(current_value) and not is_blank_cell_value(previous_value):
+            sub_df.at[idx, target_col] = previous_value
+
+    if quantity_col is not None and pg_col is not None:
+        for pos, idx in enumerate(sub_df.index):
+            if pos == 0:
+                continue
+
+            prev_idx = sub_df.index[pos - 1]
+
+            quantity_blank = is_blank_cell_value(df.at[idx, quantity_col])
+            pg_exists = not is_blank_cell_value(df.at[idx, pg_col])
+
+            if quantity_blank and pg_exists:
+                # 品名・材料・品番・共通は、現在行が空白なら前行から補完する
+                for target_col in ["品名", "材料", "品番", "共通"]:
+                    fill_from_previous_row_if_blank(target_col, idx, prev_idx)
+
+                # 数量は、この行を抽出対象として残すために前行から補完する
+                if "数量" in sub_df.columns:
+                    previous_quantity = sub_df.at[prev_idx, "数量"]
+
+                    if not is_blank_cell_value(previous_quantity):
+                        sub_df.at[idx, "数量"] = previous_quantity
+
     if quantity_col is not None:
-        def keep_row(x):
-            if pd.isna(x):
+        def keep_row_by_quantity(value):
+            if pd.isna(value):
                 return False
 
-            s = str(x).strip()
+            s = str(value).strip()
 
-            if s == "":
+            if s == "" or s.lower() in ("nan", "none"):
                 return False
 
             return True
 
-        sub_df = sub_df[df[quantity_col].apply(keep_row)]
+        # 前行補完後の sub_df["数量"] を見てフィルタする。
+        # これにより、Excel上の数量欄が空白でも、PG名ありで前行数量を引き継いだ行は残る。
+        if "数量" in sub_df.columns:
+            sub_df = sub_df[sub_df["数量"].apply(keep_row_by_quantity)]
+        else:
+            sub_df = sub_df[df[quantity_col].apply(keep_row_by_quantity)]
 
     # ✅ 検出された列に基づいて、列名を統一（英字ブレ対応）
     rename_map = {}

@@ -2376,12 +2376,27 @@ git commit -m "Show progress and reuse PDF search index(v0.9.79)"
 
 
 
-
-
+2026/6/11
 
 1. 縦結合を抽出不可条件から外す
 2. 結果表から「縦結合」列を削除
+
+Stop excluding merged rows and hide merge column
+縦結合行を抽出不可にせず、縦結合列を非表示にする
+
+git commit -m "Stop excluding merged rows and hide merge column(v0.9.80)"
+
+
 3. PG名あり・数量空白行に、前行の品名/材料/品番/数量/共通を引き継ぐ
+
+Carry forward previous row fields for PG-only rows
+PG名のみの行に前行の項目を引き継ぐ
+
+git commit -m "Carry forward previous row fields for PG-only rows(v0.9.81)"
+
+
+
+
 4. 検索文字列の先頭補足文言を除去する
 
 
