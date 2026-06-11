@@ -2395,9 +2395,13 @@ PG名のみの行に前行の項目を引き継ぐ
 git commit -m "Carry forward previous row fields for PG-only rows(v0.9.81)"
 
 
-
-
 4. 検索文字列の先頭補足文言を除去する
+
+Trim leading text before alphanumeric search terms
+検索文字列の先頭にある補足文言を除去する
+
+git commit -m "Trim leading text before alphanumeric search terms(v0.9.82)"
+
 
 
 3. タイトル行固定の再設計

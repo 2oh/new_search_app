@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.81)
+#  図面PDF検索結合ツール (v0.9.82)
 # ======================================================
 
 import flet as ft
@@ -1860,16 +1860,35 @@ def main(page: ft.Page):
             def create_search_keyword(text):
                 if pd.isna(text):
                     return ""
+
                 s = str(text).strip()
+
+                # 先頭に補足説明や記号が付いている場合、
+                # 最初の半角英数字が出てくる位置まで削除する。
+                #
+                # 例:
+                #   "補足説明 ABC123" -> "ABC123"
+                #   "※ABC123"       -> "ABC123"
+                #   "（参考）U12345" -> "U12345"
+                match = re.search(r"[A-Za-z0-9]", s)
+                if match:
+                    s = s[match.start():]
+                else:
+                    return ""
+
+                # 先頭が I/U/H/F + 数字 の場合は、先頭1文字を除去する
                 if len(s) >= 2 and s[0].upper() in ["I", "U", "H", "F"] and s[1].isdigit():
                     s = s[1:]
+
                 for pat in ["R/L", "L/R", "A/B"]:
                     idx = s.find(pat)
                     if idx != -1:
                         s = s[:idx]
+
                 idx_slash = s.find("/")
                 if idx_slash != -1:
                     s = s[:idx_slash]
+
                 return s.strip()
 
             # --- 品番 or PG名 のどちらか優先で生成（元値を保持）
