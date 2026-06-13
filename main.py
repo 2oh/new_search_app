@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.91)
+#  図面PDF検索結合ツール (v0.9.92)
 # ======================================================
 
 import flet as ft
@@ -626,6 +626,8 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
 # ========= メイン =========
 def main(page: ft.Page):
     page.title = "図面PDF検索結合ツール"
+
+    page.theme_mode = ft.ThemeMode.DARK
 
     # 起動時のウィンドウ表示設定
     try:
