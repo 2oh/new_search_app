@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.86)
+#  図面PDF検索結合ツール (v0.9.87)
 # ======================================================
 
 import flet as ft
@@ -1322,14 +1322,15 @@ def main(page: ft.Page):
             "候補状態",
             "候補PDF数",
             "縦結合",
+            "品番",
+            "PG名",
         }
 
         preferred_order = [
             "項番",
             "品名",
             "材料",
-            "品番",
-            "PG名",
+            "品番PG名",
             "数量",
             "数量セル色",
             "出力可否",
@@ -1343,6 +1344,7 @@ def main(page: ft.Page):
         ]
 
         display_only_columns = {
+            "品番PG名",
             "候補確認",
             "プレビュー",
         }
@@ -1373,6 +1375,7 @@ def main(page: ft.Page):
                 "出力可否": "抽出対象",
                 "出力対象": "出力",
                 "候補確認": "複数候補",
+                "品番PG名": "品番/PG名",
             }
             return display_name_map.get(column_name, column_name)
 
@@ -1515,6 +1518,59 @@ def main(page: ft.Page):
                     )
                     continue
 
+                if c == "品番PG名":
+                    def format_part_text(value) -> str:
+                        if pd.isna(value):
+                            return ""
+
+                        s = str(value).strip()
+
+                        if s == "" or s.lower() in ("nan", "none"):
+                            return ""
+
+                        return s
+
+                    part_number = format_part_text(row.get("品番", ""))
+                    pg_name = format_part_text(row.get("PG名", ""))
+
+                    text_controls = []
+
+                    if part_number:
+                        text_controls.append(
+                            ft.Text(
+                                part_number,
+                                no_wrap=True,
+                            )
+                        )
+
+                    if pg_name:
+                        text_controls.append(
+                            ft.Text(
+                                pg_name,
+                                no_wrap=True,
+                            )
+                        )
+
+                    if text_controls:
+                        content = ft.Column(
+                            controls=text_controls,
+                            spacing=0,
+                            tight=True,
+                        )
+                    else:
+                        content = ft.Text("")
+
+                    cells.append(
+                        ft.DataCell(
+                            ft.Container(
+                                content=content,
+                                alignment=ft.alignment.center_left,
+                            )
+                        )
+                    )
+
+                    continue
+
                 if c == "プレビュー":
                     adopted_pdf_path = str(row.get("採用PDFパス", "") or "").strip()
 
@@ -1534,6 +1590,59 @@ def main(page: ft.Page):
                             ft.Container(
                                 content=content,
                                 alignment=ft.alignment.center,
+                            )
+                        )
+                    )
+
+                    continue
+
+                if c == "品番PG名":
+                    def format_part_text(value) -> str:
+                        if pd.isna(value):
+                            return ""
+
+                        s = str(value).strip()
+
+                        if s == "" or s.lower() in ("nan", "none"):
+                            return ""
+
+                        return s
+
+                    part_number = format_part_text(row.get("品番", ""))
+                    pg_name = format_part_text(row.get("PG名", ""))
+
+                    text_controls = []
+
+                    if part_number:
+                        text_controls.append(
+                            ft.Text(
+                                part_number,
+                                no_wrap=True,
+                            )
+                        )
+
+                    if pg_name:
+                        text_controls.append(
+                            ft.Text(
+                                pg_name,
+                                no_wrap=True,
+                            )
+                        )
+
+                    if text_controls:
+                        content = ft.Column(
+                            controls=text_controls,
+                            spacing=0,
+                            tight=True,
+                        )
+                    else:
+                        content = ft.Text("")
+
+                    cells.append(
+                        ft.DataCell(
+                            ft.Container(
+                                content=content,
+                                alignment=ft.alignment.center_left,
                             )
                         )
                     )

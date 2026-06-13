@@ -2439,6 +2439,15 @@ git commit -m "Enlarge hover preview area(v0.9.86)"
 
 
 
+Display part number and PG name in one column
+品番とPG名を1列にまとめて表示する
+
+git commit -m "Display part number and PG name in one column(v0.9.87)"
+
+
+
+
+
 
 
 5. 候補選択ダイアログ拡大
