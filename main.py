@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.82)
+#  図面PDF検索結合ツール (v0.9.83)
 # ======================================================
 
 import flet as ft
@@ -443,15 +443,73 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
 
     name_idx = find_name_block_indices(cols)
     if name_idx:
-        name_df = df.iloc[:, name_idx].astype(str)
-        sub_df["品名"] = (
-            name_df.apply(lambda row: " ".join(v.strip() for v in row if v.strip() and v.lower() != "nan"), axis=1)
-            .str.strip()
-        )
+        def clean_name_value(value) -> str:
+            if pd.isna(value):
+                return ""
+
+            s = str(value).strip()
+
+            if s == "" or s.lower() in ("nan", "none"):
+                return ""
+
+            return s
+
+        def join_name_parts(parts: list[str]) -> str:
+            return " ".join(p for p in parts if p).strip()
+
+        # 品名列が1列だけの場合は、今まで通りその列の値を品名にする
+        if len(name_idx) == 1:
+            first_col = df.columns[name_idx[0]]
+            sub_df["品名"] = df[first_col].apply(clean_name_value)
+
+        # 品名列が2列以上ある場合は、
+        # 1列目を「大品名」としてWK保持し、2列目以降のみの行に引き継ぐ
+        else:
+            first_name_col = df.columns[name_idx[0]]
+            detail_name_cols = [df.columns[i] for i in name_idx[1:]]
+
+            current_major_name = ""
+            item_names = []
+
+            for idx, row in df.iterrows():
+                major_name = clean_name_value(row.get(first_name_col, ""))
+                detail_parts = [
+                    clean_name_value(row.get(col, ""))
+                    for col in detail_name_cols
+                ]
+                detail_name = join_name_parts(detail_parts)
+
+                # 品名1列目に値があれば、数量の有無に関係なくWK大品名を更新する
+                if major_name:
+                    current_major_name = major_name
+
+                if major_name and detail_name:
+                    # 同じ行に1列目・2列目両方がある場合
+                    item_name = join_name_parts([major_name, detail_name])
+
+                elif major_name:
+                    # 1列目のみの通常行
+                    item_name = major_name
+
+                elif detail_name:
+                    # 2列目以降のみの行は、直近の大品名を前に付ける
+                    item_name = join_name_parts([current_major_name, detail_name])
+
+                else:
+                    item_name = ""
+
+                item_names.append(item_name)
+
+            sub_df["品名"] = item_names
+
     else:
         name_like_cols = [c for c in df.columns if "品名" in str(c)]
         if len(name_like_cols) == 1:
-            sub_df["品名"] = df[name_like_cols[0]].astype(str).fillna("").str.strip()
+            sub_df["品名"] = (
+                df[name_like_cols[0]]
+                .apply(lambda v: "" if pd.isna(v) else str(v).strip())
+                .replace({"nan": "", "None": "", "none": ""})
+            )
 
     # --- 数量フィルタ ---
     # detect_columns() で検出した数量列を使う。
