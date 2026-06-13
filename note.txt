@@ -2458,13 +2458,21 @@ Refresh output badge when toggling output checkbox
 git commit -m "Refresh output badge when toggling output checkbox(v0.9.89)"
 
 
+Adjust hover preview for A3 drawings
+A3図面向けにホバープレビュー表示を調整する
+10. 余白プレビューのファイル名位置調整
+
+git commit -m "Adjust hover preview for A3 drawings(v0.9.90)"
+
+
+
+
 
 5. 候補選択ダイアログ拡大
 6. ライトテーマ対策
 7. アプリアイコンをタイトル欄に表示
 8. 設定保存ボタン位置の変更
 9. 上部固定表示部分の余白調整
-10. 余白プレビューのファイル名位置調整
 11. 終了ボタン追加
 12. タイトル行固定
 

@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.89)
+#  図面PDF検索結合ツール (v0.9.90)
 # ======================================================
 
 import flet as ft
@@ -766,8 +766,8 @@ def main(page: ft.Page):
 
     hover_preview_image = ft.Image(
         src="",
-        width=540,
-        height=660,
+        width=680,
+        height=500,
         fit=ft.ImageFit.CONTAIN,
         visible=False,
     )
@@ -781,7 +781,7 @@ def main(page: ft.Page):
     )
 
     hover_preview_panel = ft.Container(
-        padding=ft.padding.only(left=6, right=6, top=2),
+        padding=ft.padding.only(left=2, right=2, top=2),
         visible=False,
         bgcolor=ft.Colors.TRANSPARENT,
         expand=True,
@@ -847,14 +847,18 @@ def main(page: ft.Page):
             bgcolor=ft.Colors.TRANSPARENT,
         )
 
-    hover_preview_panel.content = ft.Column(
-        controls=[
-            hover_preview_message,
-            create_hover_preview_box(hover_preview_image, height=660),
-        ],
-        spacing=2,
-        tight=True,
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+    hover_preview_panel.content = ft.Container(
+        content=ft.Column(
+            controls=[
+                hover_preview_message,
+                create_hover_preview_box(hover_preview_image, height=520)
+            ],
+            spacing=2,
+            tight=True,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        alignment=ft.alignment.center,
+        expand=True,
     )
 
     def update_hover_preview(pdf_path: str):
