@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.87)
+#  図面PDF検索結合ツール (v0.9.88)
 # ======================================================
 
 import flet as ft
@@ -2246,8 +2246,15 @@ def main(page: ft.Page):
             page.update()
 
     def toggle_all(value: bool):
-        for checkbox in output_checkboxes.values():
+        nonlocal current_df
+
+        for idx, checkbox in output_checkboxes.items():
             checkbox.value = value
+
+            if current_df is not None and not current_df.empty and idx in current_df.index:
+                current_df.at[idx, "出力対象"] = value
+
+        render_table_from_df(current_df)
         page.update()
 
     def apply_output_target_defaults(df: pd.DataFrame) -> pd.DataFrame:

@@ -2446,6 +2446,10 @@ git commit -m "Display part number and PG name in one column(v0.9.87)"
 
 
 
+Refresh output badge when toggling all rows
+全選択・全解除時に出力件数バッジを更新する
+
+git commit -m "Refresh output badge when toggling all rows(v0.9.88)"
 
 
 
