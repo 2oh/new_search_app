@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.84)
+#  図面PDF検索結合ツール (v0.9.85)
 # ======================================================
 
 import flet as ft
@@ -759,6 +759,8 @@ def main(page: ft.Page):
         rows=[],
         column_spacing=20,
         horizontal_margin=12,
+        data_row_min_height=46,
+        data_row_max_height=60,
     )
     table_header = ft.Row([], alignment="center")
 
@@ -1277,6 +1279,29 @@ def main(page: ft.Page):
         except Exception:
             return path_text
 
+    def split_pdf_path_for_two_line_display(pdf_path: str) -> tuple[str, str]:
+        """
+        出力PDF欄を2段表示するために、PDFパスをフォルダ部分とファイル名に分ける。
+
+        1行目: フォルダパス
+        2行目: PDFファイル名
+        """
+        display_path = format_pdf_path_for_display(pdf_path)
+
+        if not display_path:
+            return "", ""
+
+        path_obj = Path(display_path)
+
+        folder_text = str(path_obj.parent)
+
+        if folder_text == ".":
+            folder_text = ""
+
+        file_name = path_obj.name
+
+        return folder_text, file_name
+
     def render_table_from_df(df: pd.DataFrame):
         nonlocal current_df
 
@@ -1672,18 +1697,65 @@ def main(page: ft.Page):
                         else text_color
                     )
 
-                    text_control = ft.Text(
-                        display_value,
-                        color=normal_text_color,
-                        weight=ft.FontWeight.NORMAL,
-                        text_align=(
-                            ft.TextAlign.CENTER
-                            if should_center_align_column(c)
-                            else ft.TextAlign.LEFT
-                        ),
-                    )
+                    if c == "採用PDFパス" and adopted_pdf_path_for_hover:
+                        folder_text, file_name = split_pdf_path_for_two_line_display(
+                            adopted_pdf_path_for_hover
+                        )
+
+                        text_control = ft.Column(
+                            controls=[
+                                ft.Text(
+                                    folder_text,
+                                    color=normal_text_color,
+                                    weight=ft.FontWeight.NORMAL,
+                                    no_wrap=True,
+                                ),
+                                ft.Text(
+                                    file_name,
+                                    color=normal_text_color,
+                                    weight=ft.FontWeight.NORMAL,
+                                    no_wrap=True,
+                                ),
+                            ],
+                            spacing=0,
+                            tight=True,
+                        )
+                    else:
+                        text_control = ft.Text(
+                            display_value,
+                            color=normal_text_color,
+                            weight=ft.FontWeight.NORMAL,
+                            text_align=(
+                                ft.TextAlign.CENTER
+                                if should_center_align_column(c)
+                                else ft.TextAlign.LEFT
+                            ),
+                        )
 
                     if enable_hover_preview_for_cell:
+                        def set_pdf_text_style(control, color, bold: bool):
+                            """
+                            出力PDF欄のホバー時に、1行表示/2段表示の両方へ色と太字を反映する。
+                            """
+                            if isinstance(control, ft.Text):
+                                control.color = color
+                                control.weight = (
+                                    ft.FontWeight.BOLD
+                                    if bold
+                                    else ft.FontWeight.NORMAL
+                                )
+                                return
+
+                            if isinstance(control, ft.Column):
+                                for child in control.controls:
+                                    if isinstance(child, ft.Text):
+                                        child.color = color
+                                        child.weight = (
+                                            ft.FontWeight.BOLD
+                                            if bold
+                                            else ft.FontWeight.NORMAL
+                                        )
+
                         def handle_output_pdf_hover(
                             e,
                             pdf_path=adopted_pdf_path_for_hover,
@@ -1691,12 +1763,10 @@ def main(page: ft.Page):
                             normal_color=normal_text_color,
                         ):
                             if e.data == "true":
-                                text.color = ft.Colors.BLUE_900
-                                text.weight = ft.FontWeight.BOLD
+                                set_pdf_text_style(text, ft.Colors.BLUE_900, True)
                                 update_hover_preview(pdf_path)
                             else:
-                                text.color = normal_color
-                                text.weight = ft.FontWeight.NORMAL
+                                set_pdf_text_style(text, normal_color, False)
                                 clear_hover_preview()
 
                             page.update()

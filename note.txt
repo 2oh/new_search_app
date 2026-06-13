@@ -2422,8 +2422,15 @@ Display item names in two-line layout
 git commit -m "Display item names in two-line layout(v0.9.84)"
 
 
-
 3. 出力PDF欄の2段表示
+
+Display output PDF paths in two-line layout
+出力PDFパスを2段表示にする
+
+git commit -m "Display output PDF paths in two-line layout(v0.9.85)"
+
+
+
 4. 余白プレビュー幅の調整
 5. 候補選択ダイアログ拡大
 6. ライトテーマ対策
