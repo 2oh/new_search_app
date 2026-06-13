@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.83)
+#  図面PDF検索結合ツール (v0.9.84)
 # ======================================================
 
 import flet as ft
@@ -484,16 +484,19 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
                     current_major_name = major_name
 
                 if major_name and detail_name:
-                    # 同じ行に1列目・2列目両方がある場合
-                    item_name = join_name_parts([major_name, detail_name])
+                    # 同じ行に1列目・2列目両方がある場合は2段表示にする
+                    item_name = "\n".join([major_name, detail_name])
 
                 elif major_name:
                     # 1列目のみの通常行
                     item_name = major_name
 
                 elif detail_name:
-                    # 2列目以降のみの行は、直近の大品名を前に付ける
-                    item_name = join_name_parts([current_major_name, detail_name])
+                    # 2列目以降のみの行は、直近の大品名を前に付けて2段表示にする
+                    if current_major_name:
+                        item_name = "\n".join([current_major_name, detail_name])
+                    else:
+                        item_name = detail_name
 
                 else:
                     item_name = ""

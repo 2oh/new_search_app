@@ -2415,6 +2415,14 @@ git commit -m "Carry forward major item names during extraction(v0.9.83)"
 
 
 2. 品名の2段表示
+
+Display item names in two-line layout
+品名を2段表示にする
+
+git commit -m "Display item names in two-line layout(v0.9.84)"
+
+
+
 3. 出力PDF欄の2段表示
 4. 余白プレビュー幅の調整
 5. 候補選択ダイアログ拡大
