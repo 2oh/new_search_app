@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.90)
+#  図面PDF検索結合ツール (v0.9.91)
 # ======================================================
 
 import flet as ft
@@ -1017,8 +1017,8 @@ def main(page: ft.Page):
 
         preview_image = ft.Image(
             src="",
-            width=520,
-            height=360,
+            width=760,
+            height=520,
             fit=ft.ImageFit.CONTAIN,
             visible=False,
         )
@@ -1113,7 +1113,7 @@ def main(page: ft.Page):
                     ),
                 ],
                 scroll="auto",
-                height=320,
+                height=460,
             )
         )
 
@@ -1132,12 +1132,12 @@ def main(page: ft.Page):
             modal=True,
             title=ft.Text("PDF候補を選択"),
             content=ft.Container(
-                width=1230,
-                height=520,
+                width=1500,
+                height=700,
                 content=ft.Row(
                     controls=[
                         ft.Container(
-                            width=620,
+                            width=580,
                             content=ft.Column(
                                 controls=[
                                     ft.Text(
@@ -1158,12 +1158,12 @@ def main(page: ft.Page):
                         ),
                         ft.VerticalDivider(),
                         ft.Container(
-                            width=560,
+                            width=860,
                             content=ft.Column(
                                 controls=[
                                     ft.Text("プレビュー", weight="bold"),
                                     preview_message,
-                                    create_preview_box(preview_image, height=390),
+                                    create_preview_box(preview_image, height=560),
                                 ],
                                 tight=True,
                             ),

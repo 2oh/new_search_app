@@ -2465,10 +2465,18 @@ A3図面向けにホバープレビュー表示を調整する
 git commit -m "Adjust hover preview for A3 drawings(v0.9.90)"
 
 
-
-
-
 5. 候補選択ダイアログ拡大
+
+Enlarge candidate selection preview
+候補選択ダイアログのプレビューを拡大する
+
+git commit -m "Enlarge candidate selection preview(v0.9.91)"
+
+
+
+
+
+
 6. ライトテーマ対策
 7. アプリアイコンをタイトル欄に表示
 8. 設定保存ボタン位置の変更
