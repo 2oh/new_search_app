@@ -2430,8 +2430,17 @@ Display output PDF paths in two-line layout
 git commit -m "Display output PDF paths in two-line layout(v0.9.85)"
 
 
-
 4. 余白プレビュー幅の調整
+
+Enlarge hover preview area
+余白ホバープレビュー領域を拡大する
+
+git commit -m "Enlarge hover preview area(v0.9.86)"
+
+
+
+
+
 5. 候補選択ダイアログ拡大
 6. ライトテーマ対策
 7. アプリアイコンをタイトル欄に表示
