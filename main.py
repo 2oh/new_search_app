@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.93)
+#  図面PDF検索結合ツール (v0.9.94)
 # ======================================================
 
 import flet as ft
@@ -699,6 +699,12 @@ def main(page: ft.Page):
         width=150
     )
 
+    save_button = ft.OutlinedButton(
+        "設定を保存",
+        icon=ft.Icons.SAVE_OUTLINED,
+        on_click=save_config,
+    )
+
     # ---- フォルダ選択ダイアログ ----
     folder_picker_search = ft.FilePicker(on_result=lambda e: pick_search_result(e))
     folder_picker_output = ft.FilePicker(on_result=lambda e: pick_output_result(e))
@@ -729,27 +735,39 @@ def main(page: ft.Page):
     # ---- 検索モード行 ----
     def update_mode_fields():
         if mode_dropdown.value == "構成部品表":
-            # ✅ 構成部品表モードでは target_col_field を表示しない
             mode_row.controls = [
-                mode_dropdown
+                ft.Row(
+                    controls=[
+                        mode_dropdown,
+                    ],
+                    spacing=12,
+                ),
+                save_button,
             ]
             set_excel_ui_enabled(True)
+
         else:
             manual_field = ft.TextField(
                 label="検索文字列（手動入力）",
-                width=450
+                width=450,
             )
             mode_row.controls = [
-                mode_dropdown,
-                manual_field
+                ft.Row(
+                    controls=[
+                        mode_dropdown,
+                        manual_field,
+                    ],
+                    spacing=12,
+                ),
+                save_button,
             ]
             set_excel_ui_enabled(False)
 
         page.update()
 
     mode_row = ft.Row(
-        [mode_dropdown],
-        alignment="spaceBetween"
+        controls=[],
+        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
     )
     mode_dropdown.on_change = lambda e: update_mode_fields()
 
@@ -2763,8 +2781,6 @@ def main(page: ft.Page):
         expand=True,
         read_only=True,
     )
-    save_button = ft.ElevatedButton("設定を保存", on_click=save_config)
-
     folder_settings_row = ft.Row(
         [
             ft.Row(
@@ -2804,14 +2820,7 @@ def main(page: ft.Page):
 
     fixed_controls = ft.Column(
         [
-            ft.Row(
-                [
-                    ft.Text("⚙️ 設定", size=20, weight="bold"),
-                    save_button,
-                ],
-                alignment="spaceBetween",
-                vertical_alignment="center",
-            ),
+            ft.Text("⚙️ 設定", size=20, weight="bold"),
             folder_settings_row,
             mode_row,
             ft.Divider(),
