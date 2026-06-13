@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.94)
+#  図面PDF検索結合ツール (v0.9.95)
 # ======================================================
 
 import flet as ft
@@ -2818,20 +2818,30 @@ def main(page: ft.Page):
         spacing=10,
     )
 
-    fixed_controls = ft.Column(
-        [
-            ft.Text("⚙️ 設定", size=20, weight="bold"),
-            folder_settings_row,
-            mode_row,
-            ft.Divider(),
-            ft.Text("🔍 構成部品表選択", size=20, weight="bold"),
-            mode_notice,
-            excel_control_row,
-            ft.Divider(),
-            table_header,
-            message,
-        ],
-        spacing=6,
+    fixed_controls = ft.Container(
+        content=ft.Column(
+            [
+                ft.Text("⚙️ 設定", size=20, weight="bold"),
+                folder_settings_row,
+                mode_row,
+
+                ft.Container(height=4),
+                ft.Divider(height=1),
+                ft.Container(height=6),
+
+                ft.Text("🔍 構成部品表選択", size=20, weight="bold"),
+                mode_notice,
+                excel_control_row,
+
+                ft.Container(height=4),
+                ft.Divider(height=1),
+
+                table_header,
+                message,
+            ],
+            spacing=8,
+        ),
+        padding=ft.padding.only(left=4, right=4, top=4, bottom=6),
     )
 
     table_area = ft.Container(

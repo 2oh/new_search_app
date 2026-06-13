@@ -2508,6 +2508,15 @@ git commit -m "Move save settings button to mode row(v0.9.94)"
 
 
 9. 上部固定表示部分の余白調整
+
+Add spacing to top control area
+上部操作エリアに余白を追加する
+
+git commit -m "Add spacing to top control area(v0.9.95)"
+
+
+
+
 11. 終了ボタン追加
 12. タイトル行固定
 
