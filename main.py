@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.88)
+#  図面PDF検索結合ツール (v0.9.89)
 # ======================================================
 
 import flet as ft
@@ -1497,6 +1497,18 @@ def main(page: ft.Page):
             "プレビュー",
         }
 
+        def on_output_checkbox_change(e, row_index):
+            nonlocal current_df
+
+            if current_df is None or current_df.empty:
+                return
+
+            if row_index in current_df.index:
+                current_df.at[row_index, "出力対象"] = bool(e.control.value)
+
+            render_table_from_df(current_df)
+            page.update()
+
         for idx, row in display_df.iterrows():
             cells = []
 
@@ -1722,7 +1734,10 @@ def main(page: ft.Page):
                             )
                         )
                     else:
-                        checkbox = ft.Checkbox(value=bool(v))
+                        checkbox = ft.Checkbox(
+                            value=bool(v),
+                            on_change=lambda e, row_index=idx: on_output_checkbox_change(e, row_index),
+                        )
                         output_checkboxes[idx] = checkbox
 
                         cells.append(

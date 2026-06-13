@@ -2452,6 +2452,11 @@ Refresh output badge when toggling all rows
 git commit -m "Refresh output badge when toggling all rows(v0.9.88)"
 
 
+Refresh output badge when toggling output checkbox
+出力チェック変更時に出力件数バッジを更新する
+
+git commit -m "Refresh output badge when toggling output checkbox(v0.9.89)"
+
 
 
 5. 候補選択ダイアログ拡大
