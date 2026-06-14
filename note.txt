@@ -2534,6 +2534,27 @@ git commit -m "Adjust preview layout for smaller windows(v0.9.97)"
 
 
 
+Show app version in window title
+ウィンドウタイトルにアプリバージョンを表示する
+
+git commit -m "Show app version in window title(v0.9.98)"
+
+
+
+
+
+2. アプリ内バージョン表示
+3. requirements.txt / pip freeze の整理
+4. 現地確認用チェックリスト作成
+
+
+逆に、version up後でいいもの
+・タイトル行固定
+・ドラッグアンドドロップ
+・通常検索
+・他ユーザーが開いているExcel読み取り
+・PDF出力ファイルのエクスプローラー表示
+
 
 -----------------------------------------
 「構成部品表モード」が完成したら1.0.0

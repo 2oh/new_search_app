@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.97)
+#  図面PDF検索結合ツール
 # ======================================================
 
 import flet as ft
@@ -14,6 +14,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
+APP_VERSION = "v0.9.98"
 DEBUG = False
 
 def debug_print(*args, **kwargs):
@@ -626,7 +627,7 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
 
 # ========= メイン =========
 def main(page: ft.Page):
-    page.title = "図面PDF検索結合ツール"
+    page.title = f"図面PDF検索結合ツール {APP_VERSION}"
     page.theme_mode = ft.ThemeMode.DARK
 
     icon_path = Path(APP_ICON_FILE)
