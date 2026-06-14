@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.96)
+#  図面PDF検索結合ツール (v0.9.97)
 # ======================================================
 
 import flet as ft
@@ -653,8 +653,7 @@ def main(page: ft.Page):
     search_text_fields = {}
     output_checkboxes = {}
 
-    HOVER_PREVIEW_MIN_WIDTH = 1500
-    # HOVER_PREVIEW_MIN_WIDTH = 900
+    HOVER_PREVIEW_MIN_WIDTH = 1700
     use_hover_preview = False
 
     # ---- 設定ファイル処理 ----
@@ -1178,7 +1177,7 @@ def main(page: ft.Page):
                 content=ft.Row(
                     controls=[
                         ft.Container(
-                            width=580,
+                            width=500,
                             content=ft.Column(
                                 controls=[
                                     ft.Text(
@@ -1210,7 +1209,8 @@ def main(page: ft.Page):
                             ),
                         ),
                     ],
-                    vertical_alignment="start",
+                    vertical_alignment=ft.CrossAxisAlignment.START,
+                    scroll="auto",
                 ),
             ),
             actions=[
