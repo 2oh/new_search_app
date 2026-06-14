@@ -14,7 +14,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v0.9.98"
+APP_VERSION = "v0.9.99"
 DEBUG = False
 
 def debug_print(*args, **kwargs):
@@ -2531,7 +2531,7 @@ def main(page: ft.Page):
             previous_status = str(row.get("候補状態", "") or "").strip()
             previous_adopted_pdf = str(row.get("採用PDFパス", "") or "").strip()
 
-            current_df.at[idx, "候補PDF数"] = candidate_count
+            current_df.at[idx, "候補PDF数"] = str(candidate_count) if candidate_count > 0 else ""
             current_df.at[idx, "先頭候補PDF"] = candidates[0] if candidates else ""
             current_df.at[idx, "候補PDFパス一覧"] = candidates
 

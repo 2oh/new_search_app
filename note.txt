@@ -2549,10 +2549,44 @@ git commit -m "Add release checklist"
 
 
 1. 現行アプリ専用の .venv を作る
+
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
 2. その .venv に Flet 0.28.3 系と必要ライブラリを入れる
+
+python -m pip install --upgrade pip
+
+where.exe flet
+C:\Users\shini\AppData\Local\Programs\Python\Python312\Scripts\flet.exe
+
+python -m pip install flet==0.28.3 flet-cli==0.28.3 flet-desktop==0.28.3 flet-web==0.28.3
+
+where.exe flet
+C:\Users\shini\OneDrive\codes_od\new_search_app\.venv\Scripts\flet.exe
+C:\Users\shini\AppData\Local\Programs\Python\Python312\Scripts\flet.exe
+仮想環境のパスが先に出ていればよい
+
+python -m pip install pandas openp	yxl pypdf PyMuPDF pyinstaller
+
 3. その環境でアプリ起動確認
+
+エラー発生
+
+
+
 4. その環境から pip freeze して requirements.txt を作る
 
+
+python -m pip freeze > requirements.txt
+
+git commit -m "Add virtual environment dependency files"
+仮想環境用の依存関係ファイルを追加する
+
+
+
+仮想からでる
+deactivate
 
 
 
