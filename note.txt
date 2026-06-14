@@ -2627,16 +2627,28 @@ git commit -m "Add virtual environment dependency files"
 仮想環境用の依存関係ファイルを追加する
 
 
+EXE作成
 
-仮想からでる
-deactivate
+git status
+	working tree clea
+
+python -c "import sys; print(sys.executable)"
+	C:\dev\new_search_app\Scripts\python.exe
+
+python -m pip show flet pyinstaller
+
+
+python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
 
 
 
+Clarify zero quantity column label
+数量ゼロ列の表示を分かりやすくする
+
+git commit -m "Clarify zero quantity column label(v0.9.100)"
 
 
 
-4. 現地確認用チェックリスト作成
 
 
 逆に、version up後でいいもの

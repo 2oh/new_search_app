@@ -14,7 +14,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v0.9.99"
+APP_VERSION = "v0.9.100"
 DEBUG = False
 
 def debug_print(*args, **kwargs):
@@ -1416,6 +1416,7 @@ def main(page: ft.Page):
             display_name_map = {
                 "検索用文字列": "検索文字列",
                 "採用PDF重複": "重複",
+                "数量": "数量ゼロ",
                 "数量セル色": "セル色",
                 "採用PDFパス": "出力PDF",
                 "出力可否": "抽出対象",
@@ -1732,7 +1733,7 @@ def main(page: ft.Page):
                     continue
 
                 if c == "数量":
-                    display_value = "ゼロ" if is_zero_quantity(v) else ""
+                    display_value = "該当" if is_zero_quantity(v) else ""
 
                 elif c == "数量セル色":
                     display_value = "あり" if str(v).strip() else ""
