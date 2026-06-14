@@ -2516,8 +2516,20 @@ git commit -m "Add spacing to top control area(v0.9.95)"
 
 
 
+2026/6/14
+
 
 11. 終了ボタン追加
+
+Add exit button
+終了ボタンを追加する
+
+git commit -m "Add exit button(v0.9.96)"
+
+
+
+
+
 12. タイトル行固定
 
 

@@ -1,5 +1,5 @@
 # ======================================================
-#  図面PDF検索結合ツール (v0.9.95)
+#  図面PDF検索結合ツール (v0.9.96)
 # ======================================================
 
 import flet as ft
@@ -682,6 +682,9 @@ def main(page: ft.Page):
         page.open(ft.SnackBar(ft.Text("設定を保存しました。")))
         page.update()
 
+    def close_app(e):
+        page.window.close()
+
     config = load_config()
 
     # ---- UI構成 ----
@@ -703,6 +706,20 @@ def main(page: ft.Page):
         "設定を保存",
         icon=ft.Icons.SAVE_OUTLINED,
         on_click=save_config,
+    )
+
+    exit_button = ft.OutlinedButton(
+        "終了",
+        icon=ft.Icons.CLOSE,
+        on_click=close_app,
+    )
+
+    settings_action_row = ft.Row(
+        controls=[
+            save_button,
+            exit_button,
+        ],
+        spacing=8,
     )
 
     # ---- フォルダ選択ダイアログ ----
@@ -742,7 +759,7 @@ def main(page: ft.Page):
                     ],
                     spacing=12,
                 ),
-                save_button,
+                settings_action_row,
             ]
             set_excel_ui_enabled(True)
 
@@ -759,7 +776,7 @@ def main(page: ft.Page):
                     ],
                     spacing=12,
                 ),
-                save_button,
+                settings_action_row,
             ]
             set_excel_ui_enabled(False)
 
