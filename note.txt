@@ -2533,6 +2533,7 @@ Adjust preview layout for smaller windows
 git commit -m "Adjust preview layout for smaller windows(v0.9.97)"
 
 
+2. アプリ内バージョン表示
 
 Show app version in window title
 ウィンドウタイトルにアプリバージョンを表示する
@@ -2540,11 +2541,24 @@ Show app version in window title
 git commit -m "Show app version in window title(v0.9.98)"
 
 
+Add release checklist
+リリースチェックリストを追加する
+
+git commit -m "Add release checklist"
 
 
 
-2. アプリ内バージョン表示
-3. requirements.txt / pip freeze の整理
+1. 現行アプリ専用の .venv を作る
+2. その .venv に Flet 0.28.3 系と必要ライブラリを入れる
+3. その環境でアプリ起動確認
+4. その環境から pip freeze して requirements.txt を作る
+
+
+
+
+
+
+
 4. 現地確認用チェックリスト作成
 
 

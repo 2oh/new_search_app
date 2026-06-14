@@ -1,4 +1,6 @@
-preview_cache/
+.venv/
 build/
 dist/
 *.spec
+__pycache__/
+preview_cache/
