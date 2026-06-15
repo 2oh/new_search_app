@@ -2660,6 +2660,11 @@ Resolve app icon path in bundled executable
 EXE化後もアプリアイコンのパスを解決できるようにする
 
 
+Update app icon for better visibility
+視認性を高めたアプリアイコンに更新する
+
+git commit -m "Update app icon for better visibility"
+
 
 今後
 
