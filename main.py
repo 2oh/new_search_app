@@ -7,6 +7,7 @@ import pandas as pd
 import os
 import json
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
@@ -14,7 +15,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v0.9.100"
+APP_VERSION = "v0.9.101"
 DEBUG = False
 
 def debug_print(*args, **kwargs):
@@ -42,6 +43,15 @@ def normalize_filename_match(text: str) -> str:
     s = re.sub(r"\s+", " ", s)
     return s
 
+def resource_path(relative_path: str) -> Path:
+    """
+    通常実行時とPyInstaller実行時の両方で、
+    同梱ファイルのパスを取得する。
+    """
+    if hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / relative_path
+
+    return Path(relative_path)
 
 def collect_pdf_files(root_folder: str, progress_callback=None) -> list[Path]:
     """
@@ -630,7 +640,7 @@ def main(page: ft.Page):
     page.title = f"図面PDF検索結合ツール {APP_VERSION}"
     page.theme_mode = ft.ThemeMode.DARK
 
-    icon_path = Path(APP_ICON_FILE)
+    icon_path = resource_path(APP_ICON_FILE)
     if icon_path.is_file():
         page.window.icon = str(icon_path.resolve())
 

@@ -2647,16 +2647,148 @@ Clarify zero quantity column label
 
 git commit -m "Clarify zero quantity column label(v0.9.100)"
 
+python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
+
+
+2026/6/15
+
+アイコンがfletだった
+
+C:\dev\new_search_app\Scripts\Activate.ps1
+
+Resolve app icon path in bundled executable
+EXE化後もアプリアイコンのパスを解決できるようにする
 
 
 
+今後
 
-逆に、version up後でいいもの
-・タイトル行固定
-・ドラッグアンドドロップ
-・通常検索
-・他ユーザーが開いているExcel読み取り
-・PDF出力ファイルのエクスプローラー表示
+
+ChatGPT側でやった方がいいこと
+ここでは、こういう 設計判断 が向いています。
+・何を共通化するか
+・どの関数を外に出すか
+・テスト対象をどこまでにするか
+・既存アプリを壊さない移行順序
+・Codexに渡す作業指示の作成
+
+つまり、地図を作る役割ですね。
+main.py のどこを app_logic.py に出すべきか
+Excel読み込み共通モジュールをどう作るか
+新アプリでも使える形にするにはどうするか
+
+Codexに任せた方がいいこと
+Codexは、方針が決まったあとの実装が向いています。
+
+・指定した関数を別ファイルへ移す
+・importを書き換える
+・pytestファイルを作る
+・テストを通すために細かく修正する
+・大量のリネームや整理
+０．現地テストとVER1判断
+
+Step 1
+v1.0 タグを切る
+
+Step 2
+refactor/excel-logic ブランチを作る
+
+Step 3
+Excel読み込み系だけ excel_logic.py に切り出す
+
+	project/
+	├─ main.py
+	├─ app_logic.py
+	├─ tests/
+	│  ├─ test_search_keyword.py
+	│  ├─ test_pdf_candidates.py
+	│  ├─ test_output_eligibility.py
+	│  └─ test_duplicates.py
+	├─ requirements.txt
+	└─ RELEASE_CHECKLIST.md
+
+	いずれは
+	main.py
+	→ Flet UI中心
+
+	excel_logic.py
+	→ Excel読み込み、列検出、抽出処理
+			・normalize()
+			・detect_columns()
+			・detect_header_row()
+			・get_merged_cells_info()
+			・get_vertically_merged_data_row_indices()
+			・get_quantity_colors()
+			・extract_data_from_excel()
+
+	pdf_logic.py
+	→ PDF候補検索、PDFパス整形、重複判定
+
+	app_logic.py
+	→ 出力可否、検索文字列生成、出力対象判定など
+
+	tests/
+	→ pytest
+
+
+	drawing_pdf_search_merge_tool/
+	├─ main.py
+	├─ excel_logic.py
+	├─ pdf_logic.py
+	├─ app_logic.py
+	├─ tests/
+	│  ├─ test_search_keyword.py
+	│  ├─ test_output_eligibility.py
+	│  ├─ test_pdf_candidates.py
+	│  └─ test_excel_logic.py
+	├─ tests/fixtures/
+	│  └─ sample_parts.xlsx
+	├─ requirements.txt
+	└─ RELEASE_CHECKLIST.md
+
+
+Step 4
+切り出した関数に pytest を付ける
+
+1. 検索文字列生成
+   - I/U/H/F の先頭削除
+   - R/L, L/R, A/B 以降削除
+   - スラッシュ以降削除
+   - 先頭の補足文削除
+
+2. PDF候補検索
+   - ファイル名部分一致
+   - 大文字小文字
+   - 候補0件 / 1件 / 複数件
+
+3. 出力可否判定
+   - 数量0 → 不可
+   - 数量セル色あり → 不可
+   - 品番・PG名なし → 不可
+   - 通常行 → 可
+
+4. 採用PDF重複判定
+   - 1件目
+   - 2件目→
+   - 空欄は無視
+
+5. 出力対象初期化
+   - 出力可否が可
+   - 採用PDFあり
+   - 重複2件目以降はOFF
+
+6. 表示変換
+   - 数量ゼロ → 該当
+   - 候補PDF数は文字列扱い
+
+
+Step 5
+今のアプリが同じように動くことを確認する
+
+Step 6
+新アプリからも excel_logic.py を使える形に整理する
+
+
 
 
 -----------------------------------------
