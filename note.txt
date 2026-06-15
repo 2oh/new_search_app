@@ -2666,6 +2666,17 @@ Update app icon for better visibility
 git commit -m "Update app icon for better visibility"
 
 
+ver1.0.0
+
+Release version 1.0.0
+バージョン1.0.0としてリリースする
+
+git commit -m "Release version 1.0.0"
+git tag -a v1.0.0 -m "Release version 1.0.0"
+git push
+git push origin v1.0.0
+
+
 今後
 
 
