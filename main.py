@@ -1068,8 +1068,8 @@ def main(page: ft.Page):
 
         preview_image = ft.Image(
             src="",
-            width=760,
-            height=520,
+            width=900,
+            height=600,
             fit=ft.ImageFit.CONTAIN,
             visible=False,
         )
@@ -1231,8 +1231,8 @@ def main(page: ft.Page):
             modal=True,
             title=ft.Text("PDF候補を選択"),
             content=ft.Container(
-                width=1500,
-                height=700,
+                width=1640,
+                height=760,
                 content=ft.Row(
                     controls=[
                         ft.Container(
@@ -1257,12 +1257,12 @@ def main(page: ft.Page):
                         ),
                         ft.VerticalDivider(),
                         ft.Container(
-                            width=860,
+                            width=980,
                             content=ft.Column(
                                 controls=[
                                     ft.Text("プレビュー", weight="bold"),
                                     preview_message,
-                                    create_preview_box(preview_image, height=560),
+                                    create_preview_box(preview_image, height=640),
                                 ],
                                 tight=True,
                             ),
