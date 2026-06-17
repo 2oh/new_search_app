@@ -2707,6 +2707,12 @@ git commit -m "fix: enlarge candidate preview area"
 
 
 3. 候補PDFをホバーでプレビューする
+
+候補PDFをホバーでプレビューする
+git commit -m "fix: preview candidate PDFs on hover"
+
+
+
 4. 出力PDF欄のパス/ファイル名の色を分ける
 5. A3ホバープレビュー画像サイズを拡大する
 

@@ -1151,6 +1151,12 @@ def main(page: ft.Page):
 
             1行目: フォルダパス
             2行目: ファイル名
+
+            ホバー時:
+                右側プレビューを更新する。
+
+            クリック時:
+                ラジオボタンをONにして採用PDFへ反映する。
             """
             folder_text, file_name = split_pdf_path_for_two_line_display(pdf_path)
 
@@ -1176,6 +1182,14 @@ def main(page: ft.Page):
                 tight=True,
             )
 
+            def preview_candidate_on_hover(e, preview_pdf_path=pdf_path):
+                """
+                候補PDFにマウスを乗せたときだけ、右側プレビューを更新する。
+                マウスが外れたときは、最後に表示したプレビューを残す。
+                """
+                if e.data == "true":
+                    update_preview(preview_pdf_path)
+
             def select_candidate(e, selected_value=pdf_path):
                 selected_pdf.value = selected_value
                 apply_candidate_selection(selected_value)
@@ -1192,9 +1206,9 @@ def main(page: ft.Page):
                 ),
                 padding=ft.padding.symmetric(horizontal=4, vertical=3),
                 border_radius=6,
+                on_hover=preview_candidate_on_hover,
                 on_click=select_candidate,
             )
-
 
         selected_pdf = ft.RadioGroup(
             value=current_adopted_pdf if current_adopted_pdf in candidates else NO_ADOPTED_PDF_VALUE,
