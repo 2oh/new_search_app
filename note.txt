@@ -2724,11 +2724,24 @@ git commit -m "fix: match output PDF path colors with candidate list"
 git commit -m "fix: enlarge hover preview image size"
 
 
+git status
+
+APP_VERSION = "v1.0.1"
+
+git add -A
+git commit -m "chore: release version 1.0.1"
+git status
+git push
+
+python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
 
 
 git checkout main
-git merge fix-v1.0.1-preview-ui
+git merge v1.0.1
 git push
+
+git tag -a v1.0.1 -m "Release version 1.0.1"
+git push origin v1.0.1
 
 
 今後
