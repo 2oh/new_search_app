@@ -1949,13 +1949,13 @@ def main(page: ft.Page):
                             controls=[
                                 ft.Text(
                                     folder_text,
-                                    color=normal_text_color,
+                                    color=ft.Colors.WHITE,
                                     weight=ft.FontWeight.NORMAL,
                                     no_wrap=True,
                                 ),
                                 ft.Text(
                                     file_name,
-                                    color=normal_text_color,
+                                    color=ft.Colors.BLUE_200,
                                     weight=ft.FontWeight.NORMAL,
                                     no_wrap=True,
                                 ),
@@ -1976,40 +1976,13 @@ def main(page: ft.Page):
                         )
 
                     if enable_hover_preview_for_cell:
-                        def set_pdf_text_style(control, color, bold: bool):
-                            """
-                            出力PDF欄のホバー時に、1行表示/2段表示の両方へ色と太字を反映する。
-                            """
-                            if isinstance(control, ft.Text):
-                                control.color = color
-                                control.weight = (
-                                    ft.FontWeight.BOLD
-                                    if bold
-                                    else ft.FontWeight.NORMAL
-                                )
-                                return
-
-                            if isinstance(control, ft.Column):
-                                for child in control.controls:
-                                    if isinstance(child, ft.Text):
-                                        child.color = color
-                                        child.weight = (
-                                            ft.FontWeight.BOLD
-                                            if bold
-                                            else ft.FontWeight.NORMAL
-                                        )
-
                         def handle_output_pdf_hover(
                             e,
                             pdf_path=adopted_pdf_path_for_hover,
-                            text=text_control,
-                            normal_color=normal_text_color,
                         ):
                             if e.data == "true":
-                                set_pdf_text_style(text, ft.Colors.BLUE_900, True)
                                 update_hover_preview(pdf_path)
                             else:
-                                set_pdf_text_style(text, normal_color, False)
                                 clear_hover_preview()
 
                             page.update()
