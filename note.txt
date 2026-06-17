@@ -2677,6 +2677,14 @@ git push
 git push origin v1.0.0
 
 
+
+2026/6/17
+
+候補PDFのパスを2段表示する
+git commit -m "fix: display candidate PDF paths in two lines"
+
+
+
 今後
 
 

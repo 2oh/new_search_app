@@ -1145,16 +1145,64 @@ def main(page: ft.Page):
 
             update_preview(selected_value)
 
+        def create_candidate_pdf_option(pdf_path: str) -> ft.Container:
+            """
+            候補選択ダイアログ用のPDF候補表示を作る。
+
+            1行目: フォルダパス
+            2行目: ファイル名
+            """
+            folder_text, file_name = split_pdf_path_for_two_line_display(pdf_path)
+
+            radio = ft.Radio(value=pdf_path)
+
+            text_column = ft.Column(
+                controls=[
+                    ft.Text(
+                        folder_text,
+                        color=ft.Colors.WHITE,
+                        size=12,
+                        no_wrap=True,
+                    ),
+                    ft.Text(
+                        file_name,
+                        color=ft.Colors.BLUE_200,
+                        size=13,
+                        weight=ft.FontWeight.BOLD,
+                        no_wrap=True,
+                    ),
+                ],
+                spacing=0,
+                tight=True,
+            )
+
+            def select_candidate(e, selected_value=pdf_path):
+                selected_pdf.value = selected_value
+                apply_candidate_selection(selected_value)
+                page.update()
+
+            return ft.Container(
+                content=ft.Row(
+                    controls=[
+                        radio,
+                        text_column,
+                    ],
+                    spacing=6,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                padding=ft.padding.symmetric(horizontal=4, vertical=3),
+                border_radius=6,
+                on_click=select_candidate,
+            )
+
+
         selected_pdf = ft.RadioGroup(
             value=current_adopted_pdf if current_adopted_pdf in candidates else NO_ADOPTED_PDF_VALUE,
             on_change=lambda e: apply_candidate_selection(e.control.value),
             content=ft.Column(
                 controls=[
                     *[
-                        ft.Radio(
-                            value=pdf_path,
-                            label=format_pdf_path_for_display(pdf_path)
-                        )
+                        create_candidate_pdf_option(pdf_path)
                         for pdf_path in candidates
                     ],
                     ft.Divider(),
