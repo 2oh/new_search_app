@@ -817,8 +817,8 @@ def main(page: ft.Page):
 
     hover_preview_image = ft.Image(
         src="",
-        width=680,
-        height=500,
+        width=820,
+        height=620,
         fit=ft.ImageFit.CONTAIN,
         visible=False,
     )
@@ -902,7 +902,7 @@ def main(page: ft.Page):
         content=ft.Column(
             controls=[
                 hover_preview_message,
-                create_hover_preview_box(hover_preview_image, height=520)
+                create_hover_preview_box(hover_preview_image, height=640)
             ],
             spacing=2,
             tight=True,
