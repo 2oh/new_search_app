@@ -2764,6 +2764,19 @@ git commit -m "fix: save settings automatically"
 git commit -m "fix: improve table header layout and A3 hover preview"
 
 
+APP_VERSION = "v1.0.2"
+git add -A
+git commit -m "chore: release version 1.0.1"
+git status
+git push
+
+python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
+
+git tag -a v1.0.1 -m "Release version 1.0.1"
+git push origin v1.0.1	→エラー
+git push origin refs/tags/v1.0.1
+
+
 今後
 
 
