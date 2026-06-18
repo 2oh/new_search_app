@@ -2741,7 +2741,17 @@ git merge v1.0.1
 git push
 
 git tag -a v1.0.1 -m "Release version 1.0.1"
-git push origin v1.0.1
+git push origin v1.0.1	→エラー
+git push origin refs/tags/v1.0.1
+
+タグはバージョン番号そのもの、ブランチは作業内容が分かる名前
+
+
+2026/6/18
+
+C:\dev\new_search_app\Scripts\Activate.ps1
+git checkout main
+git pull
 
 
 今後

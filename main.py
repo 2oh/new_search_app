@@ -680,17 +680,21 @@ def main(page: ft.Page):
         }
 
     def save_config(e=None):
+        """
+        現在の設定を config.json に保存する。
+
+        v1.0.2 以降は、設定変更時に自動保存するため、
+        保存完了メッセージは表示しない。
+        """
         config.update({
             "pdf_folder": search_folder_field.value,
             "output_folder": output_folder_field.value,
             "search_mode": mode_dropdown.value,
             "target_columns": [x.strip() for x in target_col_field.value.split(",") if x.strip()],
         })
+
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
-
-        page.open(ft.SnackBar(ft.Text("設定を保存しました。")))
-        page.update()
 
     def close_app(e):
         page.window.close()
@@ -700,6 +704,10 @@ def main(page: ft.Page):
     # ---- UI構成 ----
     search_folder_field = ft.TextField(label="検索先フォルダ", value=config.get("pdf_folder", ""), expand=True)
     output_folder_field = ft.TextField(label="出力先フォルダ", value=config.get("output_folder", ""), expand=True)
+
+    search_folder_field.on_change = save_config
+    output_folder_field.on_change = save_config
+
     target_col_field = ft.TextField(
         label="抽出対象列（カンマ区切り）",
         value=", ".join(config.get("target_columns", [])),
@@ -712,12 +720,6 @@ def main(page: ft.Page):
         width=150
     )
 
-    save_button = ft.OutlinedButton(
-        "設定を保存",
-        icon=ft.Icons.SAVE_OUTLINED,
-        on_click=save_config,
-    )
-
     exit_button = ft.OutlinedButton(
         "終了",
         icon=ft.Icons.CLOSE,
@@ -726,7 +728,6 @@ def main(page: ft.Page):
 
     settings_action_row = ft.Row(
         controls=[
-            save_button,
             exit_button,
         ],
         spacing=8,
@@ -752,11 +753,13 @@ def main(page: ft.Page):
     def pick_search_result(e: ft.FilePickerResultEvent):
         if e.path:
             search_folder_field.value = e.path
+            save_config()
             page.update()
 
     def pick_output_result(e: ft.FilePickerResultEvent):
         if e.path:
             output_folder_field.value = e.path
+            save_config()
             page.update()
 
     # ---- 検索モード行 ----
@@ -792,11 +795,15 @@ def main(page: ft.Page):
 
         page.update()
 
+    def on_mode_change(e):
+        save_config()
+        update_mode_fields()
+
     mode_row = ft.Row(
         controls=[],
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
     )
-    mode_dropdown.on_change = lambda e: update_mode_fields()
+    mode_dropdown.on_change = on_mode_change
 
     # ---- Excel選択 ----
     selected_excel_path = ""
