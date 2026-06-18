@@ -825,7 +825,7 @@ def main(page: ft.Page):
     hover_preview_image = ft.Image(
         src="",
         width=820,
-        height=620,
+        height=580,
         fit=ft.ImageFit.CONTAIN,
         visible=False,
     )
@@ -901,7 +901,7 @@ def main(page: ft.Page):
             content=preview_image,
             alignment=ft.alignment.top_center,
             height=height,
-            padding=4,
+            padding=0,
             bgcolor=ft.Colors.TRANSPARENT,
         )
 
@@ -909,13 +909,13 @@ def main(page: ft.Page):
         content=ft.Column(
             controls=[
                 hover_preview_message,
-                create_hover_preview_box(hover_preview_image, height=640)
+                create_hover_preview_box(hover_preview_image, height=600)
             ],
-            spacing=2,
+            spacing=0,
             tight=True,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        alignment=ft.alignment.center,
+        alignment=ft.alignment.top_center,
         expand=True,
     )
 
@@ -1556,37 +1556,72 @@ def main(page: ft.Page):
             display_name = get_display_column_name(column_name)
             count = badge_counts.get(column_name)
 
+            compact_header_lines = {
+                "数量": ["数量", "ゼロ"],
+                "数量セル色": ["セル", "色"],
+                "出力可否": ["抽出", "対象"],
+                "候補確認": ["複数", "候補"],
+            }
+
+            def create_header_text():
+                lines = compact_header_lines.get(column_name)
+
+                if lines:
+                    return ft.Column(
+                        controls=[
+                            ft.Text(
+                                line,
+                                size=12,
+                                weight=ft.FontWeight.BOLD,
+                                text_align=ft.TextAlign.CENTER,
+                            )
+                            for line in lines
+                        ],
+                        spacing=0,
+                        tight=True,
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    )
+
+                return ft.Text(
+                    display_name,
+                    size=12,
+                    weight=ft.FontWeight.BOLD,
+                    text_align=ft.TextAlign.CENTER,
+                )
+
+            header_text = create_header_text()
+
             # 検索文字列列は、入力欄の幅に合わせて見出しを中央寄せする
             if column_name == "検索用文字列":
                 return ft.Container(
                     width=100,
                     alignment=ft.alignment.center,
-                    content=ft.Text(
-                        display_name,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
+                    content=header_text,
                 )
 
             if count is None:
-                return ft.Text(display_name)
+                return header_text
+
+            badge = ft.Container(
+                content=ft.Text(
+                    str(count),
+                    size=12,
+                    color=ft.Colors.BLACK,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                padding=ft.padding.symmetric(horizontal=7, vertical=3),
+                border_radius=12,
+                bgcolor=get_header_badge_color(column_name),
+            )
 
             return ft.Row(
                 controls=[
-                    ft.Text(display_name),
-                    ft.Container(
-                        content=ft.Text(
-                            str(count),
-                            size=12,
-                            color=ft.Colors.BLACK,
-                            weight=ft.FontWeight.BOLD,
-                        ),
-                        padding=ft.padding.symmetric(horizontal=7, vertical=3),
-                        border_radius=12,
-                        bgcolor=get_header_badge_color(column_name),
-                    )
+                    header_text,
+                    badge,
                 ],
                 spacing=4,
                 alignment=ft.MainAxisAlignment.CENTER,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             )
 
         def should_center_align_column(column_name: str) -> bool:

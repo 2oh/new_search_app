@@ -2749,9 +2749,19 @@ git push origin refs/tags/v1.0.1
 
 2026/6/18
 
+設定を自動保存する
+
 C:\dev\new_search_app\Scripts\Activate.ps1
 git checkout main
 git pull
+
+branchきり忘れ
+
+git commit -m "fix: save settings automatically"
+
+
+テーブル見出しをコンパクトにし、A3横プレビューが収まるよう調整する
+git commit -m "fix: improve table header layout and A3 hover preview"
 
 
 今後
