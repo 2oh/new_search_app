@@ -2280,9 +2280,42 @@ def main(page: ft.Page):
 
                 return s.strip()
 
+            def resolve_pg_names_for_search(pg_series: pd.Series) -> dict:
+                """
+                検索文字列生成用にPG名を補正する。
+
+                表示上のPG名は変更せず、
+                PG名が ↑ / ↓ の場合だけ、検索用には直前のPG名を使う。
+                """
+                resolved = {}
+                last_pg_name = ""
+
+                for idx, value in pg_series.items():
+                    if pd.isna(value):
+                        resolved[idx] = ""
+                        continue
+
+                    s = str(value).strip()
+
+                    if s in ("↑", "↓"):
+                        resolved[idx] = last_pg_name
+                        continue
+
+                    resolved[idx] = s
+
+                    if s and s.lower() not in ("nan", "none"):
+                        last_pg_name = s
+
+                return resolved
+
             # --- 品番 or PG名 のどちらか優先で生成（元値を保持）
+            resolved_pg_names = resolve_pg_names_for_search(df["PG名"]) if "PG名" in df.columns else {}
+
             df["元検索文字列"] = df.apply(
-                lambda row: create_search_keyword(row.get("品番")) or create_search_keyword(row.get("PG名")),
+                lambda row: (
+                    create_search_keyword(row.get("品番"))
+                    or create_search_keyword(resolved_pg_names.get(row.name, ""))
+                ),
                 axis=1
             )
 

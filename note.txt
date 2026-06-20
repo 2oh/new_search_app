@@ -2766,16 +2766,29 @@ git commit -m "fix: improve table header layout and A3 hover preview"
 
 APP_VERSION = "v1.0.2"
 git add -A
-git commit -m "chore: release version 1.0.1"
+git commit -m "chore: release version 1.0.2"
 git status
 git push
 
 python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
 
-git tag -a v1.0.1 -m "Release version 1.0.1"
-git push origin v1.0.1	→エラー
-git push origin refs/tags/v1.0.1
+git tag -a v1.0.2 -m "Release version 1.0.2"
+git push origin refs/tags/v1.0.2
 
+
+
+2026/6/20
+
+C:\dev\new_search_app\Scripts\Activate.ps1
+
+矢印記号のPG名を前行から引き継ぐ
+git commit -m "fix: resolve arrow PG names for search"
+
+APP_VERSION = "v1.0.3"
+
+git commit -m "chore: release version 1.0.3"
+git tag -a v1.0.3 -m "Release version 1.0.3"
+git push origin refs/tags/v1.0.3
 
 今後
 
