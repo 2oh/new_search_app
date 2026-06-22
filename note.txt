@@ -2790,6 +2790,30 @@ git commit -m "chore: release version 1.0.3"
 git tag -a v1.0.3 -m "Release version 1.0.3"
 git push origin refs/tags/v1.0.3
 
+
+
+2026/6/22
+
+C:\dev\new_search_app\Scripts\Activate.ps1
+
+
+候補選択ダイアログの操作部分レイアウトを改善する
+git commit -m "fix: improve candidate dialog option layout"
+
+APP_VERSION = "v1.0.4"
+
+git commit -m "chore: release version 1.0.4"
+git push
+
+python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
+
+git tag -a v1.0.4 -m "Release version 1.0.4"
+git push origin refs/tags/v1.0.4
+
+
+
+
+
 今後
 
 

@@ -1217,24 +1217,46 @@ def main(page: ft.Page):
                 on_click=select_candidate,
             )
 
+        candidate_list_height = min(
+            460,
+            max(60, len(candidates) * 48),
+        )
+
         selected_pdf = ft.RadioGroup(
             value=current_adopted_pdf if current_adopted_pdf in candidates else NO_ADOPTED_PDF_VALUE,
             on_change=lambda e: apply_candidate_selection(e.control.value),
             content=ft.Column(
                 controls=[
-                    *[
-                        create_candidate_pdf_option(pdf_path)
-                        for pdf_path in candidates
-                    ],
-                    ft.Divider(),
-                    ft.Radio(
-                        value=NO_ADOPTED_PDF_VALUE,
-                        label="採用しない",
+                    ft.Container(
+                        height=candidate_list_height,
+                        content=ft.Column(
+                            controls=[
+                                create_candidate_pdf_option(pdf_path)
+                                for pdf_path in candidates
+                            ],
+                            spacing=2,
+                            tight=True,
+                            scroll="auto",
+                        ),
+                    ),
+                    ft.Divider(height=8),
+                    ft.Container(
+                        content=ft.Radio(
+                            value=NO_ADOPTED_PDF_VALUE,
+                            label="採用しない",
+                        ),
+                        padding=ft.padding.symmetric(horizontal=4, vertical=3),
+                        border_radius=6,
+                        on_click=lambda e: (
+                            setattr(selected_pdf, "value", NO_ADOPTED_PDF_VALUE),
+                            apply_candidate_selection(NO_ADOPTED_PDF_VALUE),
+                            page.update(),
+                        ),
                     ),
                 ],
-                scroll="auto",
-                height=460,
-            )
+                spacing=2,
+                tight=True,
+            ),
         )
 
         def close_dialog(e):
@@ -1247,6 +1269,11 @@ def main(page: ft.Page):
             render_table_from_df(current_df)
             dialog.open = False
             page.update()
+
+        ok_button = ft.ElevatedButton(
+            "OK",
+            on_click=close_dialog,
+        )
 
         dialog = ft.AlertDialog(
             modal=True,
@@ -1271,9 +1298,13 @@ def main(page: ft.Page):
                                     ft.Divider(),
                                     ft.Text("採用するPDFを選んでください。選択はすぐに反映されます。"),
                                     selected_pdf,
+                                    ft.Row(
+                                        controls=[ok_button],
+                                        alignment=ft.MainAxisAlignment.END,
+                                    ),
                                 ],
+                                spacing=4,
                                 tight=True,
-                                scroll="auto",
                             ),
                         ),
                         ft.VerticalDivider(),
@@ -1293,10 +1324,6 @@ def main(page: ft.Page):
                     scroll="auto",
                 ),
             ),
-            actions=[
-                ft.ElevatedButton("OK", on_click=close_dialog),
-            ],
-            actions_alignment="end",
         )
 
         initial_preview_pdf = selected_pdf.value
