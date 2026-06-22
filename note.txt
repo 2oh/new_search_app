@@ -2798,10 +2798,13 @@ C:\dev\new_search_app\Scripts\Activate.ps1
 
 
 候補選択ダイアログの操作部分レイアウトを改善する
+git add -A
 git commit -m "fix: improve candidate dialog option layout"
+git push
 
 APP_VERSION = "v1.0.4"
 
+git add -A
 git commit -m "chore: release version 1.0.4"
 git push
 
