@@ -18,6 +18,9 @@ APP_ICON_FILE = "assets/app_icon.ico"
 APP_VERSION = "v1.0.4"
 DEBUG = False
 
+PDF_FILE_NAME_COLOR = ft.Colors.BLUE_200
+PDF_FILE_NAME_HOVER_COLOR = ft.Colors.BLUE_100
+
 def debug_print(*args, **kwargs):
     if DEBUG:
         print(*args, **kwargs)
@@ -1169,6 +1172,14 @@ def main(page: ft.Page):
 
             radio = ft.Radio(value=pdf_path)
 
+            file_name_text = ft.Text(
+                file_name,
+                color=PDF_FILE_NAME_COLOR,
+                size=13,
+                weight=ft.FontWeight.BOLD,
+                no_wrap=True,
+            )
+
             text_column = ft.Column(
                 controls=[
                     ft.Text(
@@ -1177,13 +1188,7 @@ def main(page: ft.Page):
                         size=12,
                         no_wrap=True,
                     ),
-                    ft.Text(
-                        file_name,
-                        color=ft.Colors.BLUE_200,
-                        size=13,
-                        weight=ft.FontWeight.BOLD,
-                        no_wrap=True,
-                    ),
+                    file_name_text,
                 ],
                 spacing=0,
                 tight=True,
@@ -1191,11 +1196,16 @@ def main(page: ft.Page):
 
             def preview_candidate_on_hover(e, preview_pdf_path=pdf_path):
                 """
-                候補PDFにマウスを乗せたときだけ、右側プレビューを更新する。
-                マウスが外れたときは、最後に表示したプレビューを残す。
+                候補PDFにマウスを乗せたとき、右側プレビューを更新し、
+                ファイル名の色を少し変える。
                 """
                 if e.data == "true":
+                    file_name_text.color = PDF_FILE_NAME_HOVER_COLOR
                     update_preview(preview_pdf_path)
+                else:
+                    file_name_text.color = PDF_FILE_NAME_COLOR
+
+                page.update()
 
             def select_candidate(e, selected_value=pdf_path):
                 selected_pdf.value = selected_value
@@ -2009,9 +2019,18 @@ def main(page: ft.Page):
                         else text_color
                     )
 
+                    output_pdf_file_name_text = None
+
                     if c == "採用PDFパス" and adopted_pdf_path_for_hover:
                         folder_text, file_name = split_pdf_path_for_two_line_display(
                             adopted_pdf_path_for_hover
+                        )
+
+                        output_pdf_file_name_text = ft.Text(
+                            file_name,
+                            color=PDF_FILE_NAME_COLOR,
+                            weight=ft.FontWeight.NORMAL,
+                            no_wrap=True,
                         )
 
                         text_control = ft.Column(
@@ -2022,12 +2041,7 @@ def main(page: ft.Page):
                                     weight=ft.FontWeight.NORMAL,
                                     no_wrap=True,
                                 ),
-                                ft.Text(
-                                    file_name,
-                                    color=ft.Colors.BLUE_200,
-                                    weight=ft.FontWeight.NORMAL,
-                                    no_wrap=True,
-                                ),
+                                output_pdf_file_name_text,
                             ],
                             spacing=0,
                             tight=True,
@@ -2048,10 +2062,18 @@ def main(page: ft.Page):
                         def handle_output_pdf_hover(
                             e,
                             pdf_path=adopted_pdf_path_for_hover,
+                            file_name_text=output_pdf_file_name_text,
                         ):
                             if e.data == "true":
+                                if file_name_text is not None:
+                                    file_name_text.color = PDF_FILE_NAME_HOVER_COLOR
+
                                 update_hover_preview(pdf_path)
+
                             else:
+                                if file_name_text is not None:
+                                    file_name_text.color = PDF_FILE_NAME_COLOR
+
                                 clear_hover_preview()
 
                             page.update()

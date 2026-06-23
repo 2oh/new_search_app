@@ -2814,6 +2814,27 @@ git tag -a v1.0.4 -m "Release version 1.0.4"
 git push origin refs/tags/v1.0.4
 
 
+2026/6/23
+
+C:\dev\new_search_app\Scripts\Activate.ps1
+
+
+ホバープレビュー時にPDFファイル名を強調表示する
+git add -A
+git commit -m "fix: highlight PDF filename on hover preview"
+git push
+
+APP_VERSION = "v1.0.5"
+
+git add -A
+git commit -m "chore: release version 1.0.5"
+git push
+
+python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
+
+git tag -a v1.0.5 -m "Release version 1.0.5"
+git push origin refs/tags/v1.0.5
+
 
 
 
