@@ -2830,12 +2830,93 @@ git add -A
 git commit -m "chore: release version 1.0.5"
 git push
 
-python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
+python -m PyInstaller --onefile --windowed --name "図面PDF検索結合ツール" --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
 
 git tag -a v1.0.5 -m "Release version 1.0.5"
 git push origin refs/tags/v1.0.5
 
 
+20260701
+
+C:\dev\new_search_app\Scripts\Activate.ps1
+
+① ホバー時のPDFファイル名色をもっと分かりやすくする
+② 主要ボタンに少し色を付けて見やすくする
+③ Excel選択フォルダを記憶する
+④ メッセージ欄を大きくする
+⑤ PDF出力時メッセージを簡易化する
+⑥ Excelが他ユーザーに開かれている可能性がある時のメッセージを改善する
+⑦ 候補ダイアログのプレビューを少し大きくする
+
+git checkout main
+git pull
+
+git checkout -b fix-v1.0.6
+
+
+
+
+
+
+
+
+
+git commit -m "fix: display candidate PDF paths in two lines"
+
+git push -u origin v1.0.1
+
+git remote -v
+origin  https://github.com/2oh/new_search_app.git (fetch)
+origin  https://github.com/2oh/new_search_app.git (push)
+
+git branch -vv
+  main   71ae5fa [origin/main] Release version 1.0.0
+* v1.0.1 3333389 [origin/v1.0.1] fix: display candidate PDF paths in two lines
+
+
+2. 候補選択ダイアログのプレビュー領域を広げる
+
+候補選択ダイアログのプレビュー領域を広げる
+git commit -m "fix: enlarge candidate preview area"
+
+
+3. 候補PDFをホバーでプレビューする
+
+候補PDFをホバーでプレビューする
+git commit -m "fix: preview candidate PDFs on hover"
+
+
+4. 出力PDF欄のパス/ファイル名の色を分ける
+
+出力PDF欄の色分けを候補一覧と揃える
+git commit -m "fix: match output PDF path colors with candidate list"
+
+
+5. A3ホバープレビュー画像サイズを拡大する
+
+ホバープレビュー画像の表示サイズを拡大する
+git commit -m "fix: enlarge hover preview image size"
+
+
+git status
+
+APP_VERSION = "v1.0.1"
+
+git add -A
+git commit -m "chore: release version 1.0.1"
+git status
+git push
+
+python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
+
+
+git checkout main
+git merge v1.0.1
+git push
+
+git tag -a v1.0.1 -m "Release version 1.0.1"
+git push origin v1.0.1	→エラー
+git push origin refs/tags/v1.0.1
 
 
 今後

@@ -19,7 +19,7 @@ APP_VERSION = "v1.0.5"
 DEBUG = False
 
 PDF_FILE_NAME_COLOR = ft.Colors.BLUE_200
-PDF_FILE_NAME_HOVER_COLOR = ft.Colors.BLUE_100
+PDF_FILE_NAME_HOVER_COLOR = ft.Colors.CYAN_100
 
 def debug_print(*args, **kwargs):
     if DEBUG:
@@ -678,6 +678,7 @@ def main(page: ft.Page):
         return {
             "pdf_folder": "",
             "output_folder": "",
+            "excel_folder": "",
             "search_mode": "構成部品表",
             "target_columns": ["品番", "PG名"],
         }
@@ -692,6 +693,7 @@ def main(page: ft.Page):
         config.update({
             "pdf_folder": search_folder_field.value,
             "output_folder": output_folder_field.value,
+            "excel_folder": config.get("excel_folder", ""),
             "search_mode": mode_dropdown.value,
             "target_columns": [x.strip() for x in target_col_field.value.split(",") if x.strip()],
         })
@@ -812,7 +814,12 @@ def main(page: ft.Page):
     selected_excel_path = ""
     SHEET_PLACEHOLDER = "（シートを選択してください）"
     sheet_dropdown = ft.Dropdown(label="シート選択", width=420)
-    message = ft.Text("")
+    message = ft.Text(
+        "",
+        size=16,
+        weight=ft.FontWeight.BOLD,
+        color=ft.Colors.BLUE_100,
+    )
     
     mode_notice = ft.Text("")
     table = ft.DataTable(
@@ -1078,8 +1085,8 @@ def main(page: ft.Page):
 
         preview_image = ft.Image(
             src="",
-            width=900,
-            height=600,
+            width=980,
+            height=660,
             fit=ft.ImageFit.CONTAIN,
             visible=False,
         )
@@ -1289,8 +1296,8 @@ def main(page: ft.Page):
             modal=True,
             title=ft.Text("PDF候補を選択"),
             content=ft.Container(
-                width=1640,
-                height=760,
+                width=1740,
+                height=800,
                 content=ft.Row(
                     controls=[
                         ft.Container(
@@ -1319,12 +1326,12 @@ def main(page: ft.Page):
                         ),
                         ft.VerticalDivider(),
                         ft.Container(
-                            width=980,
+                            width=1060,
                             content=ft.Column(
                                 controls=[
                                     ft.Text("プレビュー", weight="bold"),
                                     preview_message,
-                                    create_preview_box(preview_image, height=640),
+                                    create_preview_box(preview_image, height=700),
                                 ],
                                 tight=True,
                             ),
@@ -2145,7 +2152,15 @@ def main(page: ft.Page):
     page.overlay.append(file_picker)
 
     def pick_excel_click(e):
-        file_picker.pick_files(allowed_extensions=["xlsx", "xls"])
+        initial_dir = config.get("excel_folder", "")
+
+        if not initial_dir or not os.path.isdir(initial_dir):
+            initial_dir = os.getcwd()
+
+        file_picker.pick_files(
+            allowed_extensions=["xlsx", "xls"],
+            initial_directory=initial_dir,
+        )
 
     def pick_excel_result(e: ft.FilePickerResultEvent):
         nonlocal selected_excel_path  # sheet_dropdown は作り直さないので nonlocal 不要でもOK
@@ -2158,6 +2173,10 @@ def main(page: ft.Page):
 
         selected_excel_path = e.files[0].path
         excel_file_field.value = os.path.abspath(selected_excel_path)
+
+        config["excel_folder"] = str(Path(selected_excel_path).parent)
+        save_config()
+
         page.update()
 
         try:
@@ -2179,7 +2198,11 @@ def main(page: ft.Page):
         except PermissionError:
             dialog = ft.AlertDialog(
                 title=ft.Text("ファイル使用中"),
-                content=ft.Text("Excelファイルを閉じてください。"),
+                content=ft.Text(
+                    "Excelファイルを開けませんでした。\n\n"
+                    "他のユーザー、または別のPCでこのExcelが開かれている可能性があります。\n"
+                    "Excelファイルを閉じてから、もう一度選択してください。"
+                ),
                 actions_alignment="end",
             )
 
@@ -2472,6 +2495,21 @@ def main(page: ft.Page):
 
 
             page.update()
+        except PermissionError:
+            message.value = (
+                "Excelファイルを開けませんでした。"
+                "他のユーザー、または別のPCで開かれている可能性があります。"
+            )
+            page.open(
+                ft.SnackBar(
+                    ft.Text(
+                        "Excelファイルを開けませんでした。"
+                        "他のユーザー、または別のPCで開かれている可能性があります。"
+                    )
+                )
+            )
+            page.update()
+
         except Exception as ex:
             message.value = f"エラー: {ex}"
             page.update()
@@ -2906,13 +2944,10 @@ def main(page: ft.Page):
 
             merge_pdfs(pdf_paths, output_pdf_path)
 
-            result_message = (
-                f"PDFを出力しました: {os.path.basename(output_pdf_path)} "
-                f"（結合対象: {export_ready_count}件）"
-            )
+            result_message = f"PDF出力完了：{export_ready_count}件 / {os.path.basename(output_pdf_path)}"
 
             if missing_pdf_count > 0:
-                result_message += f"\n注意: 出力対象のうち {missing_pdf_count} 件は採用PDFが未確定のため除外しました。"
+                result_message += f"（未確定除外：{missing_pdf_count}件）"
 
             debug_print("===== PDF出力 =====")
             debug_print(f"出力PDF: {output_pdf_path}")
