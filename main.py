@@ -704,6 +704,27 @@ def main(page: ft.Page):
     def close_app(e):
         page.window.close()
 
+    def create_button_style(bgcolor, color=ft.Colors.WHITE):
+        """
+        ダークテーマ上で見やすいボタンスタイルを作る。
+        """
+        return ft.ButtonStyle(
+            bgcolor=bgcolor,
+            color=color,
+            padding=ft.padding.symmetric(horizontal=10, vertical=6),
+        )
+
+
+    BUTTON_STYLE_PRIMARY = create_button_style(ft.Colors.BLUE_700)
+    BUTTON_STYLE_SUCCESS = create_button_style(ft.Colors.GREEN_700)
+    BUTTON_STYLE_WARNING = create_button_style(ft.Colors.ORANGE_700)
+    BUTTON_STYLE_SECONDARY = create_button_style(ft.Colors.BLUE_GREY_700)
+    BUTTON_STYLE_DANGER_OUTLINE = ft.ButtonStyle(
+        color=ft.Colors.RED_100,
+        side=ft.BorderSide(1, ft.Colors.RED_300),
+        padding=ft.padding.symmetric(horizontal=12, vertical=8),
+    )
+
     config = load_config()
 
     # ---- UI構成 ----
@@ -729,6 +750,7 @@ def main(page: ft.Page):
         "終了",
         icon=ft.Icons.CLOSE,
         on_click=close_app,
+        style=BUTTON_STYLE_DANGER_OUTLINE,
     )
 
     settings_action_row = ft.Row(
@@ -1873,6 +1895,8 @@ def main(page: ft.Page):
                             tooltip="候補PDFを選択",
                             on_click=lambda e, row_index=idx: on_select_pdf_candidate(row_index),
                             style=ft.ButtonStyle(
+                                bgcolor=ft.Colors.AMBER_500,
+                                color=ft.Colors.BLACK,
                                 padding=ft.padding.symmetric(horizontal=8, vertical=4),
                             ),
                         )
@@ -2478,17 +2502,37 @@ def main(page: ft.Page):
             else:
                 message.value = f"{len(df)}件のデータを抽出しました。"
 
-                select_all_btn = ft.ElevatedButton("全選択", on_click=lambda e: toggle_all(True))
-                deselect_all_btn = ft.ElevatedButton("全解除", on_click=lambda e: toggle_all(False))
-                search_pdf_btn = ft.ElevatedButton("PDF候補抽出", on_click=on_pdf_candidate_search)
-                export_pdf_btn = ft.ElevatedButton("PDF出力実行", on_click=on_pdf_export)
+                select_all_btn = ft.ElevatedButton(
+                    "全選択",
+                    on_click=lambda e: toggle_all(True),
+                    style=BUTTON_STYLE_SECONDARY,
+                )
+
+                deselect_all_btn = ft.ElevatedButton(
+                    "全解除",
+                    on_click=lambda e: toggle_all(False),
+                    style=BUTTON_STYLE_SECONDARY,
+                )
+
+                search_pdf_btn = ft.ElevatedButton(
+                    "PDF候補抽出",
+                    on_click=on_pdf_candidate_search,
+                    style=BUTTON_STYLE_PRIMARY,
+                )
+
+                export_pdf_btn = ft.ElevatedButton(
+                    "PDF出力実行",
+                    on_click=on_pdf_export,
+                    style=BUTTON_STYLE_SUCCESS,
+                )
 
                 table_header.controls = [
                     search_pdf_btn,
-                    ft.Container(width=80),
+                    ft.Container(width=40),
                     select_all_btn,
                     deselect_all_btn,
                     export_pdf_btn,
+                    ft.Container(width=240),
                 ]
 
                 render_table_from_df(df)
@@ -2978,8 +3022,17 @@ def main(page: ft.Page):
 
         page.update()
 
-    pick_excel_btn = ft.ElevatedButton("Excelを選択", on_click=pick_excel_click)
-    extract_btn = ft.ElevatedButton("抽出実行", on_click=on_extract_click)
+    pick_excel_btn = ft.ElevatedButton(
+        "Excelを選択",
+        on_click=pick_excel_click,
+        style=BUTTON_STYLE_PRIMARY,
+    )
+
+    extract_btn = ft.ElevatedButton(
+        "抽出実行",
+        on_click=on_extract_click,
+        style=BUTTON_STYLE_PRIMARY,
+    )
 
     def set_excel_ui_enabled(enabled: bool):
         excel_file_field.disabled = not enabled
@@ -3009,7 +3062,11 @@ def main(page: ft.Page):
             ft.Row(
                 [
                     search_folder_field,
-                    ft.ElevatedButton("フォルダを選択", on_click=pick_search_folder),
+                    ft.ElevatedButton(
+                        "フォルダを選択",
+                        on_click=pick_search_folder,
+                        style=BUTTON_STYLE_SECONDARY,
+                    ),
                 ],
                 expand=True,
                 spacing=6,
@@ -3017,7 +3074,11 @@ def main(page: ft.Page):
             ft.Row(
                 [
                     output_folder_field,
-                    ft.ElevatedButton("フォルダを選択", on_click=pick_output_folder),
+                    ft.ElevatedButton(
+                        "フォルダを選択",
+                        on_click=pick_output_folder,
+                        style=BUTTON_STYLE_SECONDARY,
+                    ),
                 ],
                 expand=True,
                 spacing=6,
