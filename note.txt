@@ -2870,18 +2870,20 @@ git branch -vv
 修正２回目
 git add -A
 git commit -m "fix: improve button visibility in dark theme"
+git push
 
-
-
-
+git branch -vv
+* fix-v1.0.6 70a264f [origin/fix-v1.0.6] fix: improve button visibility in dark theme
+  main       5e8c313 [origin/main] chore: release version 1.0.5
+  v1.0.1     240cba9 [origin/v1.0.1] chore: release version 1.0.1
 
 
 git status
 
-APP_VERSION = "v1.0.1"
+APP_VERSION = "v1.0.6"
 
 git add -A
-git commit -m "chore: release version 1.0.1"
+git commit -m "chore: release version 1.0.6"
 git status
 git push
 
@@ -2889,12 +2891,12 @@ python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data
 
 
 git checkout main
-git merge v1.0.1
+git merge v1.0.6
 git push
 
-git tag -a v1.0.1 -m "Release version 1.0.1"
-git push origin v1.0.1	→エラー
-git push origin refs/tags/v1.0.1
+git tag -a v1.0.6 -m "Release version 1.0.6"
+git push origin v1.0.6	→エラー
+git push origin refs/tags/v1.0.6
 
 
 今後
