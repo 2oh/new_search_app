@@ -2924,42 +2924,30 @@ git checkout -b fix-v1.0.7
 
 修正１回目
 git add -A
-git commit -m "fix: improve UI messages and preview visibility"
-git push -u origin fix-v1.0.6
+git commit -m "fix: show progress during PDF export"
+git push -u origin fix-v1.0.7
 
 git remote -v
-origin  https://github.com/2oh/new_search_app.git (fetch)
-origin  https://github.com/2oh/new_search_app.git (push)
-
 git branch -vv
-* fix-v1.0.6 e261b3d [origin/fix-v1.0.6] fix: improve UI messages and preview visibility
-  main       5e8c313 [origin/main] chore: release version 1.0.5
-  v1.0.1     240cba9 [origin/v1.0.1] chore: release version 1.0.1
 
 修正２回目
 git add -A
-git commit -m "fix: improve button visibility in dark theme"
+git commit -m "fix: constrain output PDF column width"
 git push
 
 git branch -vv
-* fix-v1.0.6 70a264f [origin/fix-v1.0.6] fix: improve button visibility in dark theme
-  main       5e8c313 [origin/main] chore: release version 1.0.5
-  v1.0.1     240cba9 [origin/v1.0.1] chore: release version 1.0.1
 
 
 git status
 
-APP_VERSION = "v1.0.6"
+APP_VERSION = "v1.0.7"
 
 git add -A
-git commit -m "chore: release version 1.0.6"
+git commit -m "chore: release version 1.0.7"
 git status
 git push
 
 git branch -vv
-* fix-v1.0.6 9d9d815 [origin/fix-v1.0.6] chore: release version 1.0.6
-  main       5e8c313 [origin/main] chore: release version 1.0.5
-  v1.0.1     240cba9 [origin/v1.0.1] chore: release version 1.0.1
 
 
 python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
@@ -2968,11 +2956,11 @@ python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data
 git stash push -m "temporary note changes" note.txt
 
 git checkout main
-git merge fix-v1.0.6
+git merge fix-v1.0.7
 git push
 
-git tag -a v1.0.6 -m "Release version 1.0.6"
-git push origin refs/tags/v1.0.6
+git tag -a v1.0.7 -m "Release version 1.0.7"
+git push origin refs/tags/v1.0.7
 
 git stash pop
 

@@ -21,6 +21,8 @@ DEBUG = False
 PDF_FILE_NAME_COLOR = ft.Colors.BLUE_200
 PDF_FILE_NAME_HOVER_COLOR = ft.Colors.CYAN_100
 
+OUTPUT_PDF_COLUMN_WIDTH = 260
+
 def debug_print(*args, **kwargs):
     if DEBUG:
         print(*args, **kwargs)
@@ -855,7 +857,7 @@ def main(page: ft.Page):
         column_spacing=20,
         horizontal_margin=12,
         data_row_min_height=46,
-        data_row_max_height=60,
+        data_row_max_height=72,
     )
     table_header = ft.Row([], alignment="center")
 
@@ -2066,21 +2068,27 @@ def main(page: ft.Page):
                             file_name,
                             color=PDF_FILE_NAME_COLOR,
                             weight=ft.FontWeight.NORMAL,
-                            no_wrap=True,
+                            no_wrap=False,
+                            max_lines=2,
+                            overflow=ft.TextOverflow.ELLIPSIS,
                         )
 
-                        text_control = ft.Column(
-                            controls=[
-                                ft.Text(
-                                    folder_text,
-                                    color=ft.Colors.WHITE,
-                                    weight=ft.FontWeight.NORMAL,
-                                    no_wrap=True,
-                                ),
-                                output_pdf_file_name_text,
-                            ],
-                            spacing=0,
-                            tight=True,
+                        text_control = ft.Container(
+                            width=OUTPUT_PDF_COLUMN_WIDTH,
+                            content=ft.Column(
+                                controls=[
+                                    ft.Text(
+                                        folder_text,
+                                        color=ft.Colors.WHITE,
+                                        weight=ft.FontWeight.NORMAL,
+                                        no_wrap=True,
+                                        overflow=ft.TextOverflow.ELLIPSIS,
+                                    ),
+                                    output_pdf_file_name_text,
+                                ],
+                                spacing=0,
+                                tight=True,
+                            ),
                         )
                     else:
                         text_control = ft.Text(
