@@ -136,7 +136,7 @@ def find_pdf_candidates_from_index(
 
     return hits
 
-def merge_pdfs(pdf_paths: list[str], output_path: str) -> str:
+def merge_pdfs(pdf_paths: list[str], output_path: str, progress_callback=None) -> str:
     """
     複数のPDFを1つに結合して保存する。
 
@@ -178,7 +178,12 @@ def merge_pdfs(pdf_paths: list[str], output_path: str) -> str:
 
     writer = PdfWriter()
 
-    for pdf_path in pdf_paths:
+    total = len(pdf_paths)
+
+    for i, pdf_path in enumerate(pdf_paths, start=1):
+        if progress_callback:
+            progress_callback(i, total, pdf_path)
+
         path = Path(pdf_path)
 
         if not path.is_file():
@@ -2986,7 +2991,18 @@ def main(page: ft.Page):
 
             pdf_paths = [p for p in pdf_paths if p]
 
-            merge_pdfs(pdf_paths, output_pdf_path)
+            def update_export_progress(current: int, total: int, pdf_path: str):
+                message.value = f"PDF出力中... {current} / {total}"
+                page.update()
+
+            message.value = f"PDF出力を開始します... 0 / {export_ready_count}"
+            page.update()
+
+            merge_pdfs(
+                pdf_paths,
+                output_pdf_path,
+                progress_callback=update_export_progress,
+            )
 
             result_message = f"PDF出力完了：{export_ready_count}件 / {os.path.basename(output_pdf_path)}"
 

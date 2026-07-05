@@ -2887,16 +2887,95 @@ git commit -m "chore: release version 1.0.6"
 git status
 git push
 
+git branch -vv
+* fix-v1.0.6 9d9d815 [origin/fix-v1.0.6] chore: release version 1.0.6
+  main       5e8c313 [origin/main] chore: release version 1.0.5
+  v1.0.1     240cba9 [origin/v1.0.1] chore: release version 1.0.1
+
+
 python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
 
 
+git stash push -m "temporary note changes" note.txt
+
 git checkout main
-git merge v1.0.6
+git merge fix-v1.0.6
 git push
 
 git tag -a v1.0.6 -m "Release version 1.0.6"
-git push origin v1.0.6	→エラー
 git push origin refs/tags/v1.0.6
+
+git stash pop
+
+
+
+2026/7/5
+
+
+C:\dev\new_search_app\Scripts\Activate.ps1
+
+① PDF出力実行中の経過表示
+② 出力PDF欄が長いファイル名で広がる問題
+
+git checkout main
+git pull
+
+git checkout -b fix-v1.0.7
+
+修正１回目
+git add -A
+git commit -m "fix: improve UI messages and preview visibility"
+git push -u origin fix-v1.0.6
+
+git remote -v
+origin  https://github.com/2oh/new_search_app.git (fetch)
+origin  https://github.com/2oh/new_search_app.git (push)
+
+git branch -vv
+* fix-v1.0.6 e261b3d [origin/fix-v1.0.6] fix: improve UI messages and preview visibility
+  main       5e8c313 [origin/main] chore: release version 1.0.5
+  v1.0.1     240cba9 [origin/v1.0.1] chore: release version 1.0.1
+
+修正２回目
+git add -A
+git commit -m "fix: improve button visibility in dark theme"
+git push
+
+git branch -vv
+* fix-v1.0.6 70a264f [origin/fix-v1.0.6] fix: improve button visibility in dark theme
+  main       5e8c313 [origin/main] chore: release version 1.0.5
+  v1.0.1     240cba9 [origin/v1.0.1] chore: release version 1.0.1
+
+
+git status
+
+APP_VERSION = "v1.0.6"
+
+git add -A
+git commit -m "chore: release version 1.0.6"
+git status
+git push
+
+git branch -vv
+* fix-v1.0.6 9d9d815 [origin/fix-v1.0.6] chore: release version 1.0.6
+  main       5e8c313 [origin/main] chore: release version 1.0.5
+  v1.0.1     240cba9 [origin/v1.0.1] chore: release version 1.0.1
+
+
+python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
+
+
+git stash push -m "temporary note changes" note.txt
+
+git checkout main
+git merge fix-v1.0.6
+git push
+
+git tag -a v1.0.6 -m "Release version 1.0.6"
+git push origin refs/tags/v1.0.6
+
+git stash pop
+
 
 
 今後
