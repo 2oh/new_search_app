@@ -2952,8 +2952,9 @@ git branch -vv
 
 python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
 
-
+====================================================
 git stash push -m "temporary note changes" note.txt
+====================================================
 
 git checkout main
 git merge fix-v1.0.7
@@ -2962,11 +2963,89 @@ git push
 git tag -a v1.0.7 -m "Release version 1.0.7"
 git push origin refs/tags/v1.0.7
 
+====================================================
 git stash pop
+====================================================
+
+
+
+2026/7/9
+
+C:\dev\new_search_app\Scripts\Activate.ps1
+
+① 余白プレビューのファイル名を少し離して大きくする
+② PDF出力完了時にポップアップ通知する
+④ 候補ダイアログでホバー外れ時にプレビューを消す
+
+git checkout main
+git pull
+
+git checkout -b fix-v1.0.8
+
+修正１回目
+git add -A
+git commit -m "fix: improve preview hover behavior"
+git push -u origin fix-v1.0.8
+
+git remote -v
+git branch -vv
+
+
+
+
+
+修正２回目
+git add -A
+git commit -m "fix: constrain output PDF column width"
+git push
+
+git branch -vv
+
+
+git status
+
+APP_VERSION = "v1.0.7"
+
+git add -A
+git commit -m "chore: release version 1.0.7"
+git status
+git push
+
+git branch -vv
+
+
+python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
+
+====================================================
+git stash push -m "temporary note changes" note.txt
+====================================================
+
+git checkout main
+git merge fix-v1.0.7
+git push
+
+git tag -a v1.0.7 -m "Release version 1.0.7"
+git push origin refs/tags/v1.0.7
+
+====================================================
+git stash pop
+====================================================
+
+
 
 
 
 今後
+
+直近の後回し案件
+・ スクロール改善
+・ プレビュー遅延対策（初回一気にホバーした場合の件）
+・Excelを開いているクライアント名表示
+・出力チェックを外してから、候補選択ダイアログに行って帰ってくると、出力チェックが戻る。（候補選択とは別の行でも）
+	→これはやってるかも？
+・候補抽出、PDF出力中は入力禁止とする
+・プレビューがたまにホバー後も残存する件
+
 
 
 ChatGPT側でやった方がいいこと

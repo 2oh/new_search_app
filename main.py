@@ -871,8 +871,8 @@ def main(page: ft.Page):
 
     hover_preview_message = ft.Text(
         "",
-        size=12,
-        color=ft.Colors.BLUE_700,
+        size=14,
+        color=ft.Colors.BLUE_100,
         weight=ft.FontWeight.BOLD,
         text_align=ft.TextAlign.CENTER,
     )
@@ -950,7 +950,7 @@ def main(page: ft.Page):
                 hover_preview_message,
                 create_hover_preview_box(hover_preview_image, height=600)
             ],
-            spacing=0,
+            spacing=1,
             tight=True,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         ),
@@ -1120,7 +1120,7 @@ def main(page: ft.Page):
             visible=False,
         )
 
-        preview_message = ft.Text("左の候補PDFを選択すると、ここにプレビューを表示します。")
+        preview_message = ft.Text("左の候補PDFにマウスを乗せると、ここにプレビューを表示します。")
 
         def update_preview(pdf_path: str):
             if not pdf_path:
@@ -1152,6 +1152,12 @@ def main(page: ft.Page):
                     f" PDFにアクセスできない、または形式に問題がある可能性があります。詳細: {ex}"
                 )
 
+            page.update()
+
+        def clear_candidate_preview():
+            preview_image.src = ""
+            preview_image.visible = False
+            preview_message.value = "左の候補PDFにマウスを乗せると、ここにプレビューを表示します。"
             page.update()
 
         NO_ADOPTED_PDF_VALUE = "__NO_ADOPTED_PDF__"
@@ -1232,14 +1238,15 @@ def main(page: ft.Page):
 
             def preview_candidate_on_hover(e, preview_pdf_path=pdf_path):
                 """
-                候補PDFにマウスを乗せたとき、右側プレビューを更新し、
-                ファイル名の色を少し変える。
+                候補PDFにマウスを乗せたときだけ、右側プレビューを表示する。
+                マウスが外れたら、プレビューを消す。
                 """
                 if e.data == "true":
                     file_name_text.color = PDF_FILE_NAME_HOVER_COLOR
                     update_preview(preview_pdf_path)
                 else:
                     file_name_text.color = PDF_FILE_NAME_COLOR
+                    clear_candidate_preview()
 
                 page.update()
 
