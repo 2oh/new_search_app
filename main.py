@@ -2940,6 +2940,26 @@ def main(page: ft.Page):
 
         page.update()
 
+    def show_pdf_export_completed_dialog(result_message: str):
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("PDF出力完了"),
+            content=ft.Text(result_message),
+            actions=[
+                ft.TextButton(
+                    "OK",
+                    on_click=lambda e: (
+                        setattr(dialog, "open", False),
+                        page.update(),
+                    ),
+                ),
+            ],
+            actions_alignment="end",
+        )
+
+        page.open(dialog)
+        page.update()
+
     def on_pdf_export(e):
         nonlocal current_df
 
@@ -3019,10 +3039,15 @@ def main(page: ft.Page):
                 progress_callback=update_export_progress,
             )
 
-            result_message = f"PDF出力完了：{export_ready_count}件 / {os.path.basename(output_pdf_path)}"
+            result_message = (
+                f"出力件数：{export_ready_count}件\n"
+                f"出力ファイル：{os.path.basename(output_pdf_path)}"
+            )
 
             if missing_pdf_count > 0:
-                result_message += f"（未確定除外：{missing_pdf_count}件）"
+                result_message += f"\n未確定除外：{missing_pdf_count}件"
+
+            show_pdf_export_completed_dialog(result_message)
 
             debug_print("===== PDF出力 =====")
             debug_print(f"出力PDF: {output_pdf_path}")

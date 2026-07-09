@@ -2990,13 +2990,9 @@ git push -u origin fix-v1.0.8
 git remote -v
 git branch -vv
 
-
-
-
-
 修正２回目
 git add -A
-git commit -m "fix: constrain output PDF column width"
+git commit -m "fix: show dialog after PDF export completes"
 git push
 
 git branch -vv
