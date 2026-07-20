@@ -8,6 +8,7 @@ import os
 import json
 import re
 import sys
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
@@ -677,6 +678,12 @@ def main(page: ft.Page):
     HOVER_PREVIEW_MIN_WIDTH = 1700
     use_hover_preview = False
 
+    # ホバープレビュー制御用
+    hover_preview_request_id = 0
+    hover_preview_current_path = ""
+    hover_preview_pending_path = ""
+    hover_preview_is_loading = False
+
     # ---- 設定ファイル処理 ----
     def load_config():
         if os.path.exists(CONFIG_FILE):
@@ -960,40 +967,130 @@ def main(page: ft.Page):
 
     def update_hover_preview(pdf_path: str):
         """
-        出力PDF欄にホバーしたとき、右側の固定プレビュー欄を更新する。
+        出力PDF欄にホバーしたとき、プレビュー生成を予約する。
+
+        画像生成中に別のPDFへホバーした場合は、
+        途中の要求をすべて処理せず、最後にホバーしたPDFだけを処理する。
         """
+        nonlocal hover_preview_request_id
+        nonlocal hover_preview_current_path
+        nonlocal hover_preview_pending_path
+        nonlocal hover_preview_is_loading
+
         if not use_hover_preview:
             return
 
-        if not pdf_path or not str(pdf_path).strip():
+        pdf_path = str(pdf_path or "").strip()
+
+        if not pdf_path:
             return
 
+        # 現在必要とされているPDFを更新する
+        hover_preview_request_id += 1
+        hover_preview_current_path = pdf_path
+        hover_preview_pending_path = pdf_path
+
+        hover_preview_image.src = ""
         hover_preview_image.visible = False
         hover_preview_message.value = "プレビューを読み込んでいます..."
         page.update()
 
+        # すでに生成処理が動いている場合は、
+        # pending_pathだけ更新して現在の処理終了を待つ
+        if hover_preview_is_loading:
+            return
+
+        page.run_task(process_hover_preview_queue)
+
+
+    async def process_hover_preview_queue():
+        """
+        ホバープレビューの生成待ちを処理する。
+
+        一度に生成する画像は1つだけとし、
+        生成中に別のPDFへ移動した場合は最後の要求だけを残す。
+        """
+        nonlocal hover_preview_request_id
+        nonlocal hover_preview_current_path
+        nonlocal hover_preview_pending_path
+        nonlocal hover_preview_is_loading
+
+        if hover_preview_is_loading:
+            return
+
+        hover_preview_is_loading = True
+
         try:
-            preview_path = create_pdf_preview_image(
-                pdf_path,
-                page_number=0,
-                dpi=100,
-            )
+            while hover_preview_pending_path:
+                pdf_path = hover_preview_pending_path
 
-            hover_preview_image.src = preview_path
-            hover_preview_image.visible = True
-            hover_preview_message.value = Path(pdf_path).name
+                # この要求はいったん取り出したので空にする。
+                # 生成中に別のホバーが来た場合、新しいパスがここへ入る。
+                hover_preview_pending_path = ""
 
-        except Exception:
-            hover_preview_image.src = ""
-            hover_preview_image.visible = False
-            hover_preview_message.value = "プレビューを生成できませんでした。"
+                request_id_at_start = hover_preview_request_id
 
-        page.update()
+                try:
+                    # PDF画像生成は重いため別スレッドで実行する
+                    preview_path = await asyncio.to_thread(
+                        create_pdf_preview_image,
+                        pdf_path,
+                        0,
+                        100,
+                    )
+
+                except Exception:
+                    # 生成完了時点ですでに別のPDFへ移動していた場合は、
+                    # 古いエラーを画面へ表示しない
+                    if (
+                        hover_preview_current_path != pdf_path
+                        or hover_preview_request_id != request_id_at_start
+                    ):
+                        continue
+
+                    hover_preview_image.src = ""
+                    hover_preview_image.visible = False
+                    hover_preview_message.value = (
+                        "プレビューを生成できませんでした。"
+                    )
+                    page.update()
+                    continue
+
+                # 生成中にマウスが外れた、または別PDFへ移動した場合は、
+                # この生成結果を画面へ表示しない
+                if (
+                    hover_preview_current_path != pdf_path
+                    or hover_preview_request_id != request_id_at_start
+                ):
+                    continue
+
+                hover_preview_image.src = preview_path
+                hover_preview_image.visible = True
+                hover_preview_message.value = Path(pdf_path).name
+                page.update()
+
+        finally:
+            hover_preview_is_loading = False
+
+            # 処理終了の直前に新しい要求が入っていた場合の保険
+            if hover_preview_pending_path:
+                page.run_task(process_hover_preview_queue)
+
 
     def clear_hover_preview():
         """
         ホバープレビュー画像とファイル名表示をクリアする。
+
+        実行中の画像生成結果も、要求番号を進めることで無効化する。
         """
+        nonlocal hover_preview_request_id
+        nonlocal hover_preview_current_path
+        nonlocal hover_preview_pending_path
+
+        hover_preview_request_id += 1
+        hover_preview_current_path = ""
+        hover_preview_pending_path = ""
+
         hover_preview_image.src = ""
         hover_preview_image.visible = False
         hover_preview_message.value = ""

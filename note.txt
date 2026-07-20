@@ -3231,6 +3231,7 @@ git pull
 git switch -c fix-v1.0.9
 
 修正１回目
+   * 出力チェックが戻る問題
 git add -A
 git commit -m "fix: preserve output checkbox state after candidate selection"
 git push -u origin fix-v1.0.9
@@ -3239,15 +3240,20 @@ git remote -v
 git branch -vv
 
 
-
-
-
 修正２回目
+   * ホバープレビュー残存（余白プレビュー）
+   * 連続ホバー処理（余白プレビュー）
 git add -A
-git commit -m "fix: show dialog after PDF export completes"
+git commit -m "fix: prevent stale hover previews and redundant generation"
 git push
 
 git branch -vv
+
+
+
+
+
+
 
 git status
 
