@@ -1209,6 +1209,13 @@ def main(page: ft.Page):
 
         current_adopted_pdf = str(row.get("採用PDFパス", "") or "").strip()
 
+        # 候補ダイアログ内プレビュー制御用
+        candidate_preview_request_id = 0
+        candidate_preview_current_path = current_adopted_pdf
+        candidate_preview_pending_path = ""
+        candidate_preview_is_loading = False
+        candidate_dialog_is_open = True
+
         preview_image = ft.Image(
             src="",
             width=980,
@@ -1219,43 +1226,130 @@ def main(page: ft.Page):
 
         preview_message = ft.Text("左の候補PDFにマウスを乗せると、ここにプレビューを表示します。")
 
-        def update_preview(pdf_path: str):
+        def request_candidate_preview(pdf_path: str):
+            """
+            候補ダイアログ内のプレビュー表示を予約する。
+
+            画像生成中に別候補へ移動した場合は、
+            最後に要求されたPDFだけを次に処理する。
+            """
+            nonlocal candidate_preview_request_id
+            nonlocal candidate_preview_current_path
+            nonlocal candidate_preview_pending_path
+            nonlocal candidate_preview_is_loading
+
+            pdf_path = str(pdf_path or "").strip()
+
+            candidate_preview_request_id += 1
+            candidate_preview_current_path = pdf_path
+            candidate_preview_pending_path = pdf_path
+
             if not pdf_path:
                 preview_image.src = ""
                 preview_image.visible = False
-                preview_message.value = "左の候補PDFを選択すると、ここにプレビューを表示します。"
+                preview_message.value = (
+                    "左の候補PDFにマウスを乗せると、"
+                    "ここにプレビューを表示します。"
+                )
                 page.update()
                 return
 
+            preview_image.src = ""
             preview_image.visible = False
             preview_message.value = "プレビューを読み込んでいます..."
             page.update()
 
+            # すでに生成中なら、pending_pathの更新だけで終了する
+            if candidate_preview_is_loading:
+                return
+
+            page.run_task(process_candidate_preview_queue)
+
+
+        async def process_candidate_preview_queue():
+            """
+            候補ダイアログ内のプレビュー要求を順に処理する。
+
+            途中のホバー要求は捨て、最新の要求だけを残す。
+            """
+            nonlocal candidate_preview_request_id
+            nonlocal candidate_preview_current_path
+            nonlocal candidate_preview_pending_path
+            nonlocal candidate_preview_is_loading
+            nonlocal candidate_dialog_is_open
+
+            if candidate_preview_is_loading:
+                return
+
+            candidate_preview_is_loading = True
+
             try:
-                preview_path = create_pdf_preview_image(
-                    pdf_path,
-                    page_number=0,
-                    dpi=120,
-                )
-                preview_image.src = preview_path
-                preview_image.visible = True
-                preview_message.value = format_pdf_path_for_display(pdf_path)
+                while candidate_preview_pending_path and candidate_dialog_is_open:
+                    pdf_path = candidate_preview_pending_path
+                    candidate_preview_pending_path = ""
 
-            except Exception as ex:
-                preview_image.src = ""
-                preview_image.visible = False
-                preview_message.value = (
-                    "プレビューを生成できませんでした。"
-                    f" PDFにアクセスできない、または形式に問題がある可能性があります。詳細: {ex}"
-                )
+                    request_id_at_start = candidate_preview_request_id
 
-            page.update()
+                    try:
+                        preview_path = await asyncio.to_thread(
+                            create_pdf_preview_image,
+                            pdf_path,
+                            0,
+                            120,
+                        )
 
-        def clear_candidate_preview():
-            preview_image.src = ""
-            preview_image.visible = False
-            preview_message.value = "左の候補PDFにマウスを乗せると、ここにプレビューを表示します。"
-            page.update()
+                    except Exception as ex:
+                        # ダイアログを閉じた後や、別PDFへ移動した後なら
+                        # 古いエラーを表示しない
+                        if (
+                            not candidate_dialog_is_open
+                            or candidate_preview_current_path != pdf_path
+                            or candidate_preview_request_id != request_id_at_start
+                        ):
+                            continue
+
+                        preview_image.src = ""
+                        preview_image.visible = False
+                        preview_message.value = (
+                            "プレビューを生成できませんでした。"
+                            " PDFにアクセスできない、または形式に"
+                            f"問題がある可能性があります。詳細: {ex}"
+                        )
+                        page.update()
+                        continue
+
+                    # 生成中にダイアログを閉じた場合や、
+                    # 別の候補へ移動した場合は表示しない
+                    if (
+                        not candidate_dialog_is_open
+                        or candidate_preview_current_path != pdf_path
+                        or candidate_preview_request_id != request_id_at_start
+                    ):
+                        continue
+
+                    preview_image.src = preview_path
+                    preview_image.visible = True
+                    preview_message.value = format_pdf_path_for_display(pdf_path)
+                    page.update()
+
+            finally:
+                candidate_preview_is_loading = False
+
+                # 終了直前に新しい要求が入っていた場合の保険
+                if candidate_preview_pending_path and candidate_dialog_is_open:
+                    page.run_task(process_candidate_preview_queue)
+
+
+        def restore_selected_candidate_preview():
+            """
+            ホバーアウト時に、現在採用中のPDFへ表示を戻す。
+            採用中PDFがなければプレビューを消す。
+            """
+            selected_path = str(
+                current_df.at[row_index, "採用PDFパス"] or ""
+            ).strip()
+
+            request_candidate_preview(selected_path)
 
         NO_ADOPTED_PDF_VALUE = "__NO_ADOPTED_PDF__"
 
@@ -1283,8 +1377,7 @@ def main(page: ft.Page):
                 current_df.at[row_index, "候補状態"] = "複数候補"
                 current_df.at[row_index, "出力対象"] = False
 
-                preview_image.src = ""
-                preview_image.visible = False
+                request_candidate_preview("")
                 preview_message.value = (
                     "採用しない状態です。"
                     "左の候補PDFを選ぶとプレビューを表示します。"
@@ -1325,7 +1418,7 @@ def main(page: ft.Page):
                 f"出力対象: {current_df.at[row_index, '出力対象']}"
             )
 
-            update_preview(selected_value)
+            request_candidate_preview(selected_value)
 
         def create_candidate_pdf_option(pdf_path: str) -> ft.Container:
             """
@@ -1367,16 +1460,12 @@ def main(page: ft.Page):
             )
 
             def preview_candidate_on_hover(e, preview_pdf_path=pdf_path):
-                """
-                候補PDFにマウスを乗せたときだけ、右側プレビューを表示する。
-                マウスが外れたら、プレビューを消す。
-                """
                 if e.data == "true":
                     file_name_text.color = PDF_FILE_NAME_HOVER_COLOR
-                    update_preview(preview_pdf_path)
+                    request_candidate_preview(preview_pdf_path)
                 else:
                     file_name_text.color = PDF_FILE_NAME_COLOR
-                    clear_candidate_preview()
+                    restore_selected_candidate_preview()
 
                 page.update()
 
@@ -1444,13 +1533,27 @@ def main(page: ft.Page):
 
         def close_dialog(e):
             nonlocal current_df
+            nonlocal candidate_preview_request_id
+            nonlocal candidate_preview_current_path
+            nonlocal candidate_preview_pending_path
+            nonlocal candidate_dialog_is_open
 
-            # 出力対象全体の初期化は行わない。
-            # ユーザーが手動で変更したチェック状態を維持する。
+            # ダイアログが閉じられたことを記録する
+            candidate_dialog_is_open = False
+
+            # 現在実行中、または待機中のプレビュー要求を無効化する
+            candidate_preview_request_id += 1
+            candidate_preview_current_path = ""
+            candidate_preview_pending_path = ""
+
+            # 候補変更後の重複状態を再計算する
             current_df = update_adopted_pdf_duplicate_info(current_df)
             current_df = apply_duplicate_output_defaults(current_df)
 
+            # メイン画面の表を更新する
             render_table_from_df(current_df)
+
+            # ダイアログを閉じる
             dialog.open = False
             page.update()
 
@@ -1516,7 +1619,7 @@ def main(page: ft.Page):
         page.update()
 
         if initial_preview_pdf and initial_preview_pdf != NO_ADOPTED_PDF_VALUE:
-            update_preview(initial_preview_pdf)
+            request_candidate_preview(initial_preview_pdf)
 
     def update_adopted_pdf_duplicate_info(df: pd.DataFrame) -> pd.DataFrame:
         """
