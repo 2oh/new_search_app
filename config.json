@@ -1,9 +1,9 @@
 {
   "search_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\pdf_output",
-  "output_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\pdf_output",
+  "output_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\new_search_app\\work\\test_data\\pdf_output",
   "search_mode": "構成部品表",
-  "excel_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\xlsx_folder",
-  "pdf_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\pdf_folder",
+  "excel_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\new_search_app\\work\\test_data\\xlsx_folder",
+  "pdf_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\new_search_app\\work\\test_data\\pdf_folder",
   "target_columns": [
     "oooo"
   ]

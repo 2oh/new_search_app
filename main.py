@@ -1165,16 +1165,33 @@ def main(page: ft.Page):
         def apply_candidate_selection(selected_value: str):
             """
             ラジオボタンで選択された候補を、即時に採用状態へ反映する。
+
+            出力対象について:
+            - 採用PDFを解除した場合は False
+            - 未採用状態からPDFを採用した場合は True
+            - すでに採用済みのPDFを変更した場合は、現在のチェック状態を維持
             """
             sync_table_state_to_current_df()
+
+            previous_adopted_pdf = str(
+                current_df.at[row_index, "採用PDFパス"] or ""
+            ).strip()
+
+            previous_output_target = bool(
+                current_df.at[row_index, "出力対象"]
+            )
 
             if selected_value == NO_ADOPTED_PDF_VALUE:
                 current_df.at[row_index, "採用PDFパス"] = ""
                 current_df.at[row_index, "候補状態"] = "複数候補"
+                current_df.at[row_index, "出力対象"] = False
 
                 preview_image.src = ""
                 preview_image.visible = False
-                preview_message.value = "採用しない状態です。左の候補PDFを選ぶとプレビューを表示します。"
+                preview_message.value = (
+                    "採用しない状態です。"
+                    "左の候補PDFを選ぶとプレビューを表示します。"
+                )
 
                 debug_print("===== PDF候補 採用解除 =====")
                 debug_print(f"行index: {row_index}")
@@ -1189,11 +1206,27 @@ def main(page: ft.Page):
             current_df.at[row_index, "採用PDFパス"] = selected_value
             current_df.at[row_index, "候補状態"] = "手動採用"
 
+            # 未採用状態から新しく採用した場合だけ、出力対象を自動でONにする。
+            # すでに採用済みだった場合は、ユーザーが設定したチェック状態を維持する。
+            if not previous_adopted_pdf:
+                is_eligible = (
+                    str(current_df.at[row_index, "出力可否"] or "").strip()
+                    == "可"
+                )
+                current_df.at[row_index, "出力対象"] = is_eligible
+            else:
+                current_df.at[row_index, "出力対象"] = previous_output_target
+
             debug_print("===== PDF候補 即時採用 =====")
             debug_print(f"行index: {row_index}")
             debug_print(f"検索文字列: {row.get('検索用文字列', '')!r}")
-            debug_print(f"採用PDF: {format_pdf_path_for_display(selected_value)}")
+            debug_print(
+                f"採用PDF: {format_pdf_path_for_display(selected_value)}"
+            )
             debug_print(f"採用PDFフルパス: {selected_value}")
+            debug_print(
+                f"出力対象: {current_df.at[row_index, '出力対象']}"
+            )
 
             update_preview(selected_value)
 
@@ -1315,7 +1348,8 @@ def main(page: ft.Page):
         def close_dialog(e):
             nonlocal current_df
 
-            current_df = apply_output_target_defaults(current_df)
+            # 出力対象全体の初期化は行わない。
+            # ユーザーが手動で変更したチェック状態を維持する。
             current_df = update_adopted_pdf_duplicate_info(current_df)
             current_df = apply_duplicate_output_defaults(current_df)
 
