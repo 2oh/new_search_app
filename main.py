@@ -675,6 +675,13 @@ def main(page: ft.Page):
     search_text_fields = {}
     output_checkboxes = {}
 
+    # PDF候補抽出・PDF出力の二重実行防止用
+    pdf_action_state = {
+        "processing": False,
+        "search_button": None,
+        "export_button": None,
+    }
+
     HOVER_PREVIEW_MIN_WIDTH = 1700
     use_hover_preview = False
 
@@ -2397,6 +2404,11 @@ def main(page: ft.Page):
         table.rows = []
         table.columns = [ft.DataColumn(ft.Text("抽出結果"))]
         table_header.controls = []
+
+        pdf_action_state["processing"] = False
+        pdf_action_state["search_button"] = None
+        pdf_action_state["export_button"] = None
+
         message.value = ""
 
         clear_hover_preview()
@@ -2780,6 +2792,9 @@ def main(page: ft.Page):
                     style=BUTTON_STYLE_SUCCESS,
                 )
 
+                pdf_action_state["search_button"] = search_pdf_btn
+                pdf_action_state["export_button"] = export_pdf_btn
+
                 table_header.controls = [
                     search_pdf_btn,
                     ft.Container(width=40),
@@ -2948,6 +2963,37 @@ def main(page: ft.Page):
 
         raise ValueError("出力ファイル名を作成できませんでした。")
 
+    def set_pdf_action_processing(
+        processing: bool,
+        status_message: str | None = None,
+    ):
+        """
+        PDF候補抽出・PDF出力の処理状態を切り替える。
+
+        processing=True:
+            候補抽出ボタンとPDF出力ボタンを無効化する。
+
+        processing=False:
+            両ボタンを再び有効化する。
+        """
+        pdf_action_state["processing"] = processing
+
+        search_button = pdf_action_state.get("search_button")
+        export_button = pdf_action_state.get("export_button")
+
+        if search_button is not None:
+            search_button.disabled = processing
+            search_button.opacity = 0.55 if processing else 1.0
+
+        if export_button is not None:
+            export_button.disabled = processing
+            export_button.opacity = 0.55 if processing else 1.0
+
+        if status_message is not None:
+            message.value = status_message
+
+        page.update()
+
     def sync_table_state_to_current_df():
         """
         DataTable上の最新の検索用文字列・出力対象チェックを current_df に反映する。
@@ -2968,6 +3014,10 @@ def main(page: ft.Page):
     def on_pdf_candidate_search(e):
         nonlocal current_df
 
+        # 処理中に再度イベントが届いても何もしない
+        if pdf_action_state["processing"]:
+            return
+
         if current_df is None or current_df.empty:
             message.value = "抽出結果がありません。"
             page.open(ft.SnackBar(ft.Text("抽出結果がありません。")))
@@ -2982,197 +3032,203 @@ def main(page: ft.Page):
             page.update()
             return
 
-        sync_table_state_to_current_df()
-
-        message.value = "PDF一覧を取得中です..."
-        page.update()
-
-        def update_pdf_collect_progress(count: int):
-            message.value = f"PDF一覧を取得中です... {count}件"
-            page.update()
-
-        pdf_files = collect_pdf_files(
-            pdf_root,
-            progress_callback=update_pdf_collect_progress
+        set_pdf_action_processing(
+            True,
+            "PDF一覧を取得中です...",
         )
 
-        if not pdf_files:
-            message.value = "検索先フォルダ配下にPDFが見つかりませんでした。"
-            page.open(ft.SnackBar(ft.Text("検索先フォルダ配下にPDFが見つかりませんでした。")))
+        try:
+            sync_table_state_to_current_df()
+
+            def update_pdf_collect_progress(count: int):
+                message.value = f"PDF一覧を取得中です... {count}件"
+                page.update()
+
+            pdf_files = collect_pdf_files(
+                pdf_root,
+                progress_callback=update_pdf_collect_progress
+            )
+
+            if not pdf_files:
+                message.value = "検索先フォルダ配下にPDFが見つかりませんでした。"
+                page.open(ft.SnackBar(ft.Text("検索先フォルダ配下にPDFが見つかりませんでした。")))
+                page.update()
+                return
+
+            message.value = f"PDF検索用データを作成中です... {len(pdf_files)}件"
             page.update()
-            return
 
-        message.value = f"PDF検索用データを作成中です... {len(pdf_files)}件"
-        page.update()
+            pdf_index = build_pdf_search_index(pdf_files)
 
-        pdf_index = build_pdf_search_index(pdf_files)
+            search_target_count = len(current_df)
 
-        search_target_count = len(current_df)
+            message.value = f"PDF候補を抽出中です... 0 / {search_target_count}"
+            page.update()
 
-        message.value = f"PDF候補を抽出中です... 0 / {search_target_count}"
-        page.update()
+            # 各行ごとにPDF候補を抽出
+            for pos, (idx, row) in enumerate(current_df.iterrows(), start=1):
 
-        # 各行ごとにPDF候補を抽出
-        for pos, (idx, row) in enumerate(current_df.iterrows(), start=1):
+                # 出力不可行はPDF検索対象外にする
+                if is_output_ineligible(row):
+                    current_df.at[idx, "候補PDF数"] = ""
+                    current_df.at[idx, "先頭候補PDF"] = ""
+                    current_df.at[idx, "候補PDFパス一覧"] = []
+                    current_df.at[idx, "採用PDFパス"] = ""
+                    current_df.at[idx, "候補状態"] = "出力不可"
+                    current_df.at[idx, "出力対象"] = False
 
-            # 出力不可行はPDF検索対象外にする
-            if is_output_ineligible(row):
-                current_df.at[idx, "候補PDF数"] = ""
-                current_df.at[idx, "先頭候補PDF"] = ""
-                current_df.at[idx, "候補PDFパス一覧"] = []
-                current_df.at[idx, "採用PDFパス"] = ""
-                current_df.at[idx, "候補状態"] = "出力不可"
-                current_df.at[idx, "出力対象"] = False
+                    if pos % 5 == 0 or pos == search_target_count:
+                        message.value = f"PDF候補を抽出中です... {pos} / {search_target_count}"
+                        page.update()
+
+                    continue
+
+                search_text = row.get("検索用文字列", "")
+                candidates = find_pdf_candidates_from_index(search_text, pdf_index)
+                candidate_count = len(candidates)
+
+                previous_status = str(row.get("候補状態", "") or "").strip()
+                previous_adopted_pdf = str(row.get("採用PDFパス", "") or "").strip()
+
+                current_df.at[idx, "候補PDF数"] = str(candidate_count) if candidate_count > 0 else ""
+                current_df.at[idx, "先頭候補PDF"] = candidates[0] if candidates else ""
+                current_df.at[idx, "候補PDFパス一覧"] = candidates
+
+                if candidate_count == 0:
+                    current_df.at[idx, "採用PDFパス"] = ""
+                    current_df.at[idx, "候補状態"] = "未検出"
+
+                elif candidate_count == 1:
+                    current_df.at[idx, "採用PDFパス"] = candidates[0]
+                    current_df.at[idx, "候補状態"] = "自動採用"
+
+                else:
+                    # 複数候補の場合:
+                    # 以前に手動採用したPDFが今回の候補にも含まれていれば、その選択を保持する
+                    if previous_status == "手動採用" and previous_adopted_pdf in candidates:
+                        current_df.at[idx, "採用PDFパス"] = previous_adopted_pdf
+                        current_df.at[idx, "候補状態"] = "手動採用"
+                    else:
+                        current_df.at[idx, "採用PDFパス"] = ""
+                        current_df.at[idx, "候補状態"] = "複数候補"
 
                 if pos % 5 == 0 or pos == search_target_count:
                     message.value = f"PDF候補を抽出中です... {pos} / {search_target_count}"
                     page.update()
 
-                continue
+            current_df = apply_output_target_defaults(current_df)
+            current_df = update_adopted_pdf_duplicate_info(current_df)
+            current_df = apply_duplicate_output_defaults(current_df)
 
-            search_text = row.get("検索用文字列", "")
-            candidates = find_pdf_candidates_from_index(search_text, pdf_index)
-            candidate_count = len(candidates)
+            render_table_from_df(current_df)
 
-            previous_status = str(row.get("候補状態", "") or "").strip()
-            previous_adopted_pdf = str(row.get("採用PDFパス", "") or "").strip()
+            candidate_counts = pd.to_numeric(
+                current_df["候補PDF数"],
+                errors="coerce"
+            ).fillna(0)
 
-            current_df.at[idx, "候補PDF数"] = str(candidate_count) if candidate_count > 0 else ""
-            current_df.at[idx, "先頭候補PDF"] = candidates[0] if candidates else ""
-            current_df.at[idx, "候補PDFパス一覧"] = candidates
-
-            if candidate_count == 0:
-                current_df.at[idx, "採用PDFパス"] = ""
-                current_df.at[idx, "候補状態"] = "未検出"
-
-            elif candidate_count == 1:
-                current_df.at[idx, "採用PDFパス"] = candidates[0]
-                current_df.at[idx, "候補状態"] = "自動採用"
-
-            else:
-                # 複数候補の場合:
-                # 以前に手動採用したPDFが今回の候補にも含まれていれば、その選択を保持する
-                if previous_status == "手動採用" and previous_adopted_pdf in candidates:
-                    current_df.at[idx, "採用PDFパス"] = previous_adopted_pdf
-                    current_df.at[idx, "候補状態"] = "手動採用"
-                else:
-                    current_df.at[idx, "採用PDFパス"] = ""
-                    current_df.at[idx, "候補状態"] = "複数候補"
-
-            if pos % 5 == 0 or pos == search_target_count:
-                message.value = f"PDF候補を抽出中です... {pos} / {search_target_count}"
-                page.update()
-
-        current_df = apply_output_target_defaults(current_df)
-        current_df = update_adopted_pdf_duplicate_info(current_df)
-        current_df = apply_duplicate_output_defaults(current_df)
-
-        render_table_from_df(current_df)
-
-        candidate_counts = pd.to_numeric(
-            current_df["候補PDF数"],
-            errors="coerce"
-        ).fillna(0)
-
-        matched_count = int((candidate_counts > 0).sum())
-        selected_count = int(current_df["出力対象"].fillna(False).sum())
-        adopted_count = int(
-            current_df["採用PDFパス"]
-            .fillna("")
-            .astype(str)
-            .str.strip()
-            .ne("")
-            .sum()
-        )
-        multiple_count = int((candidate_counts >= 2).sum())
-        duplicate_adopted_pdf_count = int(
-            current_df["採用PDF重複"]
-            .fillna("")
-            .astype(str)
-            .str.strip()
-            .ne("")
-            .sum()
-        )
-
-        export_ready_df = get_export_ready_df(current_df)
-        export_ready_count = len(export_ready_df)
-
-        debug_print("===== PDF候補抽出結果 =====")
-        for idx, row in current_df.iterrows():
-            debug_print(
-                f"[{idx}] "
-                f"出力対象={row.get('出力対象', False)}, "
-                f"検索用文字列={row.get('検索用文字列', '')!r}, "
-                f"候補PDF数={row.get('候補PDF数', 0)}, "
-                f"候補状態={row.get('候補状態', '')!r}, "
-                f"先頭候補PDF={row.get('先頭候補PDF', '')!r}, "
-                f"採用PDFパス={row.get('採用PDFパス', '')!r}"
+            matched_count = int((candidate_counts > 0).sum())
+            selected_count = int(current_df["出力対象"].fillna(False).sum())
+            adopted_count = int(
+                current_df["採用PDFパス"]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .ne("")
+                .sum()
+            )
+            multiple_count = int((candidate_counts >= 2).sum())
+            duplicate_adopted_pdf_count = int(
+                current_df["採用PDF重複"]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .ne("")
+                .sum()
             )
 
-        debug_print("===== 複数候補行 =====")
-        multiple_df = current_df[candidate_counts >= 2].copy()
+            export_ready_df = get_export_ready_df(current_df)
+            export_ready_count = len(export_ready_df)
 
-        if multiple_df.empty:
-            debug_print("複数候補の行はありません。")
-        else:
-            for idx, row in multiple_df.iterrows():
+            debug_print("===== PDF候補抽出結果 =====")
+            for idx, row in current_df.iterrows():
                 debug_print(
                     f"[{idx}] "
+                    f"出力対象={row.get('出力対象', False)}, "
                     f"検索用文字列={row.get('検索用文字列', '')!r}, "
-                    f"候補PDF数={row.get('候補PDF数', 0)}"
-                )
-
-                candidates = row.get("候補PDFパス一覧", [])
-                if not isinstance(candidates, list):
-                    candidates = []
-
-                for i, candidate_path in enumerate(candidates, start=1):
-                    debug_print(f"  {i}. {candidate_path}")
-
-
-        debug_print("===== 出力PDF 重複行 =====")
-        duplicate_df = current_df[
-            current_df["採用PDF重複"]
-            .fillna("")
-            .astype(str)
-            .str.strip()
-            .ne("")
-        ].copy()
-
-        if duplicate_df.empty:
-            debug_print("検索用文字列が重複している行はありません。")
-        else:
-            for idx, row in duplicate_df.iterrows():
-                debug_print(
-                    f"[{idx}] "
-                    f"検索用文字列={row.get('検索用文字列', '')!r}, "
-                    f"重複={row.get('採用PDF重複', '')!r}, "
+                    f"候補PDF数={row.get('候補PDF数', 0)}, "
                     f"候補状態={row.get('候補状態', '')!r}, "
+                    f"先頭候補PDF={row.get('先頭候補PDF', '')!r}, "
                     f"採用PDFパス={row.get('採用PDFパス', '')!r}"
                 )
 
-        debug_print("===== 出力可能行 =====")
-        if export_ready_df.empty:
-            debug_print("出力可能な行はありません。")
-        else:
-            for idx, row in export_ready_df.iterrows():
-                debug_print(
-                    f"[{idx}] "
-                    f"検索用文字列={row.get('検索用文字列', '')!r}, "
-                    f"採用PDFパス={row.get('採用PDFパス', '')!r}"
+            debug_print("===== 複数候補行 =====")
+            multiple_df = current_df[candidate_counts >= 2].copy()
+
+            if multiple_df.empty:
+                debug_print("複数候補の行はありません。")
+            else:
+                for idx, row in multiple_df.iterrows():
+                    debug_print(
+                        f"[{idx}] "
+                        f"検索用文字列={row.get('検索用文字列', '')!r}, "
+                        f"候補PDF数={row.get('候補PDF数', 0)}"
+                    )
+
+                    candidates = row.get("候補PDFパス一覧", [])
+                    if not isinstance(candidates, list):
+                        candidates = []
+
+                    for i, candidate_path in enumerate(candidates, start=1):
+                        debug_print(f"  {i}. {candidate_path}")
+
+
+            debug_print("===== 出力PDF 重複行 =====")
+            duplicate_df = current_df[
+                current_df["採用PDF重複"]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .ne("")
+            ].copy()
+
+            if duplicate_df.empty:
+                debug_print("検索用文字列が重複している行はありません。")
+            else:
+                for idx, row in duplicate_df.iterrows():
+                    debug_print(
+                        f"[{idx}] "
+                        f"検索用文字列={row.get('検索用文字列', '')!r}, "
+                        f"重複={row.get('採用PDF重複', '')!r}, "
+                        f"候補状態={row.get('候補状態', '')!r}, "
+                        f"採用PDFパス={row.get('採用PDFパス', '')!r}"
+                    )
+
+            debug_print("===== 出力可能行 =====")
+            if export_ready_df.empty:
+                debug_print("出力可能な行はありません。")
+            else:
+                for idx, row in export_ready_df.iterrows():
+                    debug_print(
+                        f"[{idx}] "
+                        f"検索用文字列={row.get('検索用文字列', '')!r}, "
+                        f"採用PDFパス={row.get('採用PDFパス', '')!r}"
+                    )
+
+            result_message = "PDF候補抽出が完了しました。"
+
+            message.value = result_message
+
+            page.open(
+                ft.SnackBar(
+                    ft.Text(result_message)
                 )
-
-        result_message = "PDF候補抽出が完了しました。"
-
-        message.value = result_message
-
-        page.open(
-            ft.SnackBar(
-                ft.Text(result_message)
             )
-        )
 
-        page.update()
+            page.update()
+
+        finally:
+            set_pdf_action_processing(False)        
 
     def show_pdf_export_completed_dialog(result_message: str):
         dialog = ft.AlertDialog(
@@ -3196,6 +3252,10 @@ def main(page: ft.Page):
 
     def on_pdf_export(e):
         nonlocal current_df
+
+        # 処理中に再度イベントが届いても何もしない
+        if pdf_action_state["processing"]:
+            return
 
         if current_df is None or current_df.empty:
             message.value = "抽出結果がありません。"
@@ -3243,6 +3303,11 @@ def main(page: ft.Page):
             page.update()
             return
 
+        set_pdf_action_processing(
+            True,
+            f"PDF出力を開始します... 0 / {export_ready_count}",
+        )
+
         try:
             output_pdf_path = build_output_pdf_path(
                 output_folder,
@@ -3263,9 +3328,6 @@ def main(page: ft.Page):
             def update_export_progress(current: int, total: int, pdf_path: str):
                 message.value = f"PDF出力中... {current} / {total}"
                 page.update()
-
-            message.value = f"PDF出力を開始します... 0 / {export_ready_count}"
-            page.update()
 
             merge_pdfs(
                 pdf_paths,
@@ -3301,6 +3363,9 @@ def main(page: ft.Page):
 
         except Exception as ex:
             result_message = f"PDF出力エラー: {ex}"
+
+        finally:
+            set_pdf_action_processing(False)
 
         message.value = result_message
 
