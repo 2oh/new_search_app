@@ -3259,10 +3259,10 @@ git push
 git branch -vv
 
 
+githubに上げてしまったworkフォルダを、githubから消したい（gitignoreは対応済）
 
-
-
-最後に、workを消したい
+git rm -r --cached work
+git status
 
 
 やはり簡単にインストール、アップデートできる仕組みを作る
