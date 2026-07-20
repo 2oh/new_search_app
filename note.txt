@@ -3264,23 +3264,17 @@ githubに上げてしまったworkフォルダを、githubから消したい（g
 git rm -r --cached work
 git status
 
-
-やはり簡単にインストール、アップデートできる仕組みを作る
-起動したら、初回インストールとアップデートで分ける
-
-ここら辺のリファクタテスト
-
-
-
-
+git add -A
+git commit -m "chore: remove ignored folder from repository"
+git push
 
 
 git status
 
-APP_VERSION = "v1.0.8"
+APP_VERSION = "v1.0.9"
 
 git add -A
-git commit -m "chore: release version 1.0.8"
+git commit -m "chore: release version 1.0.9"
 git status
 git push
 
@@ -3294,11 +3288,11 @@ git stash push -m "temporary note changes" note.txt
 ====================================================
 
 git checkout main
-git merge fix-v1.0.8
+git merge fix-v1.0.9
 git push
 
-git tag -a v1.0.8 -m "Release version 1.0.8"
-git push origin refs/tags/v1.0.8
+git tag -a v1.0.9 -m "Release version 1.0.9"
+git push origin refs/tags/v1.0.9
 
 ====================================================
 git stash pop
@@ -3307,6 +3301,10 @@ git stash pop
 
 
 
+やはり簡単にインストール、アップデートできる仕組みを作る
+起動したら、初回インストールとアップデートで分ける
+
+ここら辺のリファクタテスト
 
 
 
