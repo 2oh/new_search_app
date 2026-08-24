@@ -397,8 +397,9 @@ def get_quantity_colors(file_path: str, sheet_name: str, header_row_index: int, 
 
             # 2) インデックス色（パレット）
             elif fg.type == "indexed":
-                # 0, 64 は「塗りなし」的な扱いが多いので除外
-                if fg.index not in (0, 64):
+                # 0, 2, 64 は色なし扱い
+                # 2 は Excel の白
+                if fg.index not in (0, 2, 64):
                     colored = True
                     marker = f"indexed:{fg.index}"
 
