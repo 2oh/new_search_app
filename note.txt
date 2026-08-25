@@ -3432,9 +3432,9 @@ git pull
 git switch -c fix-v1.0.11
 
 修正
-   * 白は色なしとして修正する
+   * 白は色なしとして修正する（再修正）
 git add -A
-git commit -m "fix: white-filled cells being treated as colored"
+git commit -m "fix: white fill detection for indexed colors"
 git push -u origin fix-v1.0.11
 
 git remote -v

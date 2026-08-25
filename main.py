@@ -16,7 +16,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.0.10"
+APP_VERSION = "v1.0.11"
 DEBUG = False
 
 PDF_FILE_NAME_COLOR = ft.Colors.BLUE_200
