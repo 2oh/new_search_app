@@ -397,11 +397,30 @@ def get_quantity_colors(file_path: str, sheet_name: str, header_row_index: int, 
 
             # 2) インデックス色（パレット）
             elif fg.type == "indexed":
-                # 0, 2, 64 は色なし扱い
-                # 2 は Excel の白
-                if fg.index not in (0, 2, 64):
+                try:
+                    index = fg.indexed
+
+                    # ブック独自のカラーパレットがあればそれを優先
+                    indexed_colors = getattr(wb, "_colors", None)
+
+                    if indexed_colors and 0 <= index < len(indexed_colors):
+                        rgb = indexed_colors[index]
+                    else:
+                        from openpyxl.styles.colors import COLOR_INDEX
+                        rgb = COLOR_INDEX[index]
+
+                    # ARGB/RGBどちらでも下6桁で判定
+                    rgb6 = str(rgb)[-6:].upper()
+
+                    # 白だけ「色なし」扱い
+                    if rgb6 != "FFFFFF":
+                        colored = True
+                        marker = f"indexed:{index} ({rgb})"
+
+                except (IndexError, TypeError, ValueError):
+                    # 色を解決できない場合は、安全側で「色あり」
                     colored = True
-                    marker = f"indexed:{fg.index}"
+                    marker = f"indexed:{fg.indexed}"
 
             # 3) テーマ色
             elif fg.type == "theme":

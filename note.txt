@@ -3337,6 +3337,7 @@ git branch -a
 起動したら、初回インストールとアップデートで分ける
 
 
+
 2026/8/20
 
 塗りつぶしていないと思われるセルが「色あり」となった
@@ -3360,6 +3361,7 @@ End Function
 Function 色番号(セル As Range) As Long
 色番号 = セル.Interior.ColorIndex
 End Function
+
 
 
 2026/8/24
@@ -3416,7 +3418,57 @@ git stash pop
 
 
 
+2026/8/25
 
+昨日の白修正がうまくいかなかったので再修正
+現地のエクセルのデータのみ消したものを持ち帰り、分析した結果で修正
+
+
+C:\dev\new_search_app\Scripts\Activate.ps1
+
+git checkout main
+git pull
+
+git switch -c fix-v1.0.11
+
+修正
+   * 白は色なしとして修正する
+git add -A
+git commit -m "fix: white-filled cells being treated as colored"
+git push -u origin fix-v1.0.11
+
+git remote -v
+git branch -vv
+
+
+git status
+
+APP_VERSION = "v1.0.11"
+
+git add -A
+git commit -m "chore: release version 1.0.11"
+git status
+git push
+
+git branch -vv
+
+
+python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
+
+====================================================
+git stash push -m "temporary note changes" note.txt
+====================================================
+
+git checkout main
+git merge fix-v1.0.11
+git push
+
+git tag -a v1.0.11 -m "Release version 1.0.11"
+git push origin refs/tags/v1.0.11
+
+====================================================
+git stash pop
+====================================================
 
 
 3. **Fletを更新**
