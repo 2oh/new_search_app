@@ -16,7 +16,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.0.11"
+APP_VERSION = "v1.0.12"
 DEBUG = False
 
 PDF_FILE_NAME_COLOR = ft.Colors.BLUE_200
@@ -894,6 +894,13 @@ def main(page: ft.Page):
         data_row_max_height=72,
     )
     table_header = ft.Row([], alignment="center")
+
+    # PDF出力時に処理結果CSVも保存するかどうか。
+    # 通常運用では不要なため、起動時は常にOFF。
+    result_csv_checkbox = ft.Checkbox(
+        label="処理結果CSVを出力",
+        value=False,
+    )
 
     hover_preview_image = ft.Image(
         src="",
@@ -2821,7 +2828,8 @@ def main(page: ft.Page):
                     select_all_btn,
                     deselect_all_btn,
                     export_pdf_btn,
-                    ft.Container(width=240),
+                    result_csv_checkbox,
+                    ft.Container(width=120),
                 ]
 
                 render_table_from_df(df)
@@ -2940,6 +2948,126 @@ def main(page: ft.Page):
         text = " ".join(text.split())
 
         return text
+
+    def build_result_csv_df(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        処理内容を確認・比較できる処理結果CSV用DataFrameを作る。
+
+        画面表示項目だけでなく、PDF候補・採用状態・出力順などの
+        内部状態も固定列で出力する。実行日時やアプリバージョンなど、
+        実行ごとに必ず変わる日時やアプリバージョンはCSV本体には含めない。
+        """
+        if df is None:
+            df = pd.DataFrame()
+
+        source_df = df.copy()
+
+        # 最終PDFへの結合順を記録する。出力対象外の行は空欄。
+        export_order_map = {}
+        export_ready_df = get_export_ready_df(source_df)
+        for order, idx in enumerate(export_ready_df.index, start=1):
+            export_order_map[idx] = order
+
+        result_columns = [
+            "行番号",
+            "元データindex",
+            "品番",
+            "PG名",
+            "品名",
+            "材料",
+            "共通",
+            "数量",
+            "数量セル色",
+            "縦結合",
+            "元検索文字列",
+            "検索用文字列",
+            "出力可否",
+            "候補PDF数",
+            "候補状態",
+            "先頭候補PDF",
+            "候補PDFパス一覧",
+            "採用PDFパス",
+            "採用PDF重複",
+            "出力対象",
+            "出力順",
+        ]
+
+        rows = []
+
+        def clean_scalar(value):
+            if value is None:
+                return ""
+
+            try:
+                if pd.isna(value):
+                    return ""
+            except (TypeError, ValueError):
+                pass
+
+            if isinstance(value, bool):
+                return "TRUE" if value else "FALSE"
+
+            return value
+
+        for row_number, (idx, row) in enumerate(source_df.iterrows(), start=1):
+            candidates = row.get("候補PDFパス一覧", [])
+            if not isinstance(candidates, list):
+                candidates = []
+
+            record = {
+                "行番号": row_number,
+                "元データindex": idx,
+                "品番": clean_scalar(row.get("品番", "")),
+                "PG名": clean_scalar(row.get("PG名", "")),
+                "品名": clean_scalar(row.get("品名", "")),
+                "材料": clean_scalar(row.get("材料", "")),
+                "共通": clean_scalar(row.get("共通", "")),
+                "数量": clean_scalar(row.get("数量", "")),
+                "数量セル色": clean_scalar(row.get("数量セル色", "")),
+                "縦結合": clean_scalar(row.get("縦結合", "")),
+                "元検索文字列": clean_scalar(row.get("元検索文字列", "")),
+                "検索用文字列": clean_scalar(row.get("検索用文字列", "")),
+                "出力可否": clean_scalar(row.get("出力可否", "")),
+                "候補PDF数": clean_scalar(row.get("候補PDF数", "")),
+                "候補状態": clean_scalar(row.get("候補状態", "")),
+                "先頭候補PDF": clean_scalar(row.get("先頭候補PDF", "")),
+                "候補PDFパス一覧": json.dumps(
+                    [str(p) for p in candidates],
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+                "採用PDFパス": clean_scalar(row.get("採用PDFパス", "")),
+                "採用PDF重複": clean_scalar(row.get("採用PDF重複", "")),
+                "出力対象": "TRUE" if bool(row.get("出力対象", False)) else "FALSE",
+                "出力順": export_order_map.get(idx, ""),
+            }
+            rows.append(record)
+
+        return pd.DataFrame(rows, columns=result_columns)
+
+    def export_result_csv(df: pd.DataFrame, output_pdf_path: str) -> str:
+        """
+        PDFと同じベース名で処理結果CSVを保存する。
+
+        例:
+            xxx.pdf
+            xxx_result.csv
+        """
+        if not output_pdf_path or not str(output_pdf_path).strip():
+            raise ValueError("出力PDFパスが指定されていません。")
+
+        pdf_path = Path(output_pdf_path)
+        csv_path = pdf_path.with_name(f"{pdf_path.stem}_result.csv")
+
+        result_df = build_result_csv_df(df)
+        result_df.to_csv(
+            csv_path,
+            index=False,
+            encoding="utf-8-sig",
+            lineterminator="\n",
+        )
+
+        return str(csv_path)
 
     def build_output_pdf_path(output_folder: str, excel_path: str, sheet_name: str) -> str:
         """
@@ -3355,10 +3483,33 @@ def main(page: ft.Page):
                 progress_callback=update_export_progress,
             )
 
+            result_csv_path = ""
+            result_csv_error = ""
+
+            # 通常はPDFのみ。チェックされた場合だけ処理結果CSVも出力する。
+            if bool(result_csv_checkbox.value):
+                try:
+                    result_csv_path = export_result_csv(
+                        current_df,
+                        output_pdf_path,
+                    )
+                except Exception as csv_ex:
+                    # PDF本体の出力は成功しているため、CSV失敗だけでPDF出力失敗にはしない。
+                    result_csv_error = str(csv_ex)
+
             result_message = (
                 f"出力件数：{export_ready_count}件\n"
                 f"出力ファイル：{os.path.basename(output_pdf_path)}"
             )
+
+            if result_csv_path:
+                result_message += (
+                    f"\n処理結果CSV：{os.path.basename(result_csv_path)}"
+                )
+            elif result_csv_error:
+                result_message += (
+                    f"\n処理結果CSVの出力に失敗しました：{result_csv_error}"
+                )
 
             if missing_pdf_count > 0:
                 result_message += f"\n未確定除外：{missing_pdf_count}件"
@@ -3367,6 +3518,10 @@ def main(page: ft.Page):
 
             debug_print("===== PDF出力 =====")
             debug_print(f"出力PDF: {output_pdf_path}")
+            if result_csv_path:
+                debug_print(f"処理結果CSV: {result_csv_path}")
+            elif result_csv_error:
+                debug_print(f"処理結果CSV出力エラー: {result_csv_error}")
             debug_print("===== 結合対象PDF =====")
             for p in pdf_paths:
                 debug_print(p)
