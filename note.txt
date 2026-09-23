@@ -3473,6 +3473,12 @@ git stash pop
 
 2026/9/23
 
+処理結果CSV出力機能を追加
+
+* PDF出力時に処理結果CSVを任意で出力可能に
+* 「処理結果CSVを出力」チェックボックスを追加
+* デフォルトはOFF
+* 候補数、候補一覧、採用PDF、出力対象など比較用情報をCSVへ出力
 
 C:\dev\new_search_app\Scripts\Activate.ps1
 
@@ -3522,12 +3528,52 @@ git stash pop
 ====================================================
 
 
+
+品番・PG名の16始まりを検索対象外に追加
+
+* 構成部品表モードで品番またはPG名が16で始まる行をPDF検索対象外に
+* 既存の出力不可処理に合わせて扱うよう変更
+* 検索除外条件をconfigで管理
+* 構成部品表モード画面に除外条件を読み取り専用表示
+
+
 0.28.3版の最終修正
 
 * `16` で始まる品番・PG名をPDF検索対象から除外
 * 構成部品表モード時に、編集不可BOXで除外条件を日本語表示
 * config側に「判定条件」と「画面表示用説明」を持たせる
 * 既存configに項目がない場合もプログラム側で補完
+
+
+C:\dev\new_search_app\Scripts\Activate.ps1
+
+git checkout main
+git pull
+
+git switch -c release-v1.0.13
+
+修正
+APP_VERSION = "v1.0.13"
+
+git add -A
+git commit -m "feat: exclude part numbers and PG names starting with 16 from PDF search"
+
+git remote -v
+git branch -vv
+git status
+
+git push -u origin release-v1.0.13
+
+git branch -vv
+
+git checkout main
+git merge release-v1.0.13
+git push
+
+git tag -a v1.0.13 -m "Release version 1.0.13"
+git push origin refs/tags/v1.0.13
+
+python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
 
 
 

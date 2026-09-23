@@ -16,7 +16,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.0.12"
+APP_VERSION = "v1.0.13"
 DEBUG = False
 
 PDF_FILE_NAME_COLOR = ft.Colors.BLUE_200
@@ -712,17 +712,59 @@ def main(page: ft.Page):
     hover_preview_is_loading = False
 
     # ---- 設定ファイル処理 ----
-    def load_config():
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+    REQUIRED_SEARCH_EXCLUSION_RULES = [
+        {
+            "match_type": "startswith",
+            "value": "16",
+            "description": "品番・PG名が16で始まるものを除外",
+        }
+    ]
+
+    def get_default_config():
         return {
             "pdf_folder": "",
             "output_folder": "",
             "excel_folder": "",
             "search_mode": "構成部品表",
             "target_columns": ["品番", "PG名"],
+            "search_exclusion_rules": [
+                dict(rule) for rule in REQUIRED_SEARCH_EXCLUSION_RULES
+            ],
         }
+
+    def ensure_required_config(config_data: dict) -> tuple[dict, bool]:
+        changed = False
+        defaults = get_default_config()
+
+        for key, value in defaults.items():
+            if key not in config_data:
+                config_data[key] = value
+                changed = True
+
+        required_rules = [
+            dict(rule) for rule in REQUIRED_SEARCH_EXCLUSION_RULES
+        ]
+
+        if config_data.get("search_exclusion_rules") != required_rules:
+            config_data["search_exclusion_rules"] = required_rules
+            changed = True
+
+        return config_data, changed
+    def load_config():
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                loaded_config = json.load(f)
+        else:
+            loaded_config = get_default_config()
+
+        loaded_config, changed = ensure_required_config(loaded_config)
+
+        # 既存configにも必須項目を自動反映する。
+        if changed or not os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(loaded_config, f, indent=2, ensure_ascii=False)
+
+        return loaded_config
 
     def save_config(e=None):
         """
@@ -787,6 +829,27 @@ def main(page: ft.Page):
         width=150
     )
 
+    def get_search_exclusion_description() -> str:
+        descriptions = []
+
+        for rule in config.get("search_exclusion_rules", []):
+            if not isinstance(rule, dict):
+                continue
+
+            description = str(rule.get("description", "") or "").strip()
+            if description:
+                descriptions.append(description)
+
+        return " / ".join(descriptions)
+
+    search_exclusion_field = ft.TextField(
+        label="検索除外条件",
+        value=get_search_exclusion_description(),
+        read_only=True,
+        expand=True,
+        color=ft.Colors.AMBER_200,
+    )
+
     exit_button = ft.OutlinedButton(
         "終了",
         icon=ft.Icons.CLOSE,
@@ -837,8 +900,10 @@ def main(page: ft.Page):
                 ft.Row(
                     controls=[
                         mode_dropdown,
+                        search_exclusion_field,
                     ],
                     spacing=12,
+                    expand=True,
                 ),
                 settings_action_row,
             ]
@@ -2669,6 +2734,37 @@ def main(page: ft.Page):
 
                 return s.strip()
 
+            def matches_search_exclusion_rule(text) -> bool:
+                """
+                構成部品表モードの検索除外ルールに該当するか判定する。
+
+                現在は config の startswith ルールに対応する。
+                「16で始まる」の意味をそのまま保つため、
+                PDF検索用の加工は行わず、Excel上の値をstripした文字列で判定する。
+                """
+                if pd.isna(text):
+                    return False
+
+                source_text = str(text).strip()
+
+                if not source_text or source_text.lower() in ("nan", "none"):
+                    return False
+
+                for rule in config.get("search_exclusion_rules", []):
+                    if not isinstance(rule, dict):
+                        continue
+
+                    match_type = str(rule.get("match_type", "") or "").strip().lower()
+                    value = str(rule.get("value", "") or "").strip()
+
+                    if not value:
+                        continue
+
+                    if match_type == "startswith" and source_text.startswith(value):
+                        return True
+
+                return False
+
             def resolve_pg_names_for_search(pg_series: pd.Series) -> dict:
                 """
                 検索文字列生成用にPG名を補正する。
@@ -2741,6 +2837,7 @@ def main(page: ft.Page):
                 - 数量が0
                 - 数量セル色あり
                 - 品番・PG名がともに空欄
+                - 検索除外条件に該当
                 """
                 def is_blank_value(value) -> bool:
                     if pd.isna(value):
@@ -2762,7 +2859,17 @@ def main(page: ft.Page):
 
                 missing_identifier = part_number_blank and pg_name_blank
 
-                if zero_qty or colored or missing_identifier:
+                # 検索除外条件。
+                # 品番または検索用に補正したPG名が該当する場合、
+                # 品番・PG名が空欄の行と同じ「出力不可」扱いにする。
+                excluded_by_search_rule = (
+                    matches_search_exclusion_rule(row.get("品番", ""))
+                    or matches_search_exclusion_rule(
+                        resolved_pg_names.get(row.name, row.get("PG名", ""))
+                    )
+                )
+
+                if zero_qty or colored or missing_identifier or excluded_by_search_rule:
                     return "不可"
 
                 return "可"
