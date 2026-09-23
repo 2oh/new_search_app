@@ -3473,12 +3473,6 @@ git stash pop
 
 2026/9/23
 
-0.28.3版の最終修正
-
-* `16` で始まる品番・PG名をPDF検索対象から除外
-* 構成部品表モード時に、編集不可BOXで除外条件を日本語表示
-* config側に「判定条件」と「画面表示用説明」を持たせる
-* 既存configに項目がない場合もプログラム側で補完
 
 C:\dev\new_search_app\Scripts\Activate.ps1
 
@@ -3488,9 +3482,10 @@ git pull
 git switch -c fix-v1.0.12
 
 修正
-   * 白は色なしとして修正する（再修正）
+   * 処理結果CSVを出力
+
 git add -A
-git commit -m "fix: white fill detection for indexed colors"
+git commit -m "feat: add optional processing result CSV export"
 git push -u origin fix-v1.0.12
 
 git remote -v
@@ -3525,6 +3520,15 @@ git push origin refs/tags/v1.0.12
 ====================================================
 git stash pop
 ====================================================
+
+
+0.28.3版の最終修正
+
+* `16` で始まる品番・PG名をPDF検索対象から除外
+* 構成部品表モード時に、編集不可BOXで除外条件を日本語表示
+* config側に「判定条件」と「画面表示用説明」を持たせる
+* 既存configに項目がない場合もプログラム側で補完
+
 
 
 
