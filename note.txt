@@ -3576,6 +3576,56 @@ git push origin refs/tags/v1.0.13
 python -m PyInstaller --onefile --windowed --icon assets/app_icon.ico --add-data "assets/app_icon.ico;assets" main.py
 
 
+2026/10/12
+
+■ v1.1.0
+
+【変更内容】
+・Flet 0.28.3から1.0.1へ移行。
+・既存のExcel抽出・PDF検索・結合・CSV出力の仕様を維持。
+・長時間処理中のUI応答性と二重実行防止に対応。
+・出力完了ダイアログと出力PDF欄の空欄表示を修正。
+・ウィンドウタイトルとPDF・CSV出力名にv1.1.0を付加。
+・依存設定、リリース手順を更新。
+
+【Git操作】
+作業フォルダ：new_search_app
+
+1. mainから作業ブランチを作成
+git switch main
+git switch -c release-v1.1.0
+
+ここでソース修正・バージョン番号更新・テストを行い、
+RELEASE_NOTES.txtとnote.txtを更新する。
+
+main.pyのバージョン番号を更新：
+APP_VERSION = "v1.1.0"
+
+2. 変更をステージ
+git add -A
+
+3. コミット
+git commit -m "feat: migrate app A to Flet 1 and release v1.1.0"
+
+4. 作業ブランチをpush
+git push -u origin release-v1.1.0
+
+5. mainへ統合
+git switch main
+git merge --ff-only release-v1.1.0
+
+6. mainをpush
+git push origin main
+
+7. リリースタグを作成
+git tag -a v1.1.0 -m "Release v1.1.0"
+
+8. タグをpush
+git push origin v1.1.0
+
+
+
+
 
 
 3. **Fletを更新**

@@ -9,6 +9,7 @@ import json
 import re
 import sys
 import asyncio
+import queue
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
@@ -16,7 +17,10 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.0.13"
+APP_VERSION = "v1.1.0"
+APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
+# None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
+OUTPUT_FILENAME_LABEL = APP_VERSION
 DEBUG = False
 
 PDF_FILE_NAME_COLOR = ft.Colors.BLUE_200
@@ -668,7 +672,7 @@ def extract_data_from_excel(file_path: str, sheet_name: str, detected_columns: d
 
 # ========= メイン =========
 def main(page: ft.Page):
-    page.title = f"図面PDF検索結合ツール {APP_VERSION}"
+    page.title = APP_WINDOW_TITLE
     page.theme_mode = ft.ThemeMode.DARK
 
     icon_path = resource_path(APP_ICON_FILE)
@@ -784,8 +788,8 @@ def main(page: ft.Page):
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
 
-    def close_app(e):
-        page.window.close()
+    async def close_app(e):
+        await page.window.close()
 
     def create_button_style(bgcolor, color=ft.Colors.WHITE):
         """
@@ -794,7 +798,7 @@ def main(page: ft.Page):
         return ft.ButtonStyle(
             bgcolor=bgcolor,
             color=color,
-            padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=6),
         )
 
 
@@ -805,7 +809,7 @@ def main(page: ft.Page):
     BUTTON_STYLE_DANGER_OUTLINE = ft.ButtonStyle(
         color=ft.Colors.RED_100,
         side=ft.BorderSide(1, ft.Colors.RED_300),
-        padding=ft.padding.symmetric(horizontal=12, vertical=8),
+        padding=ft.Padding.symmetric(horizontal=12, vertical=8),
     )
 
     config = load_config()
@@ -824,7 +828,7 @@ def main(page: ft.Page):
     )
     mode_dropdown = ft.Dropdown(
         label="検索モード",
-        options=[ft.dropdown.Option("構成部品表"), ft.dropdown.Option("通常")],
+        options=[ft.DropdownOption("構成部品表"), ft.DropdownOption("通常")],
         value=config.get("search_mode", "構成部品表"),
         width=150
     )
@@ -865,31 +869,30 @@ def main(page: ft.Page):
     )
 
     # ---- フォルダ選択ダイアログ ----
-    folder_picker_search = ft.FilePicker(on_result=lambda e: pick_search_result(e))
-    folder_picker_output = ft.FilePicker(on_result=lambda e: pick_output_result(e))
-    page.overlay.extend([folder_picker_search, folder_picker_output])
+    folder_picker_search = ft.FilePicker()
+    folder_picker_output = ft.FilePicker()
 
-    def pick_search_folder(e):
-        start_path = search_folder_field.value.strip()  # ← テキストボックスから取得
+    async def pick_search_folder(e):
+        if pdf_action_state["processing"]:
+            return
+        start_path = search_folder_field.value.strip()
         if not os.path.isdir(start_path):
             start_path = os.getcwd()
-        folder_picker_search.get_directory_path(initial_directory=start_path)
-
-    def pick_output_folder(e):
-        start_path = output_folder_field.value.strip()  # ← テキストボックスから取得
-        if not os.path.isdir(start_path):
-            start_path = os.getcwd()
-        folder_picker_output.get_directory_path(initial_directory=start_path)
-
-    def pick_search_result(e: ft.FilePickerResultEvent):
-        if e.path:
-            search_folder_field.value = e.path
+        selected_path = await folder_picker_search.get_directory_path(initial_directory=start_path)
+        if selected_path and not pdf_action_state["processing"]:
+            search_folder_field.value = selected_path
             save_config()
             page.update()
 
-    def pick_output_result(e: ft.FilePickerResultEvent):
-        if e.path:
-            output_folder_field.value = e.path
+    async def pick_output_folder(e):
+        if pdf_action_state["processing"]:
+            return
+        start_path = output_folder_field.value.strip()
+        if not os.path.isdir(start_path):
+            start_path = os.getcwd()
+        selected_path = await folder_picker_output.get_directory_path(initial_directory=start_path)
+        if selected_path and not pdf_action_state["processing"]:
+            output_folder_field.value = selected_path
             save_config()
             page.update()
 
@@ -929,6 +932,8 @@ def main(page: ft.Page):
         page.update()
 
     def on_mode_change(e):
+        if pdf_action_state["processing"]:
+            return
         save_config()
         update_mode_fields()
 
@@ -936,7 +941,7 @@ def main(page: ft.Page):
         controls=[],
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
     )
-    mode_dropdown.on_change = on_mode_change
+    mode_dropdown.on_select = on_mode_change
 
     # ---- Excel選択 ----
     selected_excel_path = ""
@@ -971,7 +976,7 @@ def main(page: ft.Page):
         src="",
         width=820,
         height=580,
-        fit=ft.ImageFit.CONTAIN,
+        fit=ft.BoxFit.CONTAIN,
         visible=False,
     )
 
@@ -984,7 +989,7 @@ def main(page: ft.Page):
     )
 
     hover_preview_panel = ft.Container(
-        padding=ft.padding.only(left=2, right=2, top=2),
+        padding=ft.Padding.only(left=2, right=2, top=2),
         visible=False,
         bgcolor=ft.Colors.TRANSPARENT,
         expand=True,
@@ -1033,8 +1038,8 @@ def main(page: ft.Page):
         """
         return ft.Container(
             content=preview_image,
-            alignment=ft.alignment.center,
-            border=ft.border.all(1, ft.Colors.GREY_500),
+            alignment=ft.Alignment.CENTER,
+            border=ft.Border.all(1, ft.Colors.GREY_500),
             border_radius=8,
             padding=10,
             height=height,
@@ -1044,7 +1049,7 @@ def main(page: ft.Page):
     def create_hover_preview_box(preview_image: ft.Image, height: int = 620) -> ft.Container:
         return ft.Container(
             content=preview_image,
-            alignment=ft.alignment.top_center,
+            alignment=ft.Alignment.TOP_CENTER,
             height=height,
             padding=0,
             bgcolor=ft.Colors.TRANSPARENT,
@@ -1060,7 +1065,7 @@ def main(page: ft.Page):
             tight=True,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        alignment=ft.alignment.top_center,
+        alignment=ft.Alignment.TOP_CENTER,
         expand=True,
     )
 
@@ -1199,8 +1204,11 @@ def main(page: ft.Page):
         採用済みPDFをプレビュー表示する。
         自動採用・手動採用どちらでも、採用PDFパスがある行から呼び出す。
         """
+        if pdf_action_state["processing"]:
+            return
+
         if not pdf_path or not str(pdf_path).strip():
-            page.open(ft.SnackBar(ft.Text("採用PDFがありません。")))
+            page.show_dialog(ft.SnackBar(ft.Text("採用PDFがありません。")))
             page.update()
             return
 
@@ -1208,28 +1216,36 @@ def main(page: ft.Page):
             src="",
             width=760,
             height=520,
-            fit=ft.ImageFit.CONTAIN,
+            fit=ft.BoxFit.CONTAIN,
             visible=False,
         )
 
         preview_message = ft.Text("プレビューを読み込み中...")
 
-        def load_preview():
+        preview_state = {"open": True, "request_id": 0}
+
+        async def load_preview(e=None):
+            preview_state["request_id"] += 1
+            request_id = preview_state["request_id"]
             preview_image.visible = False
             preview_message.value = "プレビューを読み込んでいます..."
             page.update()
 
             try:
-                preview_path = create_pdf_preview_image(
-                    pdf_path,
+                preview_path = await asyncio.to_thread(
+                    create_pdf_preview_image, pdf_path,
                     page_number=0,
                     dpi=120,
                 )
+                if not preview_state["open"] or request_id != preview_state["request_id"]:
+                    return
                 preview_image.src = preview_path
                 preview_image.visible = True
                 preview_message.value = format_pdf_path_for_display(pdf_path)
 
             except Exception as ex:
+                if not preview_state["open"] or request_id != preview_state["request_id"]:
+                    return
                 preview_image.src = ""
                 preview_image.visible = False
                 preview_message.value = (
@@ -1240,8 +1256,9 @@ def main(page: ft.Page):
             page.update()
 
         def close_dialog(e):
+            preview_state["open"] = False
             render_table_from_df(current_df)
-            dialog.open = False
+            page.pop_dialog()
             page.update()
 
         dialog = ft.AlertDialog(
@@ -1259,16 +1276,16 @@ def main(page: ft.Page):
                 ),
             ),
             actions=[
-                ft.TextButton("再読み込み", on_click=lambda e: load_preview()),
+                ft.TextButton("再読み込み", on_click=load_preview),
                 ft.TextButton("閉じる", on_click=close_dialog),
             ],
             actions_alignment="end",
         )
 
-        page.open(dialog)
+        page.show_dialog(dialog)
         page.update()
 
-        load_preview()
+        page.run_task(load_preview)
 
     def on_select_pdf_candidate(row_index):
         """
@@ -1278,14 +1295,17 @@ def main(page: ft.Page):
         nonlocal current_df
 
         if current_df is None or current_df.empty:
-            page.open(ft.SnackBar(ft.Text("抽出結果がありません。")))
+            page.show_dialog(ft.SnackBar(ft.Text("抽出結果がありません。")))
             page.update()
+            return
+
+        if pdf_action_state["processing"]:
             return
 
         sync_table_state_to_current_df()
 
         if row_index not in current_df.index:
-            page.open(ft.SnackBar(ft.Text("対象行が見つかりません。")))
+            page.show_dialog(ft.SnackBar(ft.Text("対象行が見つかりません。")))
             page.update()
             return
 
@@ -1302,7 +1322,7 @@ def main(page: ft.Page):
             candidates = []
 
         if not candidates:
-            page.open(ft.SnackBar(ft.Text("候補PDFはありません。")))
+            page.show_dialog(ft.SnackBar(ft.Text("候補PDFはありません。")))
             page.update()
             return
 
@@ -1319,7 +1339,7 @@ def main(page: ft.Page):
             src="",
             width=980,
             height=660,
-            fit=ft.ImageFit.CONTAIN,
+            fit=ft.BoxFit.CONTAIN,
             visible=False,
         )
 
@@ -1559,7 +1579,7 @@ def main(page: ft.Page):
             )
 
             def preview_candidate_on_hover(e, preview_pdf_path=pdf_path):
-                if e.data == "true":
+                if e.data is True:
                     file_name_text.color = PDF_FILE_NAME_HOVER_COLOR
                     request_candidate_preview(preview_pdf_path)
                 else:
@@ -1582,7 +1602,7 @@ def main(page: ft.Page):
                     spacing=6,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
-                padding=ft.padding.symmetric(horizontal=4, vertical=3),
+                padding=ft.Padding.symmetric(horizontal=4, vertical=3),
                 border_radius=6,
                 on_hover=preview_candidate_on_hover,
                 on_click=select_candidate,
@@ -1616,7 +1636,7 @@ def main(page: ft.Page):
                             value=NO_ADOPTED_PDF_VALUE,
                             label="採用しない",
                         ),
-                        padding=ft.padding.symmetric(horizontal=4, vertical=3),
+                        padding=ft.Padding.symmetric(horizontal=4, vertical=3),
                         border_radius=6,
                         on_click=lambda e: (
                             setattr(selected_pdf, "value", NO_ADOPTED_PDF_VALUE),
@@ -1653,10 +1673,10 @@ def main(page: ft.Page):
             render_table_from_df(current_df)
 
             # ダイアログを閉じる
-            dialog.open = False
+            page.pop_dialog()
             page.update()
 
-        ok_button = ft.ElevatedButton(
+        ok_button = ft.Button(
             "OK",
             on_click=close_dialog,
         )
@@ -1714,7 +1734,7 @@ def main(page: ft.Page):
 
         initial_preview_pdf = selected_pdf.value
 
-        page.open(dialog)
+        page.show_dialog(dialog)
         page.update()
 
         if initial_preview_pdf and initial_preview_pdf != NO_ADOPTED_PDF_VALUE:
@@ -2008,7 +2028,7 @@ def main(page: ft.Page):
             if column_name == "検索用文字列":
                 return ft.Container(
                     width=100,
-                    alignment=ft.alignment.center,
+                    alignment=ft.Alignment.CENTER,
                     content=header_text,
                 )
 
@@ -2022,7 +2042,7 @@ def main(page: ft.Page):
                     color=ft.Colors.BLACK,
                     weight=ft.FontWeight.BOLD,
                 ),
-                padding=ft.padding.symmetric(horizontal=7, vertical=3),
+                padding=ft.Padding.symmetric(horizontal=7, vertical=3),
                 border_radius=12,
                 bgcolor=get_header_badge_color(column_name),
             )
@@ -2072,6 +2092,8 @@ def main(page: ft.Page):
         }
 
         def on_output_checkbox_change(e, row_index):
+            if pdf_action_state["processing"]:
+                return
             nonlocal current_df
 
             if current_df is None or current_df.empty:
@@ -2095,9 +2117,9 @@ def main(page: ft.Page):
                             ft.Container(
                                 content=ft.Text(""),
                                 alignment=(
-                                    ft.alignment.center
+                                    ft.Alignment.CENTER
                                     if should_center_align_column(c)
-                                    else ft.alignment.center_left
+                                    else ft.Alignment.CENTER_LEFT
                                 ),
                             )
                         )
@@ -2150,7 +2172,7 @@ def main(page: ft.Page):
                         ft.DataCell(
                             ft.Container(
                                 content=content,
-                                alignment=ft.alignment.center_left,
+                                alignment=ft.Alignment.CENTER_LEFT,
                             )
                         )
                     )
@@ -2175,7 +2197,7 @@ def main(page: ft.Page):
                         ft.DataCell(
                             ft.Container(
                                 content=content,
-                                alignment=ft.alignment.center,
+                                alignment=ft.Alignment.CENTER,
                             )
                         )
                     )
@@ -2228,7 +2250,7 @@ def main(page: ft.Page):
                         ft.DataCell(
                             ft.Container(
                                 content=content,
-                                alignment=ft.alignment.center_left,
+                                alignment=ft.Alignment.CENTER_LEFT,
                             )
                         )
                     )
@@ -2237,14 +2259,14 @@ def main(page: ft.Page):
 
                 if c == "候補確認":
                     if (not is_output_ineligible(row)) and row.get("候補状態") in ("複数候補", "手動採用"):
-                        content = ft.ElevatedButton(
+                        content = ft.Button(
                             "選択",
                             tooltip="候補PDFを選択",
                             on_click=lambda e, row_index=idx: on_select_pdf_candidate(row_index),
                             style=ft.ButtonStyle(
                                 bgcolor=ft.Colors.AMBER_500,
                                 color=ft.Colors.BLACK,
-                                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                                padding=ft.Padding.symmetric(horizontal=8, vertical=4),
                             ),
                         )
                     else:
@@ -2254,7 +2276,7 @@ def main(page: ft.Page):
                         ft.DataCell(
                             ft.Container(
                                 content=content,
-                                alignment=ft.alignment.center,
+                                alignment=ft.Alignment.CENTER,
                             )
                         )
                     )
@@ -2305,7 +2327,7 @@ def main(page: ft.Page):
                             ft.DataCell(
                                 ft.Container(
                                     content=ft.Text(""),
-                                    alignment=ft.alignment.center,
+                                    alignment=ft.Alignment.CENTER,
                                 )
                             )
                         )
@@ -2320,7 +2342,7 @@ def main(page: ft.Page):
                             ft.DataCell(
                                 ft.Container(
                                     content=checkbox,
-                                    alignment=ft.alignment.center,
+                                    alignment=ft.Alignment.CENTER,
                                 )
                             )
                         )
@@ -2342,8 +2364,8 @@ def main(page: ft.Page):
                             dense=True,
                             text_size=14,
                             color=ft.Colors.BLACK,
-                            content_padding=ft.padding.symmetric(horizontal=7, vertical=5),
-                            border=ft.InputBorder.NONE,
+                            content_padding=ft.Padding.symmetric(horizontal=7, vertical=5),
+                            border=ft.NoInputBorder(),
                             bgcolor=ft.Colors.TRANSPARENT,
                         )
                         search_text_fields[idx] = text_field
@@ -2354,7 +2376,7 @@ def main(page: ft.Page):
                                     width=105,
                                     padding=2,
                                     bgcolor=ft.Colors.AMBER_50,
-                                    border=ft.border.all(1, ft.Colors.AMBER_100),
+                                    border=ft.Border.all(1, ft.Colors.AMBER_100),
                                     border_radius=6,
                                     content=text_field,
                                 )
@@ -2448,7 +2470,7 @@ def main(page: ft.Page):
                             pdf_path=adopted_pdf_path_for_hover,
                             file_name_text=output_pdf_file_name_text,
                         ):
-                            if e.data == "true":
+                            if e.data is True:
                                 if file_name_text is not None:
                                     file_name_text.color = PDF_FILE_NAME_HOVER_COLOR
 
@@ -2464,7 +2486,7 @@ def main(page: ft.Page):
 
                         cell_content = ft.Container(
                             content=text_control,
-                            alignment=ft.alignment.center_left,
+                            alignment=ft.Alignment.CENTER_LEFT,
                             on_hover=handle_output_pdf_hover,
                         )
                     else:
@@ -2473,9 +2495,9 @@ def main(page: ft.Page):
                                 content=text_control
                             ),
                             alignment=(
-                                ft.alignment.center
+                                ft.Alignment.CENTER
                                 if should_center_align_column(c)
-                                else ft.alignment.center_left
+                                else ft.Alignment.CENTER_LEFT
                             ),
                         )
 
@@ -2518,42 +2540,50 @@ def main(page: ft.Page):
         excel_file_field.value = ""
 
         sheet_dropdown.options = [
-            ft.dropdown.Option(SHEET_PLACEHOLDER)
+            ft.DropdownOption(SHEET_PLACEHOLDER)
         ]
         sheet_dropdown.value = SHEET_PLACEHOLDER
 
         reset_extract_view()
 
     def on_sheet_change(e):
+        if pdf_action_state["processing"]:
+            return
         # シート変更時に抽出結果を初期化
         reset_extract_view()
 
-    sheet_dropdown.on_change = on_sheet_change
+    sheet_dropdown.on_select = on_sheet_change
 
-    file_picker = ft.FilePicker(on_result=lambda e: pick_excel_result(e))
-    page.overlay.append(file_picker)
+    file_picker = ft.FilePicker()
 
-    def pick_excel_click(e):
+    async def pick_excel_click(e):
+        if pdf_action_state["processing"]:
+            return
         initial_dir = config.get("excel_folder", "")
 
         if not initial_dir or not os.path.isdir(initial_dir):
             initial_dir = os.getcwd()
 
-        file_picker.pick_files(
+        files = await file_picker.pick_files(
             allowed_extensions=["xlsx", "xls"],
             initial_directory=initial_dir,
         )
+        if files:
+            await pick_excel_result(files)
 
-    def pick_excel_result(e: ft.FilePickerResultEvent):
+    async def pick_excel_result(files):
         nonlocal selected_excel_path  # sheet_dropdown は作り直さないので nonlocal 不要でもOK
 
-        if not e.files:
+        if pdf_action_state["processing"]:
+            return
+
+        if not files:
             return
 
         # ★ 抽出エリアを初期化
         reset_extract_view()
 
-        selected_excel_path = e.files[0].path
+        selected_excel_path = files[0].path
         excel_file_field.value = os.path.abspath(selected_excel_path)
 
         config["excel_folder"] = str(Path(selected_excel_path).parent)
@@ -2561,20 +2591,24 @@ def main(page: ft.Page):
 
         page.update()
 
+        set_pdf_action_processing(True, "シート一覧を読み込み中です...")
         try:
-            xls = pd.ExcelFile(selected_excel_path)
-            sheet_names = xls.sheet_names
+            def read_sheet_names(excel_path):
+                with pd.ExcelFile(excel_path) as xls:
+                    return xls.sheet_names
+
+            sheet_names = await asyncio.to_thread(read_sheet_names, selected_excel_path)
 
             # ✅ Dropdownを作り直さず、options/valueだけ更新する
             sheet_dropdown.options = [
-                ft.dropdown.Option(SHEET_PLACEHOLDER),
-                *[ft.dropdown.Option(name) for name in sheet_names]
+                ft.DropdownOption(SHEET_PLACEHOLDER),
+                *[ft.DropdownOption(name) for name in sheet_names]
             ]
             sheet_dropdown.value = SHEET_PLACEHOLDER
-            sheet_dropdown.on_change = on_sheet_change  # 念のため（維持）
-            sheet_dropdown.update()
+            sheet_dropdown.on_select = on_sheet_change  # 念のため（維持）
 
-            page.open(ft.SnackBar(ft.Text("シートを選択してください。")))
+            message.value = "シートを選択してください。"
+            page.show_dialog(ft.SnackBar(ft.Text("シートを選択してください。")))
             page.update()
 
         except PermissionError:
@@ -2592,15 +2626,21 @@ def main(page: ft.Page):
                 ft.TextButton(
                     "OK",
                     on_click=lambda e: (
-                        setattr(dialog, "open", False),
+                        page.pop_dialog(),
                         page.update(),
                     ),
                 )
             ]
 
-            page.open(dialog)
+            page.show_dialog(dialog)
             page.update()
 
+
+        except Exception as ex:
+            message.value = f"Excel読込エラー: {ex}"
+            page.update()
+        finally:
+            set_pdf_action_processing(False)
 
     # ---- ヘッダ検出 ----
     def get_merged_cells_info(excel_path, sheet_name):
@@ -2665,7 +2705,218 @@ def main(page: ft.Page):
         return 0
 
     # ---- 抽出処理 ----
-    def on_extract_click(e):
+    def extract_excel_dataframe(excel_path, sheet_name):
+        df_raw = pd.read_excel(excel_path, sheet_name=sheet_name, header=None)
+        merged_info = get_merged_cells_info(excel_path, sheet_name)
+        header_row_index = detect_header_row(df_raw, merged_info)
+        detected_columns = detect_columns(excel_path, sheet_name, header_row_index)
+        df = extract_data_from_excel(excel_path, sheet_name, detected_columns, header_row_index)
+
+        vertical_merge_indices = get_vertically_merged_data_row_indices(
+            merged_info,
+            header_row_index,
+        )
+
+        def create_search_keyword(text):
+            if pd.isna(text):
+                return ""
+
+            s = str(text).strip()
+
+            # 先頭に補足説明や記号が付いている場合、
+            # 最初の半角英数字が出てくる位置まで削除する。
+            #
+            # 例:
+            #   "補足説明 ABC123" -> "ABC123"
+            #   "※ABC123"       -> "ABC123"
+            #   "（参考）U12345" -> "U12345"
+            match = re.search(r"[A-Za-z0-9]", s)
+            if match:
+                s = s[match.start():]
+            else:
+                return ""
+
+            # 先頭が I/U/H/F + 数字 の場合は、先頭1文字を除去する
+            if len(s) >= 2 and s[0].upper() in ["I", "U", "H", "F"] and s[1].isdigit():
+                s = s[1:]
+
+            for pat in ["R/L", "L/R", "A/B"]:
+                idx = s.find(pat)
+                if idx != -1:
+                    s = s[:idx]
+
+            idx_slash = s.find("/")
+            if idx_slash != -1:
+                s = s[:idx_slash]
+
+            return s.strip()
+
+        def matches_search_exclusion_rule(text) -> bool:
+            """
+            構成部品表モードの検索除外ルールに該当するか判定する。
+
+            現在は config の startswith ルールに対応する。
+            「16で始まる」の意味をそのまま保つため、
+            PDF検索用の加工は行わず、Excel上の値をstripした文字列で判定する。
+            """
+            if pd.isna(text):
+                return False
+
+            source_text = str(text).strip()
+
+            if not source_text or source_text.lower() in ("nan", "none"):
+                return False
+
+            for rule in config.get("search_exclusion_rules", []):
+                if not isinstance(rule, dict):
+                    continue
+
+                match_type = str(rule.get("match_type", "") or "").strip().lower()
+                value = str(rule.get("value", "") or "").strip()
+
+                if not value:
+                    continue
+
+                if match_type == "startswith" and source_text.startswith(value):
+                    return True
+
+            return False
+
+        def resolve_pg_names_for_search(pg_series: pd.Series) -> dict:
+            """
+            検索文字列生成用にPG名を補正する。
+
+            表示上のPG名は変更せず、
+            PG名が ↑ / ↓ の場合だけ、検索用には直前のPG名を使う。
+            """
+            resolved = {}
+            last_pg_name = ""
+
+            for idx, value in pg_series.items():
+                if pd.isna(value):
+                    resolved[idx] = ""
+                    continue
+
+                s = str(value).strip()
+
+                if s in ("↑", "↓"):
+                    resolved[idx] = last_pg_name
+                    continue
+
+                resolved[idx] = s
+
+                if s and s.lower() not in ("nan", "none"):
+                    last_pg_name = s
+
+            return resolved
+
+        # --- 品番 or PG名 のどちらか優先で生成（元値を保持）
+        resolved_pg_names = resolve_pg_names_for_search(df["PG名"]) if "PG名" in df.columns else {}
+
+        df["元検索文字列"] = df.apply(
+            lambda row: (
+                create_search_keyword(row.get("品番"))
+                or create_search_keyword(resolved_pg_names.get(row.name, ""))
+            ),
+            axis=1
+        )
+
+        # --- 実際に検索に使う文字列（初期値は元検索文字列と同じ）
+        df["検索用文字列"] = df["元検索文字列"]
+
+        qty_colors = []
+        if "数量" in detected_columns:
+            qty_colors = get_quantity_colors(
+                excel_path,
+                sheet_name,
+                header_row_index,
+                detected_columns["数量"]
+            )
+
+            # ✅ df.index（元の行位置）で色リストを引く → フィルタ後でもズレない
+            def color_by_df_index(i: int) -> str:
+                return qty_colors[i] if 0 <= i < len(qty_colors) else ""
+
+            df["数量セル色"] = [color_by_df_index(i) for i in df.index]
+        else:
+            df["数量セル色"] = ""
+
+        df["縦結合"] = [
+            "あり" if i in vertical_merge_indices else ""
+            for i in df.index
+        ]
+
+        def decide_output_eligibility(row):
+            """
+            Excel上の条件から、自動出力処理の対象にしてよいかを判定する。
+
+            不可条件:
+            - 数量が0
+            - 数量セル色あり
+            - 品番・PG名がともに空欄
+            - 検索除外条件に該当
+            """
+            def is_blank_value(value) -> bool:
+                if pd.isna(value):
+                    return True
+
+                s = str(value).strip()
+
+                return s == "" or s.lower() in ("nan", "none")
+
+            zero_qty = False
+
+            if "数量" in df.columns:
+                zero_qty = is_zero_quantity(row.get("数量"))
+
+            colored = bool(str(row.get("数量セル色", "") or "").strip())
+
+            part_number_blank = is_blank_value(row.get("品番", ""))
+            pg_name_blank = is_blank_value(row.get("PG名", ""))
+
+            missing_identifier = part_number_blank and pg_name_blank
+
+            # 検索除外条件。
+            # 品番または検索用に補正したPG名が該当する場合、
+            # 品番・PG名が空欄の行と同じ「出力不可」扱いにする。
+            excluded_by_search_rule = (
+                matches_search_exclusion_rule(row.get("品番", ""))
+                or matches_search_exclusion_rule(
+                    resolved_pg_names.get(row.name, row.get("PG名", ""))
+                )
+            )
+
+            if zero_qty or colored or missing_identifier or excluded_by_search_rule:
+                return "不可"
+
+            return "可"
+
+        df["出力可否"] = df.apply(decide_output_eligibility, axis=1)
+
+        # この時点では、まだ出力PDFが確定していないため、出力対象はすべてOFF。
+        # PDF候補抽出後、出力可否が「可」かつ出力PDFが確定した行だけONにする。
+        df["出力対象"] = False
+
+        # 出力不可行は検索対象にしないため、検索文字列を空欄にする
+        df.loc[df["出力可否"].eq("不可"), "検索用文字列"] = ""
+
+        # PDF候補情報の初期列
+        df["候補PDF数"] = ""
+        df["先頭候補PDF"] = ""
+        df["候補PDFパス一覧"] = [[] for _ in range(len(df))]
+        df["採用PDFパス"] = ""
+        df["候補状態"] = "未検索"
+
+        df.loc[df["出力可否"].eq("不可"), "候補状態"] = "出力不可"
+
+        # 採用PDF重複は、PDF候補抽出後に更新する
+        df["採用PDF重複"] = ""
+
+        return df
+
+    async def on_extract_click(e):
+        if pdf_action_state["processing"]:
+            return
 
         clear_hover_preview()
 
@@ -2688,212 +2939,9 @@ def main(page: ft.Page):
             page.update()
             return
 
+        set_pdf_action_processing(True, "Excelを抽出中です...")
         try:
-            df_raw = pd.read_excel(selected_excel_path, sheet_name=sheet_dropdown.value, header=None)
-            merged_info = get_merged_cells_info(selected_excel_path, sheet_dropdown.value)
-            header_row_index = detect_header_row(df_raw, merged_info)
-            detected_columns = detect_columns(selected_excel_path, sheet_dropdown.value, header_row_index)
-            df = extract_data_from_excel(selected_excel_path, sheet_dropdown.value, detected_columns, header_row_index)
-
-            vertical_merge_indices = get_vertically_merged_data_row_indices(
-                merged_info,
-                header_row_index,
-            )
-
-            def create_search_keyword(text):
-                if pd.isna(text):
-                    return ""
-
-                s = str(text).strip()
-
-                # 先頭に補足説明や記号が付いている場合、
-                # 最初の半角英数字が出てくる位置まで削除する。
-                #
-                # 例:
-                #   "補足説明 ABC123" -> "ABC123"
-                #   "※ABC123"       -> "ABC123"
-                #   "（参考）U12345" -> "U12345"
-                match = re.search(r"[A-Za-z0-9]", s)
-                if match:
-                    s = s[match.start():]
-                else:
-                    return ""
-
-                # 先頭が I/U/H/F + 数字 の場合は、先頭1文字を除去する
-                if len(s) >= 2 and s[0].upper() in ["I", "U", "H", "F"] and s[1].isdigit():
-                    s = s[1:]
-
-                for pat in ["R/L", "L/R", "A/B"]:
-                    idx = s.find(pat)
-                    if idx != -1:
-                        s = s[:idx]
-
-                idx_slash = s.find("/")
-                if idx_slash != -1:
-                    s = s[:idx_slash]
-
-                return s.strip()
-
-            def matches_search_exclusion_rule(text) -> bool:
-                """
-                構成部品表モードの検索除外ルールに該当するか判定する。
-
-                現在は config の startswith ルールに対応する。
-                「16で始まる」の意味をそのまま保つため、
-                PDF検索用の加工は行わず、Excel上の値をstripした文字列で判定する。
-                """
-                if pd.isna(text):
-                    return False
-
-                source_text = str(text).strip()
-
-                if not source_text or source_text.lower() in ("nan", "none"):
-                    return False
-
-                for rule in config.get("search_exclusion_rules", []):
-                    if not isinstance(rule, dict):
-                        continue
-
-                    match_type = str(rule.get("match_type", "") or "").strip().lower()
-                    value = str(rule.get("value", "") or "").strip()
-
-                    if not value:
-                        continue
-
-                    if match_type == "startswith" and source_text.startswith(value):
-                        return True
-
-                return False
-
-            def resolve_pg_names_for_search(pg_series: pd.Series) -> dict:
-                """
-                検索文字列生成用にPG名を補正する。
-
-                表示上のPG名は変更せず、
-                PG名が ↑ / ↓ の場合だけ、検索用には直前のPG名を使う。
-                """
-                resolved = {}
-                last_pg_name = ""
-
-                for idx, value in pg_series.items():
-                    if pd.isna(value):
-                        resolved[idx] = ""
-                        continue
-
-                    s = str(value).strip()
-
-                    if s in ("↑", "↓"):
-                        resolved[idx] = last_pg_name
-                        continue
-
-                    resolved[idx] = s
-
-                    if s and s.lower() not in ("nan", "none"):
-                        last_pg_name = s
-
-                return resolved
-
-            # --- 品番 or PG名 のどちらか優先で生成（元値を保持）
-            resolved_pg_names = resolve_pg_names_for_search(df["PG名"]) if "PG名" in df.columns else {}
-
-            df["元検索文字列"] = df.apply(
-                lambda row: (
-                    create_search_keyword(row.get("品番"))
-                    or create_search_keyword(resolved_pg_names.get(row.name, ""))
-                ),
-                axis=1
-            )
-
-            # --- 実際に検索に使う文字列（初期値は元検索文字列と同じ）
-            df["検索用文字列"] = df["元検索文字列"]
-
-            qty_colors = []
-            if "数量" in detected_columns:
-                qty_colors = get_quantity_colors(
-                    selected_excel_path,
-                    sheet_dropdown.value,
-                    header_row_index,
-                    detected_columns["数量"]
-                )
-
-                # ✅ df.index（元の行位置）で色リストを引く → フィルタ後でもズレない
-                def color_by_df_index(i: int) -> str:
-                    return qty_colors[i] if 0 <= i < len(qty_colors) else ""
-
-                df["数量セル色"] = [color_by_df_index(i) for i in df.index]
-            else:
-                df["数量セル色"] = ""
-
-            df["縦結合"] = [
-                "あり" if i in vertical_merge_indices else ""
-                for i in df.index
-            ]
-
-            def decide_output_eligibility(row):
-                """
-                Excel上の条件から、自動出力処理の対象にしてよいかを判定する。
-
-                不可条件:
-                - 数量が0
-                - 数量セル色あり
-                - 品番・PG名がともに空欄
-                - 検索除外条件に該当
-                """
-                def is_blank_value(value) -> bool:
-                    if pd.isna(value):
-                        return True
-
-                    s = str(value).strip()
-
-                    return s == "" or s.lower() in ("nan", "none")
-
-                zero_qty = False
-
-                if "数量" in df.columns:
-                    zero_qty = is_zero_quantity(row.get("数量"))
-
-                colored = bool(str(row.get("数量セル色", "") or "").strip())
-
-                part_number_blank = is_blank_value(row.get("品番", ""))
-                pg_name_blank = is_blank_value(row.get("PG名", ""))
-
-                missing_identifier = part_number_blank and pg_name_blank
-
-                # 検索除外条件。
-                # 品番または検索用に補正したPG名が該当する場合、
-                # 品番・PG名が空欄の行と同じ「出力不可」扱いにする。
-                excluded_by_search_rule = (
-                    matches_search_exclusion_rule(row.get("品番", ""))
-                    or matches_search_exclusion_rule(
-                        resolved_pg_names.get(row.name, row.get("PG名", ""))
-                    )
-                )
-
-                if zero_qty or colored or missing_identifier or excluded_by_search_rule:
-                    return "不可"
-
-                return "可"
-
-            df["出力可否"] = df.apply(decide_output_eligibility, axis=1)
-
-            # この時点では、まだ出力PDFが確定していないため、出力対象はすべてOFF。
-            # PDF候補抽出後、出力可否が「可」かつ出力PDFが確定した行だけONにする。
-            df["出力対象"] = False
-
-            # 出力不可行は検索対象にしないため、検索文字列を空欄にする
-            df.loc[df["出力可否"].eq("不可"), "検索用文字列"] = ""
-
-            # PDF候補情報の初期列
-            df["候補PDF数"] = ""
-            df["先頭候補PDF"] = ""
-            df["候補PDFパス一覧"] = [[] for _ in range(len(df))]
-            df["採用PDFパス"] = ""
-            df["候補状態"] = "未検索"
-
-            df.loc[df["出力可否"].eq("不可"), "候補状態"] = "出力不可"
-
-            # 採用PDF重複は、PDF候補抽出後に更新する
-            df["採用PDF重複"] = ""
+            df = await asyncio.to_thread(extract_excel_dataframe, selected_excel_path, sheet_val)
 
             if df.empty:
                 message.value = "抽出結果がありません。"
@@ -2902,25 +2950,25 @@ def main(page: ft.Page):
             else:
                 message.value = f"{len(df)}件のデータを抽出しました。"
 
-                select_all_btn = ft.ElevatedButton(
+                select_all_btn = ft.Button(
                     "全選択",
                     on_click=lambda e: toggle_all(True),
                     style=BUTTON_STYLE_SECONDARY,
                 )
 
-                deselect_all_btn = ft.ElevatedButton(
+                deselect_all_btn = ft.Button(
                     "全解除",
                     on_click=lambda e: toggle_all(False),
                     style=BUTTON_STYLE_SECONDARY,
                 )
 
-                search_pdf_btn = ft.ElevatedButton(
+                search_pdf_btn = ft.Button(
                     "PDF候補抽出",
                     on_click=on_pdf_candidate_search,
                     style=BUTTON_STYLE_PRIMARY,
                 )
 
-                export_pdf_btn = ft.ElevatedButton(
+                export_pdf_btn = ft.Button(
                     "PDF出力実行",
                     on_click=on_pdf_export,
                     style=BUTTON_STYLE_SUCCESS,
@@ -2948,7 +2996,7 @@ def main(page: ft.Page):
                 "Excelファイルを開けませんでした。"
                 "他のユーザー、または別のPCで開かれている可能性があります。"
             )
-            page.open(
+            page.show_dialog(
                 ft.SnackBar(
                     ft.Text(
                         "Excelファイルを開けませんでした。"
@@ -2962,7 +3010,12 @@ def main(page: ft.Page):
             message.value = f"エラー: {ex}"
             page.update()
 
+        finally:
+            set_pdf_action_processing(False)
+
     def toggle_all(value: bool):
+        if pdf_action_state["processing"]:
+            return
         nonlocal current_df
 
         for idx, checkbox in output_checkboxes.items():
@@ -3181,7 +3234,7 @@ def main(page: ft.Page):
         出力先フォルダから、結合PDFの保存パスを作る。
 
         形式:
-        Excelファイル名_シート名_YYYYMMDD_HHMM.pdf
+        Excelファイル名_シート名_YYYYMMDD_HHMMSS_タイトルまたは版番号.pdf
 
         同名ファイルがある場合は _001, _002... を付ける。
         """
@@ -3204,7 +3257,12 @@ def main(page: ft.Page):
         excel_stem = sanitize_filename_part(excel_stem)
         sheet_text = sanitize_filename_part(sheet_text)
 
+        label = sanitize_filename_part(
+            OUTPUT_FILENAME_LABEL if OUTPUT_FILENAME_LABEL is not None else page.title
+        )
         base_name = f"{excel_stem}_{sheet_text}_{now_text}"
+        if label:
+            base_name += f"_{label}"
 
         candidate = output_dir / f"{base_name}.pdf"
 
@@ -3218,20 +3276,54 @@ def main(page: ft.Page):
 
         raise ValueError("出力ファイル名を作成できませんでした。")
 
+    async def run_worker_with_progress(worker):
+        updates = queue.Queue(maxsize=1)
+
+        def report(text):
+            try:
+                updates.get_nowait()
+            except queue.Empty:
+                pass
+            updates.put_nowait(text)
+
+        async def display_progress():
+            while True:
+                await asyncio.sleep(0.1)
+                try:
+                    message.value = updates.get_nowait()
+                except queue.Empty:
+                    continue
+                page.update()
+
+        progress_task = asyncio.create_task(display_progress())
+        try:
+            return await asyncio.to_thread(worker, report)
+        finally:
+            progress_task.cancel()
+            try:
+                await progress_task
+            except asyncio.CancelledError:
+                pass
+
     def set_pdf_action_processing(
         processing: bool,
         status_message: str | None = None,
     ):
         """
-        PDF候補抽出・PDF出力の処理状態を切り替える。
-
-        processing=True:
-            候補抽出ボタンとPDF出力ボタンを無効化する。
-
-        processing=False:
-            両ボタンを再び有効化する。
+        Excel読込・抽出・PDF検索・出力中の編集を止め、終了時に元の状態へ戻す。
         """
         pdf_action_state["processing"] = processing
+        if processing:
+            controls = [folder_settings_row, mode_dropdown, excel_control_row,
+                        table_header, table_area]
+            pdf_action_state["disabled_before"] = [(c, c.disabled) for c in controls]
+            for control in controls:
+                control.disabled = True
+            clear_hover_preview()
+        else:
+            for control, disabled in pdf_action_state.pop("disabled_before", []):
+                control.disabled = disabled
+
 
         search_button = pdf_action_state.get("search_button")
         export_button = pdf_action_state.get("export_button")
@@ -3266,7 +3358,83 @@ def main(page: ft.Page):
             if idx in current_df.index:
                 current_df.at[idx, "出力対象"] = bool(checkbox.value)
 
-    def on_pdf_candidate_search(e):
+    def search_pdf_dataframe(df, pdf_root, report):
+        def update_pdf_collect_progress(count: int):
+            report(f"PDF一覧を取得中です... {count}件")
+
+        pdf_files = collect_pdf_files(
+            pdf_root,
+            progress_callback=update_pdf_collect_progress
+        )
+
+        if not pdf_files:
+            report("検索先フォルダ配下にPDFが見つかりませんでした。")
+            return None
+
+        report(f"PDF検索用データを作成中です... {len(pdf_files)}件")
+
+        pdf_index = build_pdf_search_index(pdf_files)
+
+        search_target_count = len(df)
+
+        report(f"PDF候補を抽出中です... 0 / {search_target_count}")
+
+        # 各行ごとにPDF候補を抽出
+        for pos, (idx, row) in enumerate(df.iterrows(), start=1):
+
+            # 出力不可行はPDF検索対象外にする
+            if is_output_ineligible(row):
+                df.at[idx, "候補PDF数"] = ""
+                df.at[idx, "先頭候補PDF"] = ""
+                df.at[idx, "候補PDFパス一覧"] = []
+                df.at[idx, "採用PDFパス"] = ""
+                df.at[idx, "候補状態"] = "出力不可"
+                df.at[idx, "出力対象"] = False
+
+                if pos % 5 == 0 or pos == search_target_count:
+                    report(f"PDF候補を抽出中です... {pos} / {search_target_count}")
+
+                continue
+
+            search_text = row.get("検索用文字列", "")
+            candidates = find_pdf_candidates_from_index(search_text, pdf_index)
+            candidate_count = len(candidates)
+
+            previous_status = str(row.get("候補状態", "") or "").strip()
+            previous_adopted_pdf = str(row.get("採用PDFパス", "") or "").strip()
+
+            df.at[idx, "候補PDF数"] = str(candidate_count) if candidate_count > 0 else ""
+            df.at[idx, "先頭候補PDF"] = candidates[0] if candidates else ""
+            df.at[idx, "候補PDFパス一覧"] = candidates
+
+            if candidate_count == 0:
+                df.at[idx, "採用PDFパス"] = ""
+                df.at[idx, "候補状態"] = "未検出"
+
+            elif candidate_count == 1:
+                df.at[idx, "採用PDFパス"] = candidates[0]
+                df.at[idx, "候補状態"] = "自動採用"
+
+            else:
+                # 複数候補の場合:
+                # 以前に手動採用したPDFが今回の候補にも含まれていれば、その選択を保持する
+                if previous_status == "手動採用" and previous_adopted_pdf in candidates:
+                    df.at[idx, "採用PDFパス"] = previous_adopted_pdf
+                    df.at[idx, "候補状態"] = "手動採用"
+                else:
+                    df.at[idx, "採用PDFパス"] = ""
+                    df.at[idx, "候補状態"] = "複数候補"
+
+            if pos % 5 == 0 or pos == search_target_count:
+                report(f"PDF候補を抽出中です... {pos} / {search_target_count}")
+
+        df = apply_output_target_defaults(df)
+        df = update_adopted_pdf_duplicate_info(df)
+        df = apply_duplicate_output_defaults(df)
+
+        return df
+
+    async def on_pdf_candidate_search(e):
         nonlocal current_df
 
         # 処理中に再度イベントが届いても何もしない
@@ -3275,7 +3443,7 @@ def main(page: ft.Page):
 
         if current_df is None or current_df.empty:
             message.value = "抽出結果がありません。"
-            page.open(ft.SnackBar(ft.Text("抽出結果がありません。")))
+            page.show_dialog(ft.SnackBar(ft.Text("抽出結果がありません。")))
             page.update()
             return
 
@@ -3283,7 +3451,7 @@ def main(page: ft.Page):
 
         if not pdf_root or not os.path.isdir(pdf_root):
             message.value = "検索先フォルダが正しくありません。"
-            page.open(ft.SnackBar(ft.Text("検索先フォルダが正しくありません。")))
+            page.show_dialog(ft.SnackBar(ft.Text("検索先フォルダが正しくありません。")))
             page.update()
             return
 
@@ -3295,85 +3463,15 @@ def main(page: ft.Page):
         try:
             sync_table_state_to_current_df()
 
-            def update_pdf_collect_progress(count: int):
-                message.value = f"PDF一覧を取得中です... {count}件"
-                page.update()
-
-            pdf_files = collect_pdf_files(
-                pdf_root,
-                progress_callback=update_pdf_collect_progress
+            searched_df = await run_worker_with_progress(
+                lambda report: search_pdf_dataframe(current_df.copy(deep=True), pdf_root, report)
             )
-
-            if not pdf_files:
+            if searched_df is None:
                 message.value = "検索先フォルダ配下にPDFが見つかりませんでした。"
-                page.open(ft.SnackBar(ft.Text("検索先フォルダ配下にPDFが見つかりませんでした。")))
+                page.show_dialog(ft.SnackBar(ft.Text(message.value)))
                 page.update()
                 return
-
-            message.value = f"PDF検索用データを作成中です... {len(pdf_files)}件"
-            page.update()
-
-            pdf_index = build_pdf_search_index(pdf_files)
-
-            search_target_count = len(current_df)
-
-            message.value = f"PDF候補を抽出中です... 0 / {search_target_count}"
-            page.update()
-
-            # 各行ごとにPDF候補を抽出
-            for pos, (idx, row) in enumerate(current_df.iterrows(), start=1):
-
-                # 出力不可行はPDF検索対象外にする
-                if is_output_ineligible(row):
-                    current_df.at[idx, "候補PDF数"] = ""
-                    current_df.at[idx, "先頭候補PDF"] = ""
-                    current_df.at[idx, "候補PDFパス一覧"] = []
-                    current_df.at[idx, "採用PDFパス"] = ""
-                    current_df.at[idx, "候補状態"] = "出力不可"
-                    current_df.at[idx, "出力対象"] = False
-
-                    if pos % 5 == 0 or pos == search_target_count:
-                        message.value = f"PDF候補を抽出中です... {pos} / {search_target_count}"
-                        page.update()
-
-                    continue
-
-                search_text = row.get("検索用文字列", "")
-                candidates = find_pdf_candidates_from_index(search_text, pdf_index)
-                candidate_count = len(candidates)
-
-                previous_status = str(row.get("候補状態", "") or "").strip()
-                previous_adopted_pdf = str(row.get("採用PDFパス", "") or "").strip()
-
-                current_df.at[idx, "候補PDF数"] = str(candidate_count) if candidate_count > 0 else ""
-                current_df.at[idx, "先頭候補PDF"] = candidates[0] if candidates else ""
-                current_df.at[idx, "候補PDFパス一覧"] = candidates
-
-                if candidate_count == 0:
-                    current_df.at[idx, "採用PDFパス"] = ""
-                    current_df.at[idx, "候補状態"] = "未検出"
-
-                elif candidate_count == 1:
-                    current_df.at[idx, "採用PDFパス"] = candidates[0]
-                    current_df.at[idx, "候補状態"] = "自動採用"
-
-                else:
-                    # 複数候補の場合:
-                    # 以前に手動採用したPDFが今回の候補にも含まれていれば、その選択を保持する
-                    if previous_status == "手動採用" and previous_adopted_pdf in candidates:
-                        current_df.at[idx, "採用PDFパス"] = previous_adopted_pdf
-                        current_df.at[idx, "候補状態"] = "手動採用"
-                    else:
-                        current_df.at[idx, "採用PDFパス"] = ""
-                        current_df.at[idx, "候補状態"] = "複数候補"
-
-                if pos % 5 == 0 or pos == search_target_count:
-                    message.value = f"PDF候補を抽出中です... {pos} / {search_target_count}"
-                    page.update()
-
-            current_df = apply_output_target_defaults(current_df)
-            current_df = update_adopted_pdf_duplicate_info(current_df)
-            current_df = apply_duplicate_output_defaults(current_df)
+            current_df = searched_df
 
             render_table_from_df(current_df)
 
@@ -3474,12 +3572,17 @@ def main(page: ft.Page):
 
             message.value = result_message
 
-            page.open(
+            page.show_dialog(
                 ft.SnackBar(
                     ft.Text(result_message)
                 )
             )
 
+            page.update()
+
+        except Exception as ex:
+            message.value = f"PDF候補抽出エラー: {ex}"
+            page.show_dialog(ft.SnackBar(ft.Text(message.value)))
             page.update()
 
         finally:
@@ -3502,10 +3605,10 @@ def main(page: ft.Page):
             actions_alignment="end",
         )
 
-        page.open(dialog)
+        page.show_dialog(dialog)
         page.update()
 
-    def on_pdf_export(e):
+    async def on_pdf_export(e):
         nonlocal current_df
 
         # 処理中に再度イベントが届いても何もしない
@@ -3514,7 +3617,7 @@ def main(page: ft.Page):
 
         if current_df is None or current_df.empty:
             message.value = "抽出結果がありません。"
-            page.open(ft.SnackBar(ft.Text("抽出結果がありません。")))
+            page.show_dialog(ft.SnackBar(ft.Text("抽出結果がありません。")))
             page.update()
             return
 
@@ -3524,13 +3627,13 @@ def main(page: ft.Page):
 
         if not output_folder:
             message.value = "出力先フォルダを指定してください。"
-            page.open(ft.SnackBar(ft.Text("出力先フォルダを指定してください。")))
+            page.show_dialog(ft.SnackBar(ft.Text("出力先フォルダを指定してください。")))
             page.update()
             return
 
         if os.path.exists(output_folder) and not os.path.isdir(output_folder):
             message.value = "出力先フォルダが正しくありません。"
-            page.open(ft.SnackBar(ft.Text("出力先フォルダが正しくありません。")))
+            page.show_dialog(ft.SnackBar(ft.Text("出力先フォルダが正しくありません。")))
             page.update()
             return
 
@@ -3554,7 +3657,7 @@ def main(page: ft.Page):
                 )
 
             message.value = result_message
-            page.open(ft.SnackBar(ft.Text(result_message)))
+            page.show_dialog(ft.SnackBar(ft.Text(result_message)))
             page.update()
             return
 
@@ -3580,14 +3683,13 @@ def main(page: ft.Page):
 
             pdf_paths = [p for p in pdf_paths if p]
 
-            def update_export_progress(current: int, total: int, pdf_path: str):
-                message.value = f"PDF出力中... {current} / {total}"
-                page.update()
-
-            merge_pdfs(
-                pdf_paths,
-                output_pdf_path,
-                progress_callback=update_export_progress,
+            await run_worker_with_progress(
+                lambda report: merge_pdfs(
+                    pdf_paths, output_pdf_path,
+                    progress_callback=lambda current, total, path: report(
+                        f"PDF出力中... {current} / {total}"
+                    ),
+                )
             )
 
             result_csv_path = ""
@@ -3596,8 +3698,8 @@ def main(page: ft.Page):
             # 通常はPDFのみ。チェックされた場合だけ処理結果CSVも出力する。
             if bool(result_csv_checkbox.value):
                 try:
-                    result_csv_path = export_result_csv(
-                        current_df,
+                    result_csv_path = await asyncio.to_thread(
+                        export_result_csv, current_df.copy(deep=True),
                         output_pdf_path,
                     )
                 except Exception as csv_ex:
@@ -3651,7 +3753,7 @@ def main(page: ft.Page):
 
         message.value = result_message
 
-        page.open(
+        page.show_dialog(
             ft.SnackBar(
                 ft.Text(result_message)
             )
@@ -3659,13 +3761,13 @@ def main(page: ft.Page):
 
         page.update()
 
-    pick_excel_btn = ft.ElevatedButton(
+    pick_excel_btn = ft.Button(
         "Excelを選択",
         on_click=pick_excel_click,
         style=BUTTON_STYLE_PRIMARY,
     )
 
-    extract_btn = ft.ElevatedButton(
+    extract_btn = ft.Button(
         "抽出実行",
         on_click=on_extract_click,
         style=BUTTON_STYLE_PRIMARY,
@@ -3684,8 +3786,7 @@ def main(page: ft.Page):
         else:
             mode_notice.value = ""
 
-        # 保険（効かない環境があるので）
-        sheet_dropdown.update()
+        # Flet 1では初期描画前の個別updateはできないため、Page単位で更新する。
         page.update()
 
     # ---- レイアウト ----
@@ -3699,7 +3800,7 @@ def main(page: ft.Page):
             ft.Row(
                 [
                     search_folder_field,
-                    ft.ElevatedButton(
+                    ft.Button(
                         "フォルダを選択",
                         on_click=pick_search_folder,
                         style=BUTTON_STYLE_SECONDARY,
@@ -3711,7 +3812,7 @@ def main(page: ft.Page):
             ft.Row(
                 [
                     output_folder_field,
-                    ft.ElevatedButton(
+                    ft.Button(
                         "フォルダを選択",
                         on_click=pick_output_folder,
                         style=BUTTON_STYLE_SECONDARY,
@@ -3762,7 +3863,7 @@ def main(page: ft.Page):
             ],
             spacing=8,
         ),
-        padding=ft.padding.only(left=4, right=4, top=4, bottom=6),
+        padding=ft.Padding.only(left=4, right=4, top=4, bottom=6),
     )
 
     table_area = ft.Container(
@@ -3825,7 +3926,9 @@ def main(page: ft.Page):
         return changed
 
     def on_page_resize(e):
-
+        if pdf_action_state["processing"]:
+            page.update()
+            return
         changed = update_hover_preview_visibility()
 
         if changed and current_df is not None and not current_df.empty:
@@ -3842,4 +3945,4 @@ def main(page: ft.Page):
 
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    ft.run(main)
