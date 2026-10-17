@@ -3624,6 +3624,105 @@ git tag -a v1.1.0 -m "Release v1.1.0"
 git push origin v1.1.0
 
 
+2026/10/13
+
+以前作った仮想環境の作成方法まとめ
+
+まず、通常のコーディング環境に仮想環境を作った
+python -m venv .venv
+→　C:\Users\shini\OneDrive\codes_od\new_search_app\.venv
+.\.venv\Scripts\Activate.ps1
+→　各種インストール
+
+OneDriveに作るといろいろ面倒ということで、別の場所に作り直す
+C:\Users\shini\OneDrive\codes_od\new_search_app\.venv　を無効化
+python -m venv C:\dev\new_search_app
+Ctrl＋Shift＋P
+Python: Select Interpreterを選択
+上記環境のpython.exe（C:\dev\new_search_app\Scripts\python.exe）を指定
+→　この意味は、VS Codeの「Pythonファイルを実行」使われるもの、つまり事実上、ほぼ使わない
+
+作成した仮想環境をアクティベート
+C:\dev\new_search_app\Scripts\Activate.ps1
+
+その環境のライブラリ一覧を保存
+python -m pip freeze > requirements.txt
+
+仮想であろうがなかろうが、次のコマンドで使用しているpythonの場所が分かる
+python -c "import sys; print(sys.executable)"
+
+
+仮想環境について（基本）
+
+- **ソースの編集・コピー・Git操作**：仮想環境は関係ありません。
+- **ソースの実行・テスト・ライブラリのインストール・EXE作成**：どの仮想環境のPythonを使うかが関係します。
+
+ソースの置き場所と、実行に使うPython環境（⇒これを仮想環境でやるということ、置き場所は現状flet 0.28.3だし）は別です。
+
+
+2026/10/17
+
+new_search_app/
+├─ main.py                  ← 今回は変更しない
+├─ requirements.lock.txt    ← 既存と同じ内容
+├─ requirements-build.txt   ← 追加
+├─ BUILD_EXE.md             ← 追加
+├─ tools/                   ← フォルダごと追加
+│  ├─ build_exe.py
+│  ├─ entry.py
+│  ├─ frozen_selftest.py
+│  └─ fixtures/
+└─ note.txt                 ← 手順を追記
+
+
+■ Flet 1開発・ビルド環境の整備
+
+【変更内容】
+・C:\dev\new_search_appをFlet 1.0.1へ更新。
+・従来の仮想環境からソース起動・単体EXE作成を行えるよう整備。
+・APP_VERSIONから「図面PDF検索結合ツール (v1.1.0).exe」の名前を自動生成。
+・アプリの処理と版番号はv1.1.0のまま維持。
+
+【Git操作】
+作業フォルダ：new_search_app
+
+1. mainから環境整備用ブランチを作成
+git switch main
+git switch -c codex/flet1-build
+
+ここでビルド用ファイルを反映し、配置を確認してnote.txtを更新する。
+環境更新・単体EXE作成・自動テストは実施済み。
+今回は環境整備のみのため、main.pyの版番号は変更しない。
+APP_VERSION = "v1.1.0"
+
+2. 変更をステージ
+git add -A
+
+3. コミット
+git commit -m "chore: set up Flet 1 development and single-file build"
+
+4. 作業ブランチをpush
+git push -u origin codex/flet1-build
+
+5. mainへ統合
+git switch main
+git merge --ff-only codex/flet1-build
+
+6. mainをpush
+git push origin main
+
+今回は新しいアプリ版をリリースしないため、タグは追加・移動しない。
+
+【EXE作成】
+C:\dev\new_search_app\Scripts\Activate.ps1
+python tools/build_exe.py
+
+distに「図面PDF検索結合ツール (v1.1.0).exe」を作成。
+単体EXEを現地へ持ち込み確認。機能修正が必要なら次のバージョンで対応する。
+
+
+
+
 
 
 
