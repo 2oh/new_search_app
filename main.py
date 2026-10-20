@@ -17,7 +17,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.1.0"
+APP_VERSION = "v1.1.1"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -789,6 +789,8 @@ def main(page: ft.Page):
             json.dump(config, f, indent=2, ensure_ascii=False)
 
     async def close_app(e):
+        if pdf_action_state["processing"]:
+            return
         await page.window.close()
 
     def create_button_style(bgcolor, color=ft.Colors.WHITE):
@@ -1481,6 +1483,8 @@ def main(page: ft.Page):
             - 未採用状態からPDFを採用した場合は True
             - すでに採用済みのPDFを変更した場合は、現在のチェック状態を維持
             """
+            if pdf_action_state["processing"]:
+                return
             sync_table_state_to_current_df()
 
             previous_adopted_pdf = str(
@@ -1496,6 +1500,10 @@ def main(page: ft.Page):
                 current_df.at[row_index, "候補状態"] = "複数候補"
                 current_df.at[row_index, "出力対象"] = False
 
+                update_pdf_export_button()
+                refresh_header = pdf_action_state.get("refresh_header")
+                if refresh_header:
+                    refresh_header()
                 request_candidate_preview("")
                 preview_message.value = (
                     "採用しない状態です。"
@@ -1537,6 +1545,11 @@ def main(page: ft.Page):
                 f"出力対象: {current_df.at[row_index, '出力対象']}"
             )
 
+            update_pdf_export_button()
+            refresh_header = pdf_action_state.get("refresh_header")
+            if refresh_header:
+                refresh_header()
+            page.update()
             request_candidate_preview(selected_value)
 
         def create_candidate_pdf_option(pdf_path: str) -> ft.Container:
@@ -1968,12 +1981,7 @@ def main(page: ft.Page):
                 counts["候補確認"] = int((candidate_counts >= 2).sum())
 
             if "出力対象" in df.columns:
-                counts["出力対象"] = int(
-                    df["出力対象"]
-                    .fillna(False)
-                    .astype(bool)
-                    .sum()
-                )
+                counts["出力対象"] = len(get_export_ready_df(df))
 
             return counts
 
@@ -2072,12 +2080,15 @@ def main(page: ft.Page):
             }
             return column_name in center_columns
 
-        badge_counts = get_header_badge_counts(current_df)
+        def refresh_header():
+            badge_counts = get_header_badge_counts(current_df)
+            table.columns = [
+                ft.DataColumn(create_header_label(c, badge_counts))
+                for c in display_columns
+            ]
 
-        table.columns = [
-            ft.DataColumn(create_header_label(c, badge_counts))
-            for c in display_columns
-        ]
+        pdf_action_state["refresh_header"] = refresh_header
+        refresh_header()
         table.rows = []
 
         ineligible_blank_columns = {
@@ -2506,6 +2517,7 @@ def main(page: ft.Page):
             table.rows.append(ft.DataRow(cells=cells))
 
         update_hover_preview_visibility()
+        update_pdf_export_button()
 
     # 🔽 抽出結果エリアの初期化関数を追加 🔽
     def reset_extract_view():
@@ -2519,7 +2531,7 @@ def main(page: ft.Page):
         table.columns = [ft.DataColumn(ft.Text("抽出結果"))]
         table_header.controls = []
 
-        pdf_action_state["processing"] = False
+        pdf_action_state.pop("refresh_header", None)
         pdf_action_state["search_button"] = None
         pdf_action_state["export_button"] = None
 
@@ -2944,9 +2956,8 @@ def main(page: ft.Page):
             df = await asyncio.to_thread(extract_excel_dataframe, selected_excel_path, sheet_val)
 
             if df.empty:
+                reset_extract_view()
                 message.value = "抽出結果がありません。"
-                table.rows = []
-                table_header.controls = []
             else:
                 message.value = f"{len(df)}件のデータを抽出しました。"
 
@@ -3305,6 +3316,17 @@ def main(page: ft.Page):
             except asyncio.CancelledError:
                 pass
 
+    def update_pdf_export_button():
+        """実際の出力条件に合わせてボタンを更新する（描画は呼出元で行う）。"""
+        export_button = pdf_action_state.get("export_button")
+        if export_button is not None:
+            disabled = (
+                pdf_action_state["processing"]
+                or get_export_ready_df(current_df).empty
+            )
+            export_button.disabled = disabled
+            export_button.opacity = 0.55 if disabled else 1.0
+
     def set_pdf_action_processing(
         processing: bool,
         status_message: str | None = None,
@@ -3315,7 +3337,7 @@ def main(page: ft.Page):
         pdf_action_state["processing"] = processing
         if processing:
             controls = [folder_settings_row, mode_dropdown, excel_control_row,
-                        table_header, table_area]
+                        table_header, table_area, exit_button]
             pdf_action_state["disabled_before"] = [(c, c.disabled) for c in controls]
             for control in controls:
                 control.disabled = True
@@ -3326,15 +3348,12 @@ def main(page: ft.Page):
 
 
         search_button = pdf_action_state.get("search_button")
-        export_button = pdf_action_state.get("export_button")
 
         if search_button is not None:
             search_button.disabled = processing
             search_button.opacity = 0.55 if processing else 1.0
 
-        if export_button is not None:
-            export_button.disabled = processing
-            export_button.opacity = 0.55 if processing else 1.0
+        update_pdf_export_button()
 
         if status_message is not None:
             message.value = status_message

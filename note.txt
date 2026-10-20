@@ -3721,8 +3721,172 @@ distに「図面PDF検索結合ツール (v1.1.0).exe」を作成。
 単体EXEを現地へ持ち込み確認。機能修正が必要なら次のバージョンで対応する。
 
 
+2026/10/20
+
+図面PDF検索結合ツール v1.1.1 作業手順
+
+【変更内容】
+・出力可能なPDFが0件の場合、「PDF出力実行」を無効にする。
+・抽出、検索、個別チェック、全選択・全解除、候補変更、
+  重複判定、処理終了後にボタンの状態を更新する。
+・「出力」件数バッジ、ボタンの有効判定、実際の出力で
+  同じ出力可能条件を使用する。
+・処理中の既存の操作制限と非同期処理を維持する。
+・画面内の「終了」ボタンも処理中は無効にする。
+  ウィンドウ右上の×の制御は今回含めない。
+・候補変更処理に処理中のガードを追加する。
+・再抽出結果が空の場合、以前の抽出データと
+  PDF操作ボタンの参照が残らないようにする。
+・PDFとCSVの出力内容、検索条件、候補選択、
+  重複PDFの既存の扱いは変更しない。
+
+【作業場所】
+C:\Users\shini\OneDrive\codes_od\new_search_app
+
+移行用コピーの app_a/migrated/main.py は変更しない。
+
+【1．作業ブランチの作成】
+この手順を正本リポジトリの note.txt に保存する。
+VS Codeのターミナルで以下を実行する。
+
+Set-Location "C:\Users\shini\OneDrive\codes_od\new_search_app"
+git status --short --branch
+git branch --show-current
+
+現在のブランチがmainであることを確認する。
+note.txtの保存による変更は、そのまま作業ブランチへ引き継ぐ。
+
+git switch -c release-v1.1.1
+git status --short --branch
+
+ここまで終わったら、Codexにブランチ作成完了を伝える。
+
+【2．ソース修正・版番号更新・テスト】
+Codexが正本の状態を再確認してから修正する。
+
+main.pyの版番号：
+APP_VERSION = "v1.1.1"
+
+主な修正箇所：
+・PDF操作ボタンの状態更新
+・出力件数バッジの集計
+・処理中の操作制限
+・候補変更時の状態更新
+・抽出結果が空の場合の内部状態初期化
+
+RELEASE_NOTES.txtにv1.1.1の変更内容を追記する。
+バージョン間の空行は1行とする。
+実際の変更と検証結果に合わせてnote.txtも更新する。
+
+架空データで以下を確認する。
+・出力可能件数0件／1件以上でのボタン状態
+・個別チェック、全選択・全解除
+・候補採用、採用解除、再検索保持、重複PDF
+・各処理中の操作制限と二重実行防止
+・正常終了時とエラー時の状態復元
+・空の再抽出結果に以前のデータが残らないこと
+・変更前後のPDF・CSVの出力内容
+
+自動試験と実画面での操作確認は分けて記録する。
+Python実行時は仮想環境を有効化する。
+
+& "C:\dev\new_search_app\Scripts\Activate.ps1"
+python -c "import sys; print(sys.executable)"
+
+表示されるPythonが以下であることを確認する。
+C:\dev\new_search_app\Scripts\python.exe
+
+実画面確認の起動：
+python main.py
+
+【3．変更内容の確認・コミット】
+修正と必要な確認が完了してから実行する。
+
+git diff --check
+git diff --stat
+git diff
+git status --short --branch
+
+git add -A
+git diff --cached --stat
+git commit -m "fix: improve processing controls and PDF export availability"
+
+【4．作業ブランチをpush】
+git push -u origin release-v1.1.1
+
+【5．mainへ統合してpush】
+git switch main
+git merge --ff-only release-v1.1.1
+git push origin main
+
+【6．注釈タグを作成してpush】
+git tag -a v1.1.1 -m "Release v1.1.1"
+git push origin v1.1.1
+
+【7．単体EXEを作成】
+Set-Location "C:\Users\shini\OneDrive\codes_od\new_search_app"
+& "C:\dev\new_search_app\Scripts\Activate.ps1"
+python -c "import sys; print(sys.executable)"
+python tools/build_exe.py
+
+APP_VERSIONから以下の名称で単体EXEを作成する。
+図面PDF検索結合ツール (v1.1.1).exe
+
+既存の旧版.specは使用しない。
+配布に_internalフォルダは不要。
+設定ファイルはEXEの隣で扱う。
+
+生成したEXEでも起動と今回の操作改善を確認する。
+実データでの現地確認はユーザーが行う。
 
 
+
+【2026-10-20 修正・自動検証記録】
+・作業ブランチ：release-v1.1.1
+・main.py：APP_VERSION = "v1.1.1"
+・出力可能件数0件時の無効化、件数バッジとの判定統一、
+  候補変更時の表示更新、処理中の終了・候補変更ガードを実装。
+・空の再抽出結果では内部データとボタン参照を初期化。
+  結果の初期化だけでは処理中の操作制限を解除しない。
+・RELEASE_NOTES.txtにv1.1.1を追記。
+・tools/test_ui_state.pyを追加。
+  正本のmain.pyとtools/fixturesの架空データを使用する。
+
+自動検証：
+・既存のfrozen_selftestをPythonソースに対して実行：成功。
+  今回はEXEとしての検証ではない。
+・変更前v1.1.0と変更後v1.1.1で、架空データのCSV内容が完全一致。
+  PDFのページ数・文字・描画結果も一致。
+・抽出直後、検索後、個別チェック、全選択・全解除、
+  候補採用・解除、再検索、未検出、重複の状態確認：成功。
+・Excel読込・抽出・検索・PDF出力の処理中の操作制限、
+  再入防止、ワーカー待機中のイベントループ応答、
+  エラー後の復帰：成功。
+・空の再抽出結果で以前の内部データが残らないことを確認。
+・CSVチェックOFF時はCSVを作らないことを確認。
+
+正本での自動試験の再実行：
+& "C:\dev\new_search_app\Scripts\Activate.ps1"
+python tools/test_ui_state.py .
+
+これから実画面で確認する項目：
+・抽出直後はPDF出力実行が無効。
+・PDF候補抽出後、出力可能件数1件以上なら有効。
+・全解除と最後の1件のチェック解除で無効。
+・候補の採用・解除後、件数とボタン表示が一致。
+・処理中は編集と画面内の終了ボタンが無効。
+・処理終了後に操作可能へ戻り、進捗表示と画面応答に問題がない。
+・PDF欄の文字表示と完了ダイアログも確認。
+
+実画面操作、単体EXE作成・EXE動作確認、現地実データ確認は未実施。
+コミット・push・mainへの統合・タグ作成は未実施。
+
+【2026-10-20 実画面確認完了】
+・抽出直後、検索後、全選択・全解除時の出力ボタン状態：OK
+・個別チェックON/OFF時の出力件数とボタン状態：OK
+・候補の採用・解除後のチェック、件数、ボタン状態：OK
+・PDF出力と、完了ダイアログがOK1回で閉じること：OK
+・単体EXE作成とEXEでの動作確認は未実施。
 
 
 
