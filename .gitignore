@@ -6,3 +6,4 @@ __pycache__/
 preview_cache/
 work/
 config.json
+dist-size-check/

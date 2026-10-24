@@ -3889,6 +3889,164 @@ python tools/test_ui_state.py .
 ・単体EXE作成とEXEでの動作確認は未実施。
 
 
+2026/10/22
+
+図面PDF検索結合ツール v1.1.2 作業手順
+
+【変更内容】
+・一覧の「出力PDF」欄のパスをクリックすると、
+  Explorerで対象PDFを選択した状態で表示する。
+・ファイル名をクリックすると、Windowsの既定のPDFアプリで開く。
+・現在のパス表示とホバープレビューを基本的に維持する。
+・検索先直下のPDFでパス部分が空欄になるケースは、
+  架空データで確認してから扱いを決める。
+・候補選択ダイアログ内のクリックによる採用操作は維持する。
+・各行にはツールチップを追加しない。
+  「出力PDF」の見出しに次の説明をまとめる。
+  「パスをクリック：Explorerで表示
+    ファイル名をクリック：PDFを開く」
+・主要ボタンのホバー時の色変化を分かりやすくする。
+・処理中や無効なボタンの操作制限を維持する。
+・タイトル行固定は次の段階で対応する。
+
+【EXEサイズの検証】
+・現在の仮想環境と配布済みv1.1.1は残す。
+・別の検証用仮想環境へ指定の依存パッケージを導入する。
+・同じソースから作成したEXEのサイズと同梱内容を比較する。
+・Fletクライアントの二重同梱が解消することを確認する。
+・起動、アイコン、プレビュー、Excel抽出、検索、
+  PDF・CSV出力、内蔵self-testを確認する。
+・検証結果に基づいて、次版のビルド環境を確定する。
+・不要と確認していないライブラリを一律に除外しない。
+
+【作業場所】
+C:\Users\shini\OneDrive\codes_od\new_search_app
+
+【1．作業ブランチの作成】
+この手順を正本リポジトリのnote.txtへ保存する。
+VS Codeのターミナルで実行する。
+
+Set-Location "C:\Users\shini\OneDrive\codes_od\new_search_app"
+git status --short --branch
+git branch --show-current
+
+現在のブランチがmainであることを確認する。
+note.txtの変更はそのまま作業ブランチへ引き継ぐ。
+
+git switch -c release-v1.1.2
+git status --short --branch
+
+ここまで終わったら、Codexへブランチ作成完了を伝える。
+
+【2．修正・版番号更新・テスト】
+Codexが正本の状態を再確認してから修正する。
+
+main.py：
+APP_VERSION = "v1.1.2"
+
+RELEASE_NOTES.txtへ変更内容を追記する。
+バージョン間の空行は1行とする。
+
+note.txtの追加記録はCodexが文章を提示し、
+ユーザーが末尾へ追記する。
+
+確認項目：
+・パスクリックでExplorerが対象PDFを選択して表示する。
+・ファイル名クリックで既定のPDFアプリが開く。
+・日本語、空白、サブフォルダを含むパスを正しく扱う。
+・検索先直下のPDFの表示と操作を確認する。
+・共有フォルダは利用できる環境で確認する。
+・PDFが移動・削除されている場合に適切に通知する。
+・処理中は新しいクリック操作も無効になる。
+・既存のホバープレビューと候補採用操作を維持する。
+・ボタンのホバー色が分かりやすく、文字も読みやすい。
+・無効なボタンが有効に見えない。
+・既存のPDF・CSV出力結果が変わらない。
+
+自動試験と実画面操作は分けて記録する。
+
+現在の開発環境での起動：
+& "C:\dev\new_search_app\Scripts\Activate.ps1"
+python -c "import sys; print(sys.executable)"
+python main.py
+
+既存の自動試験：
+python tools/test_ui_state.py .
+
+【3．検証用ビルド環境の準備】
+以下は修正・テストの段階で実施する。
+作業ブランチ作成時にはまだ実行しない。
+
+検証用フォルダ候補：
+C:\dev\new_search_app_build_v112
+
+使用前に同名の環境が存在しないことを確認する。
+存在する場合は内容を確認してから扱いを決める。
+
+新規作成：
+& "C:\dev\new_search_app\Scripts\python.exe" -m venv "C:\dev\new_search_app_build_v112"
+
+検証用環境を有効化：
+& "C:\dev\new_search_app_build_v112\Scripts\Activate.ps1"
+python -c "import sys; print(sys.executable)"
+
+依存パッケージを導入：
+python -m pip install -r requirements-build.txt
+python -m pip check
+
+比較用EXEを別の出力先へ作成：
+python tools/build_exe.py --output dist-size-check
+
+サイズ、同梱内容、内蔵self-test、実画面動作を確認する。
+必要なビルド設定の修正は、結果を見て決定する。
+
+【4．変更内容の確認・コミット】
+修正・テスト・ビルド検証が完了してから実行する。
+検証用の生成物が追加対象に含まれないことも確認する。
+
+git diff --check
+git diff --stat
+git diff
+git status --short --branch
+
+git add -A
+git diff --cached --stat
+git commit -m "feat: add PDF file actions and improve button hover feedback"
+
+【5．作業ブランチをpush】
+git push -u origin release-v1.1.2
+
+【6．mainへ統合してpush】
+git switch main
+git merge --ff-only release-v1.1.2
+git push origin main
+
+【7．注釈タグを作成してpush】
+git tag -a v1.1.2 -m "Release v1.1.2"
+git push origin v1.1.2
+
+【8．配布用の単体EXEを作成】
+検証で確定したビルド環境を有効にして実行する。
+
+python -c "import sys; print(sys.executable)"
+python tools/build_exe.py
+
+生成名：
+図面PDF検索結合ツール (v1.1.2).exe
+
+生成したEXEで新機能とPDF出力を最終確認する。
+現地確認後に運用へ切り替える。
+
+
+
+
+
+
+
+
+
+
+
 
 
 3. **Fletを更新**

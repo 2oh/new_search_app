@@ -75,6 +75,13 @@ async def run_test(app, bundle, destination):
         assert current['候補状態'].tolist() == ['自動採用', '手動採用'] + ['出力不可'] * 4
         preview = await asyncio.to_thread(app.create_pdf_preview_image, str(destination / 'pdfs/TEST001.pdf'))
         assert Path(preview).is_file()
+        shortcut_checked = False
+        if hasattr(app, 'create_explorer_shortcut'):
+            shortcut = await asyncio.to_thread(
+                app.create_explorer_shortcut, str(destination / 'pdfs/TEST001.pdf'),
+                str(destination / 'shell-links'))
+            assert shortcut.is_file() and shortcut.suffix == '.lnk'
+            shortcut_checked = True
         scope['output_folder_field'].value = str(destination / 'export')
         scope['result_csv_checkbox'].value = True
         await scope['on_pdf_export'](None)
@@ -107,7 +114,7 @@ async def run_test(app, bundle, destination):
         (destination / 'SELFTEST_PASS.json').write_text(json.dumps({
             'frozen': bool(getattr(sys, 'frozen', False)),
             'version': app.APP_VERSION,
-            'checks': ['Excel', 'search', 'manual selection', 're-search', 'output PDF filename and folder text after search', 'preview', 'PDF 2 pages', 'CSV 6 rows / 21 columns', 'title in paired output filenames', 'version-only label', 'one-click close'],
+            'checks': ['Excel', 'search', 'manual selection', 're-search', 'output PDF filename and folder text after search', 'preview', 'PDF 2 pages', 'CSV 6 rows / 21 columns', 'title in paired output filenames', 'version-only label', 'one-click close'] + (['Explorer shortcut creation'] if shortcut_checked else []),
         }, indent=2), encoding='utf-8')
     finally:
         sys.setprofile(old_profile)

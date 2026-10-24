@@ -10,6 +10,8 @@ import re
 import sys
 import asyncio
 import queue
+import tempfile
+from windows_file_actions import create_explorer_shortcut
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
@@ -17,7 +19,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.1.1"
+APP_VERSION = "v1.1.2"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -793,23 +795,40 @@ def main(page: ft.Page):
             return
         await page.window.close()
 
-    def create_button_style(bgcolor, color=ft.Colors.WHITE):
+    def create_button_style(bgcolor, hover_bgcolor, color=ft.Colors.WHITE):
         """
         ダークテーマ上で見やすいボタンスタイルを作る。
         """
         return ft.ButtonStyle(
-            bgcolor=bgcolor,
-            color=color,
+            bgcolor={
+                ft.ControlState.DISABLED: ft.Colors.BLUE_GREY_800,
+                ft.ControlState.HOVERED: hover_bgcolor,
+                ft.ControlState.FOCUSED: hover_bgcolor,
+                ft.ControlState.DEFAULT: bgcolor,
+            },
+            color={
+                ft.ControlState.DISABLED: ft.Colors.GREY_400,
+                ft.ControlState.DEFAULT: color,
+            },
             padding=ft.Padding.symmetric(horizontal=10, vertical=6),
         )
 
 
-    BUTTON_STYLE_PRIMARY = create_button_style(ft.Colors.BLUE_700)
-    BUTTON_STYLE_SUCCESS = create_button_style(ft.Colors.GREEN_700)
-    BUTTON_STYLE_WARNING = create_button_style(ft.Colors.ORANGE_700)
-    BUTTON_STYLE_SECONDARY = create_button_style(ft.Colors.BLUE_GREY_700)
+    BUTTON_STYLE_PRIMARY = create_button_style(ft.Colors.BLUE_700, ft.Colors.BLUE_500)
+    BUTTON_STYLE_SUCCESS = create_button_style(ft.Colors.GREEN_700, ft.Colors.GREEN_500)
+    BUTTON_STYLE_WARNING = create_button_style(ft.Colors.ORANGE_700, ft.Colors.ORANGE_500)
+    BUTTON_STYLE_SECONDARY = create_button_style(ft.Colors.BLUE_GREY_700, ft.Colors.BLUE_GREY_500)
     BUTTON_STYLE_DANGER_OUTLINE = ft.ButtonStyle(
-        color=ft.Colors.RED_100,
+        color={
+            ft.ControlState.DISABLED: ft.Colors.GREY_400,
+            ft.ControlState.DEFAULT: ft.Colors.RED_100,
+        },
+        bgcolor={
+            ft.ControlState.DISABLED: ft.Colors.TRANSPARENT,
+            ft.ControlState.HOVERED: ft.Colors.RED_800,
+            ft.ControlState.FOCUSED: ft.Colors.RED_800,
+            ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT,
+        },
         side=ft.BorderSide(1, ft.Colors.RED_300),
         padding=ft.Padding.symmetric(horizontal=12, vertical=8),
     )
@@ -1824,6 +1843,52 @@ def main(page: ft.Page):
 
         return df
 
+    external_url_launcher = ft.UrlLauncher()
+    external_open_state = {"directory": None}
+
+    async def open_output_pdf(pdf_path: str, select_in_explorer: bool):
+        """共有フォルダへのアクセスや外部アプリの起動でUIを止めない。"""
+        if pdf_action_state["processing"]:
+            return
+        try:
+            if not pdf_path or not str(pdf_path).strip():
+                raise FileNotFoundError("PDFが指定されていません。")
+            path = Path(os.path.abspath(pdf_path))
+            if path.suffix.lower() != ".pdf":
+                raise ValueError("PDFファイルを指定してください。")
+            if not await asyncio.to_thread(path.is_file):
+                raise FileNotFoundError("PDFが見つかりません。移動・削除、または接続状態を確認してください。")
+            # 存在確認を待つ間に検索・出力が始まった場合も起動しない。
+            if pdf_action_state["processing"]:
+                return
+            launch_path = path
+            if select_in_explorer:
+                if external_open_state["directory"] is None:
+                    external_open_state["directory"] = tempfile.TemporaryDirectory(
+                        prefix="drawing-pdf-links-"
+                    )
+                launch_path = await asyncio.to_thread(
+                    create_explorer_shortcut, str(path), external_open_state["directory"].name
+                )
+            if pdf_action_state["processing"]:
+                return
+            # 前面のFlet画面プロセスからWindowsに起動を依頼する。
+            # Explorerは一時ショートカットで/selectを維持する。
+            await external_url_launcher.launch_url(
+                launch_path.as_uri(), mode=ft.LaunchMode.EXTERNAL_APPLICATION
+            )
+        except Exception as ex:
+            action = "Explorerで表示する" if select_in_explorer else "PDFを開く"
+            message.value = f"{action}ことができませんでした：{ex}"
+            page.show_dialog(ft.SnackBar(ft.Text(message.value)))
+            page.update()
+
+    def create_output_pdf_link(content, pdf_path: str, select_in_explorer: bool):
+        async def on_click(e):
+            await open_output_pdf(pdf_path, select_in_explorer)
+
+        return ft.Container(content=content, on_click=on_click, ink=True)
+
     def format_pdf_path_for_display(pdf_path: str) -> str:
         """
         PDFパスを画面表示用に整形する。
@@ -2031,6 +2096,11 @@ def main(page: ft.Page):
                 )
 
             header_text = create_header_text()
+            if column_name == "採用PDFパス":
+                return ft.Container(
+                    content=header_text,
+                    tooltip="パスをクリック：Explorerで表示\nファイル名をクリック：PDFを開く",
+                )
 
             # 検索文字列列は、入力欄の幅に合わせて見出しを中央寄せする
             if column_name == "検索用文字列":
@@ -2274,10 +2344,9 @@ def main(page: ft.Page):
                             "選択",
                             tooltip="候補PDFを選択",
                             on_click=lambda e, row_index=idx: on_select_pdf_candidate(row_index),
-                            style=ft.ButtonStyle(
-                                bgcolor=ft.Colors.AMBER_500,
+                            style=create_button_style(
+                                ft.Colors.AMBER_500, ft.Colors.AMBER_200,
                                 color=ft.Colors.BLACK,
-                                padding=ft.Padding.symmetric(horizontal=8, vertical=4),
                             ),
                         )
                     else:
@@ -2437,6 +2506,9 @@ def main(page: ft.Page):
                             adopted_pdf_path_for_hover
                         )
 
+                        # 検索先直下では相対フォルダ名がないため、実際の親を表示する。
+                        folder_text = folder_text or f"({Path(adopted_pdf_path_for_hover).parent})"
+
                         output_pdf_file_name_text = ft.Text(
                             file_name,
                             color=PDF_FILE_NAME_COLOR,
@@ -2450,14 +2522,22 @@ def main(page: ft.Page):
                             width=OUTPUT_PDF_COLUMN_WIDTH,
                             content=ft.Column(
                                 controls=[
-                                    ft.Text(
-                                        folder_text,
-                                        color=ft.Colors.WHITE,
-                                        weight=ft.FontWeight.NORMAL,
-                                        no_wrap=True,
-                                        overflow=ft.TextOverflow.ELLIPSIS,
+                                    create_output_pdf_link(
+                                        ft.Text(
+                                            folder_text,
+                                            color=ft.Colors.WHITE,
+                                            weight=ft.FontWeight.NORMAL,
+                                            no_wrap=True,
+                                            overflow=ft.TextOverflow.ELLIPSIS,
+                                        ),
+                                        adopted_pdf_path_for_hover,
+                                        True,
                                     ),
-                                    output_pdf_file_name_text,
+                                    create_output_pdf_link(
+                                        output_pdf_file_name_text,
+                                        adopted_pdf_path_for_hover,
+                                        False,
+                                    ),
                                 ],
                                 spacing=0,
                                 tight=True,
@@ -2502,8 +2582,10 @@ def main(page: ft.Page):
                         )
                     else:
                         cell_content = ft.Container(
-                            content=ft.SelectionArea(
-                                content=text_control
+                            content=(
+                                text_control
+                                if c == "採用PDFパス" and adopted_pdf_path_for_hover
+                                else ft.SelectionArea(content=text_control)
                             ),
                             alignment=(
                                 ft.Alignment.CENTER

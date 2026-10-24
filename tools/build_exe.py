@@ -2,7 +2,7 @@
 import argparse
 import ast
 import hashlib
-from importlib.metadata import version
+from importlib.metadata import distributions, version
 import json
 from pathlib import Path
 import re
@@ -48,6 +48,8 @@ def main():
     report = {'version': app_version, 'python': sys.version, 'python_executable': sys.executable,
               'main_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
               'exe_sha256': hashlib.sha256(exe.read_bytes()).hexdigest(),
+              'exe_size_bytes': exe.stat().st_size,
+              'all_packages': dict(sorted((d.metadata['Name'], d.version) for d in distributions())),
               'packages': {n: version(n) for n in ('flet', 'flet-desktop', 'pyinstaller', 'pandas', 'openpyxl', 'pypdf', 'PyMuPDF')}}
     exe.with_suffix('.build.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
     print(f'Built: {exe}')

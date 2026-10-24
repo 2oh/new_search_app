@@ -22,7 +22,11 @@ sys.dont_write_bytecode = True
 def load(name, path):
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.path.insert(0, str(path.parent))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
     return module
 
 
@@ -42,9 +46,9 @@ async def verify(root, baseline):
         await helper.run_test(app, bundle, destination)
         print("PASS: existing source selftest (Excel, manual candidate, re-search, PDF, CSV, preview, completion)")
         if baseline:
-            new_csv = next((destination / "export").glob("*v1.1.1_result.csv")).read_bytes()
+            new_csv = next((destination / "export").glob(f"*{app.APP_VERSION}_result.csv")).read_bytes()
             assert old_csv == new_csv, "CSV contents changed"
-            new_pdf = next((destination / "export").glob("*v1.1.1.pdf"))
+            new_pdf = next((destination / "export").glob(f"*{app.APP_VERSION}.pdf"))
             with helper.fitz.open(old_pdf) as left, helper.fitz.open(new_pdf) as right:
                 assert len(left) == len(right)
                 for a, b in zip(left, right):
