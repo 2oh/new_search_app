@@ -63,3 +63,17 @@ python tools/build_exe.py
 `.build.json` にEXEサイズと全インストール済みパッケージ一覧も保存します。
 既存の `packages` は主要パッケージの抜粋、`all_packages` は環境全体です。
 単体EXEの実画面確認は、内蔵self-testとは別に行います。
+
+## v1.1.3の見出し固定
+
+`flet-datatable2==1.0.1` を依存へ追加しています。Flet本体は1.0.1を維持します。
+開発環境とビルド環境のそれぞれで、該当環境を有効化して次を実行します。
+
+```powershell
+python -m pip install -r requirements-build.txt
+python -m pip check
+```
+
+ビルド環境は引き続き `C:\dev\new_search_app_build_v112` を使用できます。
+Flet 1.0.1の標準Windowsクライアントに含まれるDataTable2を利用します。
+追加のFlutterビルドは不要です。生成exeでも見出し固定と横スクロールを確認します。

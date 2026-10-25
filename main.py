@@ -3,6 +3,7 @@
 # ======================================================
 
 import flet as ft
+import flet_datatable2 as dt2
 import pandas as pd
 import os
 import json
@@ -19,7 +20,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.1.2"
+APP_VERSION = "v1.1.3"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -976,13 +977,19 @@ def main(page: ft.Page):
     )
     
     mode_notice = ft.Text("")
-    table = ft.DataTable(
+    table = dt2.DataTable2(
         columns=[ft.DataColumn(ft.Text("抽出結果"))],
         rows=[],
-        column_spacing=20,
-        horizontal_margin=12,
-        data_row_min_height=46,
-        data_row_max_height=72,
+        column_spacing=12,
+        horizontal_margin=8,
+        data_row_height=72,
+        heading_row_height=56,
+        fixed_top_rows=1,
+        fixed_left_columns=0,
+        min_width=240,
+        visible_horizontal_scroll_bar=True,
+        visible_vertical_scroll_bar=True,
+        heading_row_color=ft.Colors.BLUE_GREY_900,
     )
     table_header = ft.Row([], alignment="center")
 
@@ -2150,10 +2157,32 @@ def main(page: ft.Page):
             }
             return column_name in center_columns
 
+        # DataTable2 uses explicit widths rather than measuring every cell.
+        # Widths include cell padding; keep room for two-line values and badges.
+        column_widths = {
+            "項番": 46, "品名": 120, "材料": 72, "品番PG名": 130,
+            "数量": 48, "数量セル色": 48, "出力可否": 84,
+            "検索用文字列": 117, "共通": 48, "候補確認": 88,
+            "採用PDFパス": OUTPUT_PDF_COLUMN_WIDTH + 12,
+            "採用PDF重複": 48, "出力対象": 84, "プレビュー": 72,
+        }
+
         def refresh_header():
             badge_counts = get_header_badge_counts(current_df)
+            widths = {}
+            for c in display_columns:
+                width = column_widths.get(c, 120)
+                if c in badge_counts:
+                    width = max(width, 60 + 8 * len(str(badge_counts[c])))
+                widths[c] = width
+            table.min_width = sum(widths.values()) + 16
             table.columns = [
-                ft.DataColumn(create_header_label(c, badge_counts))
+                dt2.DataColumn2(
+                    create_header_label(c, badge_counts),
+                    # One flexible column receives spare room on wide screens.
+                    fixed_width=None if c == "品名" else widths[c],
+                    size=dt2.DataColumnSize.M,
+                )
                 for c in display_columns
             ]
 
@@ -2229,6 +2258,7 @@ def main(page: ft.Page):
                             ft.Text(
                                 part_number,
                                 no_wrap=True,
+                                overflow=ft.TextOverflow.ELLIPSIS,
                             )
                         )
 
@@ -2237,6 +2267,7 @@ def main(page: ft.Page):
                             ft.Text(
                                 pg_name,
                                 no_wrap=True,
+                                overflow=ft.TextOverflow.ELLIPSIS,
                             )
                         )
 
@@ -2307,6 +2338,7 @@ def main(page: ft.Page):
                             ft.Text(
                                 part_number,
                                 no_wrap=True,
+                                overflow=ft.TextOverflow.ELLIPSIS,
                             )
                         )
 
@@ -2315,6 +2347,7 @@ def main(page: ft.Page):
                             ft.Text(
                                 pg_name,
                                 no_wrap=True,
+                                overflow=ft.TextOverflow.ELLIPSIS,
                             )
                         )
 
@@ -2548,6 +2581,8 @@ def main(page: ft.Page):
                             display_value,
                             color=normal_text_color,
                             weight=ft.FontWeight.NORMAL,
+                            max_lines=2,
+                            overflow=ft.TextOverflow.ELLIPSIS,
                             text_align=(
                                 ft.TextAlign.CENTER
                                 if should_center_align_column(c)
@@ -2611,6 +2646,7 @@ def main(page: ft.Page):
 
         table.rows = []
         table.columns = [ft.DataColumn(ft.Text("抽出結果"))]
+        table.min_width = 240
         table_header.controls = []
 
         pdf_action_state.pop("refresh_header", None)
@@ -3967,23 +4003,17 @@ def main(page: ft.Page):
         padding=ft.Padding.only(left=4, right=4, top=4, bottom=6),
     )
 
-    table_area = ft.Container(
-        content=ft.Column(
-            [
-                table,
-            ],
-            scroll="auto",
-            expand=True,
-        ),
-    )
+    # DataTable2 owns both scroll axes and pins its header internally.
+    # Give it bounded space: an outer scrolling Column would unbound its height.
+    table_area = ft.Container(content=table, expand=True)
 
     result_area = ft.Row(
         controls=[
-            table_area,            # 表は必要な幅だけ
+            table_area,            # 狭い画面では横スクロール
             hover_preview_panel,   # 余った幅を全部使う
         ],
         expand=True,
-        vertical_alignment=ft.CrossAxisAlignment.START,
+        vertical_alignment=ft.CrossAxisAlignment.STRETCH,
     )
 
     layout = ft.Column(
@@ -4020,6 +4050,12 @@ def main(page: ft.Page):
 
         use_hover_preview = new_use_hover_preview
         hover_preview_panel.visible = use_hover_preview
+        # Keep space for the preview; the table scrolls horizontally if needed.
+        table_area.expand = not use_hover_preview
+        table_area.width = (
+            min(table.min_width or 240, max(600, page_width - 460))
+            if use_hover_preview else None
+        )
 
         if not use_hover_preview:
             clear_hover_preview()

@@ -3889,7 +3889,7 @@ python tools/test_ui_state.py .
 ・単体EXE作成とEXEでの動作確認は未実施。
 
 
-2026/10/22
+2026/10/22-2026/10/24
 
 図面PDF検索結合ツール v1.1.2 作業手順
 
@@ -4039,8 +4039,117 @@ python tools/build_exe.py
 
 
 
+2026/10/25
+
+図面PDF検索結合ツール v1.1.3 作業手順
+
+【変更予定】
+・検索結果テーブルの項目タイトル行を縦スクロール時も表示する。
+・見出しと各列の位置がずれないようにする。
+・既存の選択操作、PDFを開く操作、Explorer表示、
+  ホバープレビュー、PDF・CSV出力を維持する。
+・今回完成した版を現地テストへ持参する。
+・動作確認済みのv1.1.1のexeも、戻せるように保管する。
+
+【作業場所】
+C:\Users\shini\OneDrive\codes_od\new_search_app
+
+【1．手順の保存と開始状態の確認】
+この手順をnote.txtへ貼り付けて保存する。
+VS CodeのPowerShellで実行する。
+
+Set-Location "C:\Users\shini\OneDrive\codes_od\new_search_app"
+git branch --show-current
+git status --short --branch
+
+確認すること：
+・現在のブランチがmainである。
+・変更がnote.txtだけである。
+・ほかの変更や想定外の表示があれば、その時点で確認する。
+
+【2．作業ブランチを作成】
+git switch -c release-v1.1.3
+git branch --show-current
+git status --short --branch
+
+確認すること：
+・現在のブランチがrelease-v1.1.3になった。
+・note.txtの変更が残っている。
+
+ここまで終わったら、Codexへブランチ作成完了を伝える。
+
+【3．実装・版番号更新・検証】
+Codexが修正と自動テストを行う。
+APP_VERSIONをv1.1.3に更新し、RELEASE_NOTES.txtへ追記する。
+実画面でスクロール、列位置、既存操作を確認する。
+note.txtへの追加記録は、提示された文章を自分で保存する。
+
+【4．コミット】
+git branch --show-current
+git status --short --branch
+git diff --stat
+git diff --check
+
+release-v1.1.3で、変更内容が今回の作業に対応することを確認する。
+git add -Aは新規・変更・削除をすべて登録するため、
+不要なファイルが含まれていないか確認してから実行する。
+
+git add -A
+git diff --cached --stat
+git diff --cached --check
+
+問題がなければコミットする。
+
+git commit -m "feat: keep search result headers visible while scrolling"
+git status --short --branch
+
+変更ファイルの表示がなくなったことを確認する。
+
+【5．作業ブランチをpush】
+git push -u origin release-v1.1.3
+
+【6．mainへ統合してpush】
+git status --short --branch
+
+未コミットの変更がないことを確認してから実行する。
+
+git switch main
+git branch --show-current
+git merge --ff-only release-v1.1.3
+git push origin main
+
+エラーが出た場合は、そこで止めて確認する。
+強制pushや、別方式のmergeへ勝手に切り替えない。
+
+【7．注釈タグを作成してpush】
+git tag -a v1.1.3 -m "Release v1.1.3"
+git push origin v1.1.3
+
+【8．配布用exeを作成】
+ビルド環境はv1.1.2で検証したものを引き続き使用する。
+環境名にv112とあるが、次版のビルドにも使用できる。
+
+& "C:\dev\new_search_app_build_v112\Scripts\Activate.ps1"
+python -c "import sys; print(sys.executable)"
+
+表示が次のパスであることを確認する。
+C:\dev\new_search_app_build_v112\Scripts\python.exe
+
+python tools/build_exe.py
+
+出力先：
+dist\図面PDF検索結合ツール (v1.1.3).exe
+
+完成したexeで最終動作確認を行う。
+問題があった場合は、そのまま配布せず確認する。
 
 
+【v1.1.3 実画面確認】
+・見出し固定、スクロール、表示の方向性：OK
+・行高を72へ調整し、PDF欄の3行表示：OK
+・右側プレビュー領域の拡大：OK
+・自動テスト、exe自己テスト：成功
+・A3横PDFの四隅と下端が収まるかは現地で確認する。
 
 
 
