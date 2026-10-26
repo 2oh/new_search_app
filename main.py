@@ -20,7 +20,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.1.3"
+APP_VERSION = "v1.1.4"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -371,9 +371,21 @@ def get_quantity_colors(file_path: str, sheet_name: str, header_row_index: int, 
     try:
         ws = wb[sheet_name]
         colors = []
+        quantity_column = quantity_col_index + 1  # openpyxlは1始まり
+        first_data_row = header_row_index + 2
+        merged_quantity_cells = {}
+        # 数量列を含む結合範囲では、各行の色を結合元（左上）から取得する。
+        # 他列だけの結合や、結合されていない数量セルには影響させない。
+        for merged_range in ws.merged_cells.ranges:
+            if merged_range.min_col <= quantity_column <= merged_range.max_col:
+                anchor = ws.cell(merged_range.min_row, merged_range.min_col)
+                for row_idx in range(max(first_data_row, merged_range.min_row), merged_range.max_row + 1):
+                    merged_quantity_cells[row_idx] = anchor
 
-        for row_idx in range(header_row_index + 2, ws.max_row + 1):
-            cell = ws.cell(row=row_idx, column=quantity_col_index + 1)  # openpyxlは1始まり
+        for row_idx in range(first_data_row, ws.max_row + 1):
+            cell = merged_quantity_cells.get(row_idx)
+            if cell is None:
+                cell = ws.cell(row=row_idx, column=quantity_column)
             fill = cell.fill
 
             if not fill:
@@ -2013,7 +2025,7 @@ def main(page: ft.Page):
             display_name_map = {
                 "検索用文字列": "検索文字列",
                 "採用PDF重複": "重複",
-                "数量": "数量ゼロ",
+                "数量": "数量",
                 "数量セル色": "セル色",
                 "採用PDFパス": "出力PDF",
                 "出力可否": "抽出対象",
@@ -2070,7 +2082,6 @@ def main(page: ft.Page):
             count = badge_counts.get(column_name)
 
             compact_header_lines = {
-                "数量": ["数量", "ゼロ"],
                 "数量セル色": ["セル", "色"],
                 "出力可否": ["抽出", "対象"],
                 "候補確認": ["複数", "候補"],
@@ -2161,7 +2172,7 @@ def main(page: ft.Page):
         # Widths include cell padding; keep room for two-line values and badges.
         column_widths = {
             "項番": 46, "品名": 120, "材料": 72, "品番PG名": 130,
-            "数量": 48, "数量セル色": 48, "出力可否": 84,
+            "数量": 64, "数量セル色": 48, "出力可否": 84,
             "検索用文字列": 117, "共通": 48, "候補確認": 88,
             "採用PDFパス": OUTPUT_PDF_COLUMN_WIDTH + 12,
             "採用PDF重複": 48, "出力対象": 84, "プレビュー": 72,
@@ -2397,7 +2408,7 @@ def main(page: ft.Page):
                     continue
 
                 if c == "数量":
-                    display_value = "該当" if is_zero_quantity(v) else ""
+                    display_value = format_quantity_for_display(v)
 
                 elif c == "数量セル色":
                     display_value = "あり" if str(v).strip() else ""

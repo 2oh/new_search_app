@@ -4152,7 +4152,82 @@ dist\図面PDF検索結合ツール (v1.1.3).exe
 ・A3横PDFの四隅と下端が収まるかは現地で確認する。
 
 
+2026/10/26
 
+【v1.1.4 作業内容】
+・数量列の縦結合セルに色がある場合、結合範囲内の各行を「色あり」と判定する。
+・数量列が結合されていない場合は、各行のセル色で判定する。
+・表示列「数量ゼロ」を「数量」に変更し、「各１」などの数量の値を表示する。
+・数量がゼロの場合は、従来どおり出力対象外とする。
+・数量列の幅を調整し、表示と判定を検証する。
+
+【v1.1.3 現地確認結果】
+・修正箇所は正常動作を確認。
+・A3横、A4縦ともに、プレビュー下部が切れないことを確認。
+
+Set-Location "C:\Users\shini\OneDrive\codes_od\new_search_app" # 短縮形：cd "同じパス"
+git status --short --branch # 短縮形：git status -sb
+git branch --list release-v1.1.4
+
+・現状mainで、release-v1.1.4がない
+
+git switch -c release-v1.1.4
+git status --short --branch # 短縮形：git status -sb
+
+・codexにて、修正と動作確認
+
+& "C:\dev\new_search_app\Scripts\Activate.ps1"
+python main.py
+
+new_search_app：python main.py で起動して動作確認する開発用環境。
+new_search_app_build_v112：配布用EXEを作成する環境。v1.1.4でも引き続き使います。
+
+・こちら側動作確認
+・確認OK
+
+Set-Location "C:\Users\shini\OneDrive\codes_od\new_search_app" # 短縮形：cd "同じパス"
+git status --short --branch # 短縮形：git status -sb
+git diff --check
+git diff --stat
+
+ブランチが release-v1.1.4 であることを確認。git diff --check は何も表示されなければOKです。
+
+git add -A
+git diff --cached --check
+git diff --cached --stat
+
+対象が上記４ファイルであることを確認します。
+
+git commit -m "fix: handle merged quantity cell colors and display quantity values"
+git status --short --branch # 短縮形：git status -sb
+
+変更ファイルの表示がなくなればOKです。
+
+git push -u origin release-v1.1.4
+
+git switch main
+git status --short --branch # 短縮形：git status -sb
+
+git merge --ff-only release-v1.1.4
+git status --short --branch # 短縮形：git status -sb
+
+git push origin main
+
+git tag --list v1.1.4
+
+git tag -a v1.1.4 -m "Release v1.1.4"
+git show --no-patch v1.1.4
+
+git push origin v1.1.4
+
+deactivate
+
+& "C:\dev\new_search_app_build_v112\Scripts\Activate.ps1"
+python -c "import sys; print(sys.executable)"
+
+確認：C:\dev\new_search_app_build_v112\Scripts\python.exe
+
+python tools/build_exe.py
 
 
 
