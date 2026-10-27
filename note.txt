@@ -4230,6 +4230,181 @@ python -c "import sys; print(sys.executable)"
 python tools/build_exe.py
 
 
+2026/10/27
+
+【v1.1.5 作業内容】
+・テーマ色で指定された白が「色あり」になる問題を修正する。
+・実際の色と濃淡補正を確認し、白なら「色なし」とする。
+・薄いグレーなど、白以外の塗りつぶしは「色あり」を維持する。
+・縦結合セルの色判定にも同じルールを適用する。
+
+【v1.1.4 現地確認結果】
+・数量表示、縦結合セルの色判定、数量ゼロの除外は正常動作を確認。
+
+【実行時の注意】
+・各段階の結果を確認してから次へ進む。
+・エラーが出た場合は、その先を実行せず止める。
+・note.txtの必要な追記・修正は、コミット前にすべて保存する。
+
+
+【1．現在の状態を確認】
+Set-Location "C:\Users\shini\OneDrive\codes_od\new_search_app" # 短縮形：cd "同じパス"
+git status --short --branch # 短縮形：git status -sb
+git branch --list release-v1.1.5
+
+確認事項：
+・現在のブランチがmainであること。
+・変更がnote.txtだけであること。
+・release-v1.1.5が表示されないこと。
+・想定と違う場合は、ここで止めて確認する。
+
+
+【2．作業ブランチ作成】
+git switch -c release-v1.1.5
+git status --short --branch # 短縮形：git status -sb
+
+確認事項：
+・ブランチがrelease-v1.1.5になっていること。
+・note.txtの変更が残っていて正常。
+
+ここで一旦停止し、アプリの修正・自動検証を待つ。
+
+
+【3．修正後の動作確認】
+仮想環境が有効な場合は、まず抜ける。
+有効でなければdeactivateは省略する。
+
+deactivate
+
+開発用環境で起動する。
+
+& "C:\dev\new_search_app\Scripts\Activate.ps1"
+python -c "import sys; print(sys.executable)"
+
+表示が以下であることを確認する。
+C:\dev\new_search_app\Scripts\python.exe
+
+python main.py
+
+確認事項：
+・今回のサンプルと同じテーマ色の白が「色なし」になる。
+・薄いグレーや他の色は「色あり」のまま。
+・塗りつぶしなしは「色なし」のまま。
+・縦結合された数量セルでも、同じ判定が各行に反映される。
+・数量表示と数量ゼロの除外が従来どおり動作する。
+
+動作確認後、アプリを終了する。
+
+
+【4．変更確認】
+確認結果など、note.txtへの追記を済ませて保存する。
+
+git status --short --branch # 短縮形：git status -sb
+git diff --check
+git diff --stat
+
+確認事項：
+・ブランチがrelease-v1.1.5であること。
+・git diff --checkが何も表示しないこと。
+・変更ファイル一覧が、修正完了時の案内と一致すること。
+・意図しない生成ファイルがあれば、追加前に.gitignoreを検討する。
+
+
+【5．ステージングとコミット】
+変更一覧に意図したファイルだけがあることを確認してから実行する。
+
+git add -A
+git diff --cached --check
+git diff --cached --stat
+
+内容を確認してからコミットする。
+
+git commit -m "fix: treat white theme fills as uncolored"
+git status --short --branch # 短縮形：git status -sb
+
+変更ファイルの表示がなくなればOK。
+
+
+【6．作業ブランチをpush】
+git push -u origin release-v1.1.5
+
+
+【7．mainへ移動】
+git status --short --branch # 短縮形：git status -sb
+
+release-v1.1.5で、未コミットの変更がないことを確認する。
+
+git switch main
+git status --short --branch # 短縮形：git status -sb
+
+
+【8．GitHub側のmainの更新を取り込む】
+git fetch origin
+git merge --ff-only origin/main
+
+更新がなければ「Already up to date.」となる。
+エラーの場合は、その先を実行せず止める。
+
+
+【9．作業ブランチをmainへ統合】
+git merge --ff-only release-v1.1.5
+git status --short --branch # 短縮形：git status -sb
+
+統合が成功し、未コミットの変更がないことを確認する。
+
+git push origin main
+
+
+【10．注釈タグを作成してpush】
+git tag --list v1.1.5
+
+何も表示されなければ、タグを作成する。
+既に表示された場合は止めて確認する。
+
+git tag -a v1.1.5 -m "Release v1.1.5"
+git show --no-patch v1.1.5
+
+内容を確認してからpushする。
+
+git push origin v1.1.5
+
+
+【11．配布用ビルド環境に切り替え】
+仮想環境が有効な場合は、まず抜ける。
+有効でなければdeactivateは省略する。
+
+deactivate
+
+& "C:\dev\new_search_app_build_v112\Scripts\Activate.ps1"
+python -c "import sys; print(sys.executable)"
+
+表示が以下であることを確認する。
+C:\dev\new_search_app_build_v112\Scripts\python.exe
+
+環境名のv112は、そのまま使用してよい。
+
+
+【12．配布用EXEを作成】
+python tools/build_exe.py
+
+生成先：
+C:\Users\shini\OneDrive\codes_od\new_search_app\dist\図面PDF検索結合ツール (v1.1.5).exe
+
+
+【13．EXEの動作確認・最終確認】
+生成したEXEで、手順3の確認事項を再確認する。
+
+git status --short --branch # 短縮形：git status -sb
+
+確認事項：
+・mainとorigin/mainがそろっていること。
+・変更ファイルの表示がないこと。
+・生成ファイルが表示された場合は、そのまま追加せず確認する。
+
+現地確認用にv1.1.5のEXEを持参する。
+前のv1.1.4のEXEも残しておく。
+
+
 
 
 

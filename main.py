@@ -20,7 +20,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.1.4"
+APP_VERSION = "v1.1.5"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -360,6 +360,39 @@ def detect_columns(file_path: str, sheet_name: str, header_row_index: int, targe
 
 
 # ========= 数量セルの背景色を取得 =========
+def get_white_theme_indices(workbook) -> set[int]:
+    """Resolve white theme entries by name (SpreadsheetML uses light/dark order)."""
+    from xml.etree import ElementTree as ET
+
+    if not workbook.loaded_theme:
+        return set()
+    try:
+        theme = ET.fromstring(workbook.loaded_theme)
+    except (ET.ParseError, ValueError, TypeError):
+        return set()
+    ns = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+    scheme = theme.find(f".//{ns}clrScheme")
+    if scheme is None:
+        return set()
+    names = ("lt1", "dk1", "lt2", "dk2", "accent1", "accent2",
+             "accent3", "accent4", "accent5", "accent6", "hlink", "folHlink")
+    white = set()
+    for index, name in enumerate(names):
+        entry = scheme.find(ns + name)
+        if entry is None or len(entry) == 0:
+            continue
+        color = entry[0]
+        if color.tag == ns + "srgbClr":
+            rgb = color.get("val", "")
+        elif color.tag == ns + "sysClr":
+            rgb = color.get("lastClr", "")
+        else:
+            continue
+        if rgb.upper() == "FFFFFF":
+            white.add(index)
+    return white
+
+
 def get_quantity_colors(file_path: str, sheet_name: str, header_row_index: int, quantity_col_index: int):
     """
     数量セルに「何らかの色が付いているかどうか」を判定して返す。
@@ -371,6 +404,7 @@ def get_quantity_colors(file_path: str, sheet_name: str, header_row_index: int, 
     try:
         ws = wb[sheet_name]
         colors = []
+        white_theme_indices = get_white_theme_indices(wb)
         quantity_column = quantity_col_index + 1  # openpyxlは1始まり
         first_data_row = header_row_index + 2
         merged_quantity_cells = {}
@@ -443,8 +477,14 @@ def get_quantity_colors(file_path: str, sheet_name: str, header_row_index: int, 
 
             # 3) テーマ色
             elif fg.type == "theme":
-                # テーマ色で塗りがある場合は、とりあえず「色あり」とみなす
-                colored = True
+                # 白を暗くした色（薄いグレーを含む）は色あり。
+                # 白以外を明るくしても、完全な白（tint=1）以外は色あり。
+                # 解決できないテーマ色も、安全側で色ありを維持する。
+                is_white = (
+                    fg.tint == 1.0
+                    or (fg.theme in white_theme_indices and fg.tint >= 0.0)
+                )
+                colored = not is_white
                 marker = f"theme:{fg.theme}"
 
             # その他タイプは一応「色なし」として扱う
