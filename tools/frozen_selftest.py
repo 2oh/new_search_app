@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import sys
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import fitz
 from flet.controls.context import _context_page
@@ -111,10 +112,43 @@ async def run_test(app, bundle, destination):
                 with fitz.open(destination / 'pdfs' / name) as source:
                     assert merged[i].get_text() == source[0].get_text()
                     assert merged[i].get_pixmap().samples == source[0].get_pixmap().samples
+        normal_checks = []
+        if 'normal_mode' in scope:
+            normal = scope['normal_mode']
+            # MemoryConnection has no native client to acknowledge focus calls.
+            normal.focus = AsyncMock()
+            bom_before = current.copy(deep=True)
+            scope['mode_dropdown'].value = '通常'
+            scope['on_mode_change'](None)
+            assert normal.view.visible and not scope['result_area'].visible
+            await normal.commit([])
+            normal.query.value = 'test001'
+            await normal.search()
+            assert len(normal.results) == 1
+            normal.select_all()
+            await normal.add_selected()
+            normal.query.value = '12345_b'
+            await normal.search()
+            assert len(normal.results) == 1 and len(normal.items) == 1
+            normal.select_all()
+            await normal.add_selected()
+            assert len(normal.items) == 2 and normal.store.load() == normal.items
+            scope['output_folder_field'].value = str(destination / 'normal-export')
+            await normal.export()
+            normal_pdf = max((destination / 'normal-export').glob('*.pdf'), key=lambda p:p.stat().st_mtime)
+            with fitz.open(normal_pdf) as merged, fitz.open(pdf) as bom_pdf:
+                assert len(merged) == 2
+                assert all(merged[i].get_pixmap().samples == bom_pdf[i].get_pixmap().samples for i in range(2))
+            assert len(normal.items) == 2
+            scope['mode_dropdown'].value = '構成部品表'
+            scope['on_mode_change'](None)
+            after = inspect.getclosurevars(scope['render_table_from_df']).nonlocals['current_df']
+            assert after.equals(bom_before) and scope['result_area'].visible
+            normal_checks = ['normal search', 'persistent stack', 'normal PDF order', 'BOM state preserved across modes']
         (destination / 'SELFTEST_PASS.json').write_text(json.dumps({
             'frozen': bool(getattr(sys, 'frozen', False)),
             'version': app.APP_VERSION,
-            'checks': ['Excel', 'search', 'manual selection', 're-search', 'output PDF filename and folder text after search', 'preview', 'PDF 2 pages', 'CSV 6 rows / 21 columns', 'title in paired output filenames', 'version-only label', 'one-click close'] + (['Explorer shortcut creation'] if shortcut_checked else []),
+            'checks': ['Excel', 'search', 'manual selection', 're-search', 'output PDF filename and folder text after search', 'preview', 'PDF 2 pages', 'CSV 6 rows / 21 columns', 'title in paired output filenames', 'version-only label', 'one-click close'] + (['Explorer shortcut creation'] if shortcut_checked else []) + normal_checks,
         }, indent=2), encoding='utf-8')
     finally:
         sys.setprofile(old_profile)

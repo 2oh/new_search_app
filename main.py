@@ -13,6 +13,7 @@ import asyncio
 import queue
 import tempfile
 from windows_file_actions import create_explorer_shortcut
+from normal_mode import NormalMode
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
@@ -20,7 +21,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.1.5"
+APP_VERSION = "v1.2.0"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -987,10 +988,7 @@ def main(page: ft.Page):
             set_excel_ui_enabled(True)
 
         else:
-            manual_field = ft.TextField(
-                label="検索文字列（手動入力）",
-                width=450,
-            )
+            manual_field = normal_mode.search_controls
             mode_row.controls = [
                 ft.Row(
                     controls=[
@@ -998,11 +996,23 @@ def main(page: ft.Page):
                         manual_field,
                     ],
                     spacing=12,
+                    expand=True,
                 ),
                 settings_action_row,
             ]
             set_excel_ui_enabled(False)
 
+        normal_active = mode_dropdown.value == "通常"
+        normal_mode.activate(normal_active)
+        excel_heading.visible = not normal_active
+        excel_control_row.visible = not normal_active
+        mode_notice.visible = not normal_active
+        table_header.visible = not normal_active
+        result_area.visible = not normal_active
+        if normal_active:
+            clear_hover_preview()
+        else:
+            update_hover_preview_visibility()
         page.update()
 
     def on_mode_change(e):
@@ -3506,7 +3516,8 @@ def main(page: ft.Page):
         pdf_action_state["processing"] = processing
         if processing:
             controls = [folder_settings_row, mode_dropdown, excel_control_row,
-                        table_header, table_area, exit_button]
+                        table_header, table_area, exit_button,
+                        normal_mode.view, normal_mode.search_controls]
             pdf_action_state["disabled_before"] = [(c, c.disabled) for c in controls]
             for control in controls:
                 control.disabled = True
@@ -3969,7 +3980,6 @@ def main(page: ft.Page):
         extract_btn.disabled = not enabled
 
         if not enabled:
-            reset_excel_selection()
             mode_notice.value = "通常モードでは構成部品表選択は無効です。"
         else:
             mode_notice.value = ""
@@ -4028,6 +4038,18 @@ def main(page: ft.Page):
         spacing=10,
     )
 
+    normal_mode = NormalMode(
+        page, folder=lambda: search_folder_field.value or "",
+        output_folder=lambda: output_folder_field.value or "",
+        collect=collect_pdf_files, preview=create_pdf_preview_image,
+        open_pdf=open_output_pdf, merge=merge_pdfs,
+        busy=lambda: pdf_action_state["processing"], set_busy=set_pdf_action_processing,
+        worker=run_worker_with_progress, message=message,
+        completed=show_pdf_export_completed_dialog, version=APP_VERSION,
+        button_style=BUTTON_STYLE_PRIMARY,
+    )
+    excel_heading = ft.Text("🔍 構成部品表選択", size=20, weight="bold")
+
     fixed_controls = ft.Container(
         content=ft.Column(
             [
@@ -4039,7 +4061,7 @@ def main(page: ft.Page):
                 ft.Divider(height=1),
                 ft.Container(height=6),
 
-                ft.Text("🔍 構成部品表選択", size=20, weight="bold"),
+                excel_heading,
                 mode_notice,
                 excel_control_row,
 
@@ -4071,6 +4093,7 @@ def main(page: ft.Page):
         [
             fixed_controls,
             result_area,
+            normal_mode.view,
         ],
         expand=True,
     )
@@ -4114,6 +4137,10 @@ def main(page: ft.Page):
         return changed
 
     def on_page_resize(e):
+        if mode_dropdown.value == "通常":
+            normal_mode.resize()
+            page.update()
+            return
         if pdf_action_state["processing"]:
             page.update()
             return

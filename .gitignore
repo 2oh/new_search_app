@@ -7,3 +7,5 @@ preview_cache/
 work/
 config.json
 dist-size-check/
+normal_stack.json
+normal_stack.json.*.tmp
