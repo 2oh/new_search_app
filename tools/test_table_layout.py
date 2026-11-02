@@ -42,7 +42,7 @@ async def run(root):
             scope['search_folder_field'].value = str(root / 'tools/fixtures/pdfs')
             await scope['on_pdf_candidate_search'](None)
             df = pd.concat([current()] * 15, ignore_index=True)
-            df.loc[0, '品名'] = '長い部品名称' * 40
+            df.loc[0, '品名'] = '長い部品名称' * 40 + '\n結合相手'
             scope['render_table_from_df'](df)
             selection = current()['出力対象'].copy()
             for width in (1200, 1920, 1699, 1700, 1200):
@@ -57,6 +57,15 @@ async def run(root):
                 assert current()['出力対象'].equals(selection)
                 assert table.min_width >= sum(c.fixed_width or 0 for c in table.columns)
                 assert all(c.fixed_width is None or c.fixed_width >= 44 for c in table.columns)
+                def walk(control):
+                    yield control
+                    for attr in ('content', 'controls', 'cells'):
+                        value = getattr(control, attr, None)
+                        for child in value if isinstance(value, list) else [value]:
+                            if child is not None:
+                                yield from walk(child)
+                second_line = [c for c in walk(table.rows[0]) if getattr(c, 'value', None) == '結合相手']
+                assert len(second_line) == 1 and second_line[0].no_wrap and second_line[0].max_lines == 1
             box = scope['output_checkboxes'][0]
             box.value = False
             box.on_change(SimpleNamespace(control=box))

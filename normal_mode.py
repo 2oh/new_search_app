@@ -24,37 +24,39 @@ class NormalMode:
             self.items = self.store.load()
         except (OSError, ValueError) as exc:
             self.items = []
-            self.load_error = f'保存リストを読み込めません。保存データを保護するため変更を停止しています：{exc}'
+            self.load_error = f'ストックを読み込めません。保存データを保護するため変更を停止しています：{exc}'
         self.results, self.selection, self.metadata = [], set(), {}
         self.files, self.index_folder = None, None
         self.preview_generation = 0
         self.activation_generation = 0
         self.preview_running = False
         self.preview_pending = None
-        self.query = ft.TextField(label='検索文字列', hint_text='空白でAND検索、/区切りは空白も含めて検索、"..."でフレーズ検索',
+        self.query = ft.TextField(label='検索文字列', hint_text='空白区切り（例：A B）でAND検索。ファイル名内のA・Bの出現順に関係なく検索されます。空白を含む文字列は " " で囲みます（例："A B"）。',
                                   expand=True, on_submit=self.search, on_focus=self.caret_end)
         self.search_button = ft.Button('検索', on_click=self.search, style=button_style)
-        self.search_controls = ft.Row([self.query, self.search_button], expand=True)
+        self.query.tooltip = self.query.hint_text
+        self.search_controls = ft.Row([self.search_button, self.query], expand=True, spacing=8)
         self.result_count = ft.Text('検索結果：0件', weight=ft.FontWeight.BOLD)
         self.stack_count = ft.Text('', weight=ft.FontWeight.BOLD)
-        self.export_button = ft.Button('PDF出力実行', on_click=self.export, style=button_style)
+        self.export_button = ft.Button('PDF出力', on_click=self.export, style=button_style)
+        self.open_button = ft.Button('PDFを開く', on_click=self.open_selected, style=button_style)
         self.result_table = self.new_table()
         self.stack_table = self.new_table()
         self.result_section = ft.Column([
-            ft.Row([self.result_count, ft.TextButton('全選択', on_click=self.select_all),
+            ft.Row([self.result_count, ft.Container(expand=True), ft.TextButton('全選択', on_click=self.select_all),
                     ft.TextButton('全解除', on_click=self.deselect_all),
-                    ft.Button('保存リストへ追加', on_click=self.add_selected, style=button_style)], wrap=True),
+                    ft.Button('ストックへ追加', on_click=self.add_selected, style=button_style)]),
             ft.Container(content=self.result_table, expand=True),
         ], expand=True, spacing=4)
         self.stack_section = ft.Container(content=ft.Column([
-            ft.Row([self.stack_count, ft.TextButton('全選択', on_click=self.check_all),
+            ft.Row([self.stack_count, ft.Container(expand=True), ft.TextButton('全選択', on_click=self.check_all),
                     ft.TextButton('全解除', on_click=self.uncheck_all),
-                    ft.TextButton('全削除', on_click=self.confirm_clear), self.export_button], wrap=True),
+                    ft.TextButton('全削除', on_click=self.confirm_clear), self.open_button, self.export_button]),
             ft.Container(content=self.stack_table, expand=True),
         ], expand=True, spacing=4), bgcolor='#303438', padding=6, expand=True)
         self.wide = False
         self.result_tab = ft.Tab(label='検索結果')
-        self.stack_tab = ft.Tab(label='保存リスト')
+        self.stack_tab = ft.Tab(label='ストック')
         self.tabs = ft.Tabs(length=2, selected_index=0, expand=True,
             on_change=self.on_tab_change,
             content=ft.Column([
@@ -132,7 +134,7 @@ class NormalMode:
         self.wide = wide
         self.preview_panel.visible = wide
         self.lists.expand = not wide
-        self.lists.width = min(1120, max(600, (self.page.width or 1200) - 460)) if wide else None
+        self.lists.width = max(1200, (self.page.width or 1200) - 400) if wide else None
         self.image.height = max(100, (self.page.height or 800) - 300)
         if changed:
             self.clear_preview()
@@ -174,7 +176,7 @@ class NormalMode:
             self.image.visible = False
             self.preview_label.value = ''
             self.tabs.selected_index = 0
-            self.message.value = f'検索結果：{len(results)}件。追加するPDFをチェックして保存リストへ追加してください。'
+            self.message.value = f'検索結果：{len(results)}件。追加するPDFをチェックしてストックへ追加してください。'
         except Exception as exc:
             self.message.value = f'検索できませんでした：{exc}'
         finally:
@@ -205,16 +207,21 @@ class NormalMode:
         self.selection.difference_update(stacked)
         output_count = sum(i['selected'] for i in self.items)
         self.result_count.value = f'検索結果：{len(self.results)}件'
-        self.stack_count.value = f'保存リスト：{len(self.items)}件'
+        self.stack_count.value = f'ストック：{len(self.items)}件'
         self.result_tab.label = self.header('検索結果', len(self.results), ft.Colors.BLUE_100)
-        self.stack_tab.label = self.header('保存リスト', len(self.items), ft.Colors.BLUE_100)
+        self.stack_tab.label = self.header('ストック', len(self.items), ft.Colors.BLUE_100)
         self.export_button.disabled = self.busy() or not output_count or bool(self.load_error)
+        self.open_button.disabled = self.export_button.disabled
+        available_width = self.lists.width or max(600, (self.page.width or 1200) - 60)
+        path_width = min(600, max(450, available_width - 900))
         for table, items, is_stack in ((self.result_table, self.results, False), (self.stack_table, self.items, True)):
-            columns = [('項番', 46), ('パス', 300), ('ファイル名', None), ('更新日時', 144)]
+            columns = [('項番', 46), ('パス', path_width), ('ファイル名', None), ('更新日時', 96)]
             if not self.wide:
                 columns.append(('プレビュー', 80))
-            columns += [('削除', 64), ('出力' if is_stack else '追加', 100)]
-            table.min_width = 1030 if self.wide else 1110
+            if is_stack:
+                columns.append(('削除', 64))
+            columns.append(('選択' if is_stack else '追加', 100))
+            table.min_width = sum(width or 360 for _, width in columns) + 16
             table.columns = [dt2.DataColumn2(self.header(label,
                 (output_count if is_stack else len(self.selection)) if index == len(columns)-1 else None,
                 ft.Colors.GREEN_100 if is_stack else ft.Colors.BLUE_100), fixed_width=width)
@@ -264,19 +271,20 @@ class NormalMode:
                         alignment=ft.Alignment.CENTER_LEFT)
                 folder = self.folder_label(path)
                 modified = meta.get('modified')
-                date = datetime.fromtimestamp(modified).strftime('%Y/%m/%d %H:%M') if modified else '—'
+                date = datetime.fromtimestamp(modified).strftime('%Y/%m/%d\n%H:%M') if modified is not None else '—'
                 def centered(control):
                     return ft.DataCell(ft.Container(control, alignment=ft.Alignment.CENTER))
                 cells = [centered(ft.Text(str(number), size=14)),
                     ft.DataCell(link(folder, open_folder, ft.Colors.WHITE, str(Path(path).parent))),
                     ft.DataCell(link(label + status, open_file, ft.Colors.BLUE_200, path + status)),
-                    ft.DataCell(ft.Text(date, size=14, no_wrap=True))]
+                    ft.DataCell(ft.Text(date, size=14, no_wrap=True, max_lines=2))]
                 if not self.wide:
                     cells.append(centered(ft.IconButton(icon=ft.Icons.VISIBILITY_OUTLINED,
                         tooltip='PDFをプレビュー', on_click=preview)))
-                cells.append(centered(ft.IconButton(icon=ft.Icons.DELETE_OUTLINE,
-                    icon_color=ft.Colors.ORANGE_300, tooltip='保存リストから削除',
-                    on_click=remove, disabled=bool(self.load_error)) if is_stack else ft.Text('')))
+                if is_stack:
+                    cells.append(centered(ft.IconButton(icon=ft.Icons.DELETE_OUTLINE,
+                        icon_color=ft.Colors.ORANGE_300, tooltip='ストックから削除',
+                        on_click=remove, disabled=bool(self.load_error))))
                 cells.append(centered(checkbox))
                 rows.append(ft.DataRow(cells=cells))
             table.rows = rows
@@ -321,13 +329,13 @@ class NormalMode:
             if self.load_error:
                 self.report_error(self.load_error)
             return False
-        self.set_busy(True, '保存リストを保存しています…')
+        self.set_busy(True, 'ストックに保存しています…')
         saved = False
         try:
             await asyncio.to_thread(self.store.save, items)
             self.items = items
             saved = True
-            self.message.value = '保存リストを保存しました。'
+            self.message.value = 'ストックに保存しました。'
         except Exception as exc:
             self.message.value = f'保存できなかったため変更を取り消しました：{exc}'
         finally:
@@ -341,7 +349,7 @@ class NormalMode:
             return
         paths = [i['path'] for i in self.results if path_key(i['path']) in self.selection]
         if not paths:
-            self.report_error('保存リストに追加するPDFをチェックしてください。')
+            self.report_error('ストックに追加するPDFをチェックしてください。')
             return
         if await self.commit(add_to_stack(self.items, paths)):
             self.selection.clear()
@@ -377,7 +385,7 @@ class NormalMode:
         def no(e):
             dialog.open = False
             self.page.update()
-        dialog = ft.AlertDialog(modal=True, title=ft.Text('保存リストを全削除しますか？'),
+        dialog = ft.AlertDialog(modal=True, title=ft.Text('ストックを全削除しますか？'),
                                 content=ft.Text('元のPDFファイルは削除しません。'),
                                 actions=[ft.TextButton('キャンセル', on_click=no), ft.TextButton('全削除', on_click=yes)])
         self.page.show_dialog(dialog)
@@ -414,6 +422,34 @@ class NormalMode:
                 self.page.update()
         finally:
             self.preview_running = False
+
+    async def open_selected(self, event=None):
+        if self.busy() or self.load_error:
+            return
+        paths = [item['path'] for item in self.items if item['selected']]
+        if not paths:
+            self.report_error('開くPDFを選択してください。')
+            return
+        self.caret_end()
+        self.set_busy(True, '選択したPDFを開いています…')
+        opened, failed = 0, []
+        try:
+            for path in paths:
+                try:
+                    success = await self.open_pdf(path, False, batch=True)
+                    if success is False:
+                        failed.append(path)
+                    else:
+                        opened += 1
+                except Exception:
+                    failed.append(path)
+            self.message.value = f'PDFを開く操作を実行しました：{opened}件。'
+            if failed:
+                self.message.value += f' 開けなかったPDF：{len(failed)}件\n' + '\n'.join(failed)
+        finally:
+            self.set_busy(False)
+            self.render()
+            self.page.update()
 
     async def export(self, event=None):
         if self.busy() or self.load_error:

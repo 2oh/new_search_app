@@ -46,7 +46,10 @@ def search_files(words, files):
         stem = unicodedata.normalize('NFKC', path.stem).casefold()
         if all(word in stem for word in words):
             results.append(file_info(str(path.absolute())))
-    return sorted(results, key=lambda item: (Path(item['path']).name.casefold(), path_key(item['path'])))
+    return sorted(results, key=lambda item: (
+        path_key(str(Path(item['path']).parent)),
+        -(item['modified'] if item['modified'] is not None else float('-inf')),
+        Path(item['path']).name.casefold(), path_key(item['path'])))
 
 
 def file_info(path):

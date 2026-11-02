@@ -1,6 +1,7 @@
 """Search, persistence, interactions, PDF output and BOM isolation regression."""
 import asyncio
 import inspect
+import json
 import os
 from pathlib import Path
 import sys
@@ -21,6 +22,15 @@ async def run(root):
     assert logic.parse_search_query('"err " " pp "') == ['err ', ' pp ']
     assert logic.parse_search_query('"a/b" c') == ['a/b', 'c']
     assert logic.parse_search_query('  / "" ') == []
+    ordered = [Path('b') / 'A.pdf', Path('a') / 'oldAB.pdf', Path('a') / 'newBA.pdf']
+    with patch.object(logic, 'file_info', side_effect=lambda p: {
+            'path': p, 'modified': 10 if 'old' in p else 20, 'available': True}):
+        matches = logic.search_files(['a', 'b'], ordered)
+    assert [Path(i['path']).name for i in matches] == ['newBA.pdf', 'oldAB.pdf']
+    with patch.object(logic, 'file_info', side_effect=lambda p: {
+            'path': p, 'modified': 999 if Path(p).parent.name == 'b' else 1, 'available': True}):
+        matches = logic.search_files(['a'], ordered)
+    assert [Path(i['path']).parent.name for i in matches] == ['a', 'a', 'b']
     try:
         logic.parse_search_query('"open')
         raise AssertionError('unclosed quote accepted')
@@ -63,7 +73,7 @@ async def run(root):
                 app.main(page)
                 sys.setprofile(old_profile)
                 normal = scope['normal_mode']
-                assert len(normal.search_controls.controls) == 2
+                assert normal.search_controls.controls == [normal.search_button, normal.query]
                 assert normal.tabs.length == 2
                 normal.query.value = 'abc'
                 normal.caret_end()
@@ -122,6 +132,19 @@ async def run(root):
                     assert len(doc) == 2
                     assert 'first' in doc[0].get_text() and 'third' in doc[1].get_text()
                 assert len(normal.items) == 3 and normal.store.load() == selected
+                # The real shared launcher must work during the batch lock, in stock order.
+                launcher = scope['external_url_launcher']
+                with patch.object(launcher, 'launch_url', new_callable=AsyncMock) as launch:
+                    await normal.open_selected()
+                    assert launch.await_count == 2
+                    assert [call.args[0] for call in launch.await_args_list] == [
+                        Path(i['path']).as_uri() for i in selected if i['selected']]
+                assert normal.items == selected and not scope['pdf_action_state']['processing']
+                with patch.object(launcher, 'launch_url', new_callable=AsyncMock,
+                                  side_effect=[OSError('unavailable'), None]) as launch:
+                    await normal.open_selected()
+                    assert launch.await_count == 2
+                    assert '開けなかったPDF：1件' in scope['message'].value
                 with patch.object(normal.store, 'save', side_effect=OSError('disk full')):
                     await normal.commit([])
                 assert normal.items == selected and not scope['pdf_action_state']['processing']
@@ -156,10 +179,11 @@ async def run(root):
                     page.width = width
                     scope['on_page_resize'](None)
                     assert normal.preview_panel.visible == (width >= 1700)
-                    assert len(normal.result_table.columns) == (7 if width < 1700 else 6)
-                    assert len(normal.stack_table.columns) == len(normal.result_table.columns)
+                    assert len(normal.result_table.columns) == (6 if width < 1700 else 5)
+                    assert len(normal.stack_table.columns) == len(normal.result_table.columns) + 1
+                    assert normal.result_table.columns[1].fixed_width >= 450
                     assert normal.result_table.columns[-1].label.controls[0].value == '追加'
-                    assert normal.stack_table.columns[-1].label.controls[0].value == '出力'
+                    assert normal.stack_table.columns[-1].label.controls[0].value == '選択'
                     assert len(normal.stack_table.rows) == 3
                     session.get_page_patch()
                 normal.tabs.selected_index = 1
@@ -177,6 +201,31 @@ async def run(root):
                 scope['set_pdf_action_processing'](False)
                 await asyncio.sleep(0.05)
                 assert logic.StackStore('normal_stack.json').load() == selected
+                # A fresh main() must restore both modes from the persisted config.
+                for mode in ('構成部品表', '通常'):
+                    scope['mode_dropdown'].value = mode
+                    scope['on_mode_change'](None)
+                    assert json.loads(Path('config.json').read_text(encoding='utf-8'))['search_mode'] == mode
+                    fresh = {}
+                    def capture_restart(frame, event, arg):
+                        if event == 'return' and frame.f_code is app.main.__code__:
+                            fresh.update(frame.f_locals)
+                    restart = helper.Session(helper.MemoryConnection())
+                    restart.start_updates_scheduler()
+                    restart.get_page_patch()
+                    restart_token = helper._context_page.set(restart.page)
+                    try:
+                        with patch('normal_mode.NormalMode.focus', new_callable=AsyncMock):
+                            sys.setprofile(capture_restart)
+                            app.main(restart.page)
+                            sys.setprofile(old_profile)
+                            await asyncio.sleep(0.05)
+                        assert fresh['mode_dropdown'].value == mode
+                        assert fresh['normal_mode'].view.visible == (mode == '通常')
+                    finally:
+                        sys.setprofile(old_profile)
+                        restart.close()
+                        helper._context_page.reset(restart_token)
                 print('PASS: query, mixed-case PDF, no extension matching, stack dedup/persistence, selection, ordered output, errors, mode switching, resize, preview, locks')
             finally:
                 sys.setprofile(old_profile)

@@ -21,7 +21,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.2.0"
+APP_VERSION = "v1.2.1"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -1915,9 +1915,9 @@ def main(page: ft.Page):
     external_url_launcher = ft.UrlLauncher()
     external_open_state = {"directory": None}
 
-    async def open_output_pdf(pdf_path: str, select_in_explorer: bool):
+    async def open_output_pdf(pdf_path: str, select_in_explorer: bool, *, batch=False):
         """共有フォルダへのアクセスや外部アプリの起動でUIを止めない。"""
-        if pdf_action_state["processing"]:
+        if pdf_action_state["processing"] and not batch:
             return
         try:
             if not pdf_path or not str(pdf_path).strip():
@@ -1928,7 +1928,7 @@ def main(page: ft.Page):
             if not await asyncio.to_thread(path.is_file):
                 raise FileNotFoundError("PDFが見つかりません。移動・削除、または接続状態を確認してください。")
             # 存在確認を待つ間に検索・出力が始まった場合も起動しない。
-            if pdf_action_state["processing"]:
+            if pdf_action_state["processing"] and not batch:
                 return
             launch_path = path
             if select_in_explorer:
@@ -1939,18 +1939,21 @@ def main(page: ft.Page):
                 launch_path = await asyncio.to_thread(
                     create_explorer_shortcut, str(path), external_open_state["directory"].name
                 )
-            if pdf_action_state["processing"]:
+            if pdf_action_state["processing"] and not batch:
                 return
             # 前面のFlet画面プロセスからWindowsに起動を依頼する。
             # Explorerは一時ショートカットで/selectを維持する。
             await external_url_launcher.launch_url(
                 launch_path.as_uri(), mode=ft.LaunchMode.EXTERNAL_APPLICATION
             )
+            return True
         except Exception as ex:
             action = "Explorerで表示する" if select_in_explorer else "PDFを開く"
             message.value = f"{action}ことができませんでした：{ex}"
-            page.show_dialog(ft.SnackBar(ft.Text(message.value)))
+            if not batch:
+                page.show_dialog(ft.SnackBar(ft.Text(message.value)))
             page.update()
+            return False
 
     def create_output_pdf_link(content, pdf_path: str, select_in_explorer: bool):
         async def on_click(e):
@@ -2221,7 +2224,7 @@ def main(page: ft.Page):
         # DataTable2 uses explicit widths rather than measuring every cell.
         # Widths include cell padding; keep room for two-line values and badges.
         column_widths = {
-            "項番": 46, "品名": 120, "材料": 72, "品番PG名": 130,
+            "項番": 46, "品名": 300, "材料": 72, "品番PG名": 130,
             "数量": 64, "数量セル色": 48, "出力可否": 84,
             "検索用文字列": 117, "共通": 48, "候補確認": 88,
             "採用PDFパス": OUTPUT_PDF_COLUMN_WIDTH + 12,
@@ -2636,6 +2639,18 @@ def main(page: ft.Page):
                                 spacing=0,
                                 tight=True,
                             ),
+                        )
+                    elif c == "品名":
+                        # Keep the original second line visible even when the first is long.
+                        name_lines = str(display_value).split("\n", 1)
+                        text_control = ft.Container(
+                            tooltip=str(display_value),
+                            content=ft.Column([
+                                ft.Text(line.replace("\n", " / "),
+                                    color=normal_text_color, weight=ft.FontWeight.NORMAL,
+                                    no_wrap=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+                                for line in name_lines
+                            ], spacing=0, tight=True),
                         )
                     else:
                         text_control = ft.Text(

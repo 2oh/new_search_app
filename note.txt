@@ -4745,6 +4745,174 @@ git status --short --branch # 短縮形：git status -sb
 note.txtは利用者が更新する。CodexによるGitコミット・push・タグ作成は行っていない。
 
 
+2026/11/2
+
+【v1.2.1 改修内容・いつもの作業手順】
+
+今回はこちらを手順付きの完全版として使用する。
+Git操作は利用者が実行する。Codexはブランチ作成・切替・コミット・push・merge・タグ作成を行っていない。
+既存のnote.txtは変更していない。このノートの内容を必要に応じて追記して保存する。
+
+【今回の改修内容】
+・通常検索結果をパス昇順、同じフォルダ内は更新日時降順にする。同日時はファイル名昇順。
+・パス列を従来300から450～600へ拡大し、ファイル名にも余った幅を割り当てる。
+・更新日時は日付と時刻の2段表示。右側プレビューを縮めて一覧を広げる。
+・検索ボタンを入力欄のすぐ左へ、検索結果／ストックの操作ボタンを一覧の右端へ配置する。
+・「保存リスト」を「ストック」へ変更。通知は「ストックに保存しました。」。
+・削除列はストック側だけ。ストックのチェック欄は「選択」とする。
+・選択チェックを「PDF出力」と「PDFを開く」で共用し、複数PDFをまとめて開けるようにする。
+・ストックの追加順・PDF出力順は維持する。
+・検索欄の説明を以下に変更する。スラッシュの説明は表示せず、機能は残す。
+  空白区切り（例：A B）でAND検索。ファイル名内のA・Bの出現順に関係なく検索されます。空白を含む文字列は " " で囲みます（例："A B"）。
+・構成部品表の品名欄を約20文字分を目安に拡大し、元の1行目と結合相手の2行目を別々に表示する。
+  長い場合は1行ごとに省略し、ツールチップで全文を表示。抽出データとCSVは変更しない。
+・最後の検索モードを保存・復元する既存実装を両モードで検証する。
+・位置情報関連の改修は今回も対象外。
+
+【1．現在のブランチと変更を確認する】
+PowerShellで、以下を実行する。
+
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git branch --show-current
+git diff --check
+git diff --stat
+
+今回の実装開始時はmainだった。変更は未コミットで反映している。
+ただし、既に利用者がブランチを作成した場合は現在の表示を優先する。
+git diff --checkは何も表示されなければOK。
+
+【2．未コミット変更を作業ブランチへ引き継ぐ】
+現在mainの場合だけ、以下を実行する。
+
+git switch -c release-v1.2.1
+git status -sb
+
+これでmain上の未コミット変更をそのままrelease-v1.2.1へ引き継ぐ。
+mainのコミット履歴は変わらない。変更を消したり、stashしたりする必要はない。
+既にrelease-v1.2.1にいる場合、この作成コマンドは実行しない。
+「既に存在する」等のエラーや別のブランチ名が出た場合は、そこで止めて状態を確認する。
+以降、作業ブランチがrelease-v1.2.1であることを確認して進める。
+
+【3．実装後の起動確認】
+開発用Pythonで確認する場合：
+
+& 'C:\dev\new_search_app\Scripts\python.exe' main.py
+
+作成済みの更新EXEで確認する場合：
+C:\Users\shini\Documents\ChatGPT\構成部品表関連処理\app_a\v1_2_1_work\release\dist\図面PDF検索結合ツール (v1.2.1).exe
+
+・検索結果のパス順、同一フォルダ内の新しい順を確認する。
+・パス／ファイル名の幅、更新日時2段表示、広い画面と狭い画面のプレビューを確認する。
+・検索ボタンが入力欄の近く、一覧の各ボタンが右端にあることを確認する。
+・ストックへ追加し、通知、選択件数、ストックだけの削除列を確認する。
+・2件を選択して「PDFを開く」で両方を開く。同じ2件をPDF出力して内容・順序を確認する。
+・モードを変更して終了し、同じ配置先・起動方法で再起動して最後のモードが復元されることを確認する。
+・構成部品表の長い品名と結合相手の表示、抽出・候補検索・PDF出力を確認する。
+・モードを往復しても構成部品表のデータとストックが保持されることを確認する。
+
+以前と同じ設定・ストックを使う場合は、既存のconfig.jsonとnormal_stack.jsonを残す。
+今回の検証環境では、PDF2件が開いた後にFont Capture: Windows（0xc06d007e）が再表示された。
+発生元は未特定で、解消済みとは扱わない。手動確認で再発した場合は操作と表示内容を記録する。
+修正が必要な場合は、コミット前に反映して再検証する。
+
+【4．変更内容とnoteを確認・保存する】
+note.txtへの今回分の追記も、この段階で保存する。
+
+git status -sb
+git diff --check
+git diff --stat
+
+今回の実装変更は以下の6ファイル。
+main.py
+normal_mode.py
+normal_search.py
+RELEASE_NOTES.txt
+tools/test_normal_mode.py
+tools/test_table_layout.py
+
+利用者が追記したnote.txtもコミット対象に含める。
+config.json、normal_stack.json、preview_cache、build、dist、__pycache__等の利用者データ・生成物は追加しない。
+前回の生成ファイル追跡解除コマンドは、今回の手順には不要。
+
+【5．ステージして確認・コミットする】
+git add -- main.py normal_mode.py normal_search.py RELEASE_NOTES.txt tools/test_normal_mode.py tools/test_table_layout.py note.txt
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+
+今回の実装ファイルと追記したnoteだけであることを確認して、次へ進む。
+
+git commit -m "fix: refine PDF search layout and stock operations"
+git status -sb
+
+未コミットの変更が残る場合は、その内容を確認してから次へ進む。
+
+【6．作業ブランチをpushする】
+git push -u origin release-v1.2.1
+git status -sb
+
+【7．mainへ統合する】
+作業ブランチに未コミットの変更がないことを確認する。
+
+git status -sb
+git switch main
+git fetch origin
+git merge --ff-only origin/main
+git merge --ff-only release-v1.2.1
+git status -sb
+git push origin main
+
+いずれかが失敗した場合はそこで止めて確認する。強制pushやresetはしない。
+
+【8．注釈タグを作成・pushする】
+git status -sb
+git tag --list v1.2.1
+
+タグが何も表示されなければ、次を実行する。既にあれば止めて確認する。
+
+git tag -a v1.2.1 -m "Release v1.2.1"
+git show --no-patch v1.2.1
+git push origin v1.2.1
+
+【9．配布用EXEを作成する】
+既に作成済みのEXEがある。手順3以降にコードを変更した場合や、いつものdistに出力したい場合は再作成する。
+仮想環境の切替は不要。配布用Pythonのフルパスを指定する。
+
+git status -sb
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
+
+生成先：dist\図面PDF検索結合ツール (v1.2.1).exe
+ビルド記録：同名の.build.json。
+単体EXE方式を維持する。配布ビルドは上記の専用環境を使う。
+
+【10．再作成したEXEをセルフテストする】
+$selftestDir = Join-Path $PWD ('work\v121-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$exePath = Join-Path $PWD 'dist\図面PDF検索結合ツール (v1.2.1).exe'
+$testProcess = Start-Process -FilePath $exePath -ArgumentList @('--self-test', ('"' + $selftestDir + '"')) -WindowStyle Hidden -Wait -PassThru
+$testProcess.ExitCode
+Get-Content (Join-Path $selftestDir 'SELFTEST_PASS.json')
+
+ExitCodeが0、frozenがtrue、versionがv1.2.1であることを確認する。
+checksにnormal search、persistent stack、normal PDF order、
+BOM state preserved across modesが含まれることを確認する。
+毎回新しい検証先を使い、古い成功記録を今回の結果と取り違えない。
+失敗した場合は配布せず、dist\startup-error.logを確認する。
+ビルドを省略して作成済みEXEを使用する場合は、この再テスト手順も省略可能。
+作成済みの最終EXEはrelease\selftest-final\SELFTEST_PASS.jsonで合格を確認済み。
+
+【11．現地確認・配布】
+実際に配布するEXEを起動し、手順3の確認を行う。
+前のv1.2.0 EXEは残し、新版は書き込み可能なフォルダで使用する。
+自分の環境を引き継ぐ場合は既存のconfig.json／normal_stack.jsonを維持する。
+他の人には個人のconfig.json／normal_stack.json／preview_cacheを配布しない。
+
+git status -sb
+
+生成物が表示されても、そのままGitへ追加しない。
+作業ブランチの削除は今回の手順に含めない。
+
+
 
 
 3. **Fletを更新**
