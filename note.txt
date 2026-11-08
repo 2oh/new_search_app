@@ -4913,6 +4913,104 @@ git status -sb
 作業ブランチの削除は今回の手順に含めない。
 
 
+2026/11/7
+
+【v1.2.2 改修前note・いつもの手順】
+この版は計画段階。実装・テスト・EXE作成はまだ行っていない。
+バージョンはv1.2.2を予定。Git操作は利用者が行う。
+
+【今回の確定したご要望】
+・通常モードのファイル名欄を、同じ画面幅における現在の約半分にする。
+・長いファイル名は最大2行で表示。さらに長い場合は省略し、ツールチップで全文を確認できるようにする。
+・パス欄は現在の幅と1行表示を維持する。
+・ファイル名欄で空いた幅を右側プレビューへ割り当てる。
+・検索結果とストックの両方に反映する。
+・狭い画面での別ダイアログによるプレビューは維持する。
+注意：パス幅は現在の一覧幅から算出されるため、一覧を縮めた結果パスまで縮まないように分離する。
+
+【検索の進捗表示：決定】
+・通常モードは途中のPDF収集件数を表示せず、動く表示と「検索中…」で処理中を示す。
+・検索完了後は、従来どおり検索結果の件数を表示する。
+・検索のたびに最新のPDF一覧を取得する処理は維持する。
+・一覧の再利用や再読み込みボタンの追加は今回は行わない。
+・構成部品表モードの進捗表示は維持する。
+・実際の検索時間短縮を目的とした変更ではなく、表示による待ち時間の感じ方を現地で確認する。
+
+【1．正本と状態の確認】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git branch --show-current
+git diff --check
+
+【2．実装前に作業ブランチを作成】
+mainが最新で未コミット変更がないことを確認してから実行する。
+git switch -c release-v1.2.2
+git status -sb
+既にrelease-v1.2.2にいる場合は作成不要。別ブランチや未コミット変更がある場合は先に内容を確認する。
+ブランチ準備後に、列幅・プレビューと通常検索の進捗表示を実装する。
+
+【3．実装後の起動確認】
+& 'C:\dev\new_search_app\Scripts\python.exe' main.py
+・現地と同じ画面幅でパス幅が維持され、ファイル名が約半分、プレビューが広がったことを確認。
+・検索結果／ストック、長いファイル名の2行表示、全文ツールチップを確認。
+・検索・選択・追加・削除・PDF起動・結合出力を確認。
+・構成部品表モードとの往復を確認。
+・通常モードの検索中に収集件数が表示されず、動く表示と「検索中…」が出ることを確認。
+・検索完了後の結果件数と、新規PDF追加・改名・削除が再検索で反映されることを確認。
+・note.txtへの追記を保存する。
+
+【4．確認・ステージ・コミット】
+git status -sb
+git diff --check
+git diff --stat
+利用者データや生成物が追加対象でないことを確認する。
+git add -A
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+今回の修正とnoteのみであることを確認して実行する。
+git commit -m "fix: rebalance normal search columns and preview"
+git status -sb
+
+【5．作業ブランチをpush】
+git push -u origin release-v1.2.2
+
+【6．mainへ統合】
+未コミット変更がないことを確認して進む。
+git switch main
+git fetch origin
+git merge --ff-only origin/main
+git merge --ff-only release-v1.2.2
+git push origin main
+失敗したら止めて確認する。強制pushやresetはしない。
+
+【7．タグ】
+git tag --list v1.2.2
+未作成であることを確認して進む。
+git tag -a v1.2.2 -m "Release v1.2.2"
+git show --no-patch v1.2.2
+git push origin v1.2.2
+
+【8．EXE作成】
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
+生成先：dist\図面PDF検索結合ツール (v1.2.2).exe
+
+【9．EXEセルフテスト】
+$selftestDir = Join-Path $PWD ('work\v122-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$exePath = Join-Path $PWD 'dist\図面PDF検索結合ツール (v1.2.2).exe'
+$testProcess = Start-Process -FilePath $exePath -ArgumentList @('--self-test', ('"' + $selftestDir + '"')) -WindowStyle Hidden -Wait -PassThru
+$testProcess.ExitCode
+Get-Content (Join-Path $selftestDir 'SELFTEST_PASS.json')
+終了コード0、frozen=true、version=v1.2.2を確認。
+
+【10．現地確認】
+前版を残し、実際のEXEで手順3を確認する。
+既存のconfig.jsonとnormal_stack.jsonは維持し、他の人への配布物には含めない。
+git status -sb
+
+
+
+
 
 
 3. **Fletを更新**

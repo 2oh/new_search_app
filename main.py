@@ -21,7 +21,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.2.1"
+APP_VERSION = "v1.2.2"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION

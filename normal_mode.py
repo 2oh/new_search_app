@@ -35,7 +35,8 @@ class NormalMode:
                                   expand=True, on_submit=self.search, on_focus=self.caret_end)
         self.search_button = ft.Button('検索', on_click=self.search, style=button_style)
         self.query.tooltip = self.query.hint_text
-        self.search_controls = ft.Row([self.search_button, self.query], expand=True, spacing=8)
+        self.search_indicator = ft.ProgressRing(width=20, height=20, stroke_width=2, visible=False)
+        self.search_controls = ft.Row([self.search_button, self.search_indicator, self.query], expand=True, spacing=8)
         self.result_count = ft.Text('検索結果：0件', weight=ft.FontWeight.BOLD)
         self.stack_count = ft.Text('', weight=ft.FontWeight.BOLD)
         self.export_button = ft.Button('PDF出力', on_click=self.export, style=button_style)
@@ -134,7 +135,11 @@ class NormalMode:
         self.wide = wide
         self.preview_panel.visible = wide
         self.lists.expand = not wide
-        self.lists.width = max(1200, (self.page.width or 1200) - 400) if wide else None
+        # Preserve the old path width independently of the narrower table.
+        previous_width = max(1200, (self.page.width or 1200) - 400)
+        path_width = min(600, max(450, previous_width - 900))
+        previous_filename = max(360, previous_width - path_width - 46 - 96 - 100 - 16)
+        self.lists.width = previous_width - previous_filename / 2 if wide else None
         self.image.height = max(100, (self.page.height or 800) - 300)
         if changed:
             self.clear_preview()
@@ -158,7 +163,8 @@ class NormalMode:
             await self.focus()
             return
         folder = self.folder().strip()
-        self.set_busy(True, 'PDFを検索しています…')
+        self.search_indicator.visible = True
+        self.set_busy(True, '検索中…')
         self.activation_generation += 1
         self.preview_generation += 1
         self.preview_pending = None
@@ -166,7 +172,7 @@ class NormalMode:
             def work(report):
                 if not folder or not Path(folder).is_dir():
                     raise ValueError('有効な検索先フォルダを指定してください。')
-                cached = self.collect(folder, lambda count: report(f'PDF一覧を読込中：{count}件'))
+                cached = self.collect(folder)
                 results = search_files(words, cached)
                 return cached, results
             files, results = await self.worker(work)
@@ -180,6 +186,7 @@ class NormalMode:
         except Exception as exc:
             self.message.value = f'検索できませんでした：{exc}'
         finally:
+            self.search_indicator.visible = False
             self.set_busy(False)
             self.render()
             self.page.update()
@@ -212,7 +219,8 @@ class NormalMode:
         self.stack_tab.label = self.header('ストック', len(self.items), ft.Colors.BLUE_100)
         self.export_button.disabled = self.busy() or not output_count or bool(self.load_error)
         self.open_button.disabled = self.export_button.disabled
-        available_width = self.lists.width or max(600, (self.page.width or 1200) - 60)
+        available_width = (max(1200, (self.page.width or 1200) - 400) if self.wide
+                           else max(600, (self.page.width or 1200) - 60))
         path_width = min(600, max(450, available_width - 900))
         for table, items, is_stack in ((self.result_table, self.results, False), (self.stack_table, self.items, True)):
             columns = [('項番', 46), ('パス', path_width), ('ファイル名', None), ('更新日時', 96)]
@@ -221,7 +229,7 @@ class NormalMode:
             if is_stack:
                 columns.append(('削除', 64))
             columns.append(('選択' if is_stack else '追加', 100))
-            table.min_width = sum(width or 360 for _, width in columns) + 16
+            table.min_width = sum(width or (180 if self.wide else 360) for _, width in columns) + 16
             table.columns = [dt2.DataColumn2(self.header(label,
                 (output_count if is_stack else len(self.selection)) if index == len(columns)-1 else None,
                 ft.Colors.GREEN_100 if is_stack else ft.Colors.BLUE_100), fixed_width=width)
@@ -264,9 +272,9 @@ class NormalMode:
                 status = '（追加済み）' if not is_stack and key in stacked else ''
                 if meta.get('available') is False:
                     status += '（参照不可）'
-                def link(value, click, color, tooltip):
+                def link(value, click, color, tooltip, lines=1):
                     return ft.Container(ft.Text(value, size=14, color=color,
-                        no_wrap=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                        no_wrap=lines == 1, max_lines=lines, overflow=ft.TextOverflow.ELLIPSIS),
                         on_click=click, on_hover=hover, ink=True, tooltip=tooltip,
                         alignment=ft.Alignment.CENTER_LEFT)
                 folder = self.folder_label(path)
@@ -276,7 +284,7 @@ class NormalMode:
                     return ft.DataCell(ft.Container(control, alignment=ft.Alignment.CENTER))
                 cells = [centered(ft.Text(str(number), size=14)),
                     ft.DataCell(link(folder, open_folder, ft.Colors.WHITE, str(Path(path).parent))),
-                    ft.DataCell(link(label + status, open_file, ft.Colors.BLUE_200, path + status)),
+                    ft.DataCell(link(label + status, open_file, ft.Colors.BLUE_200, path + status, lines=2)),
                     ft.DataCell(ft.Text(date, size=14, no_wrap=True, max_lines=2))]
                 if not self.wide:
                     cells.append(centered(ft.IconButton(icon=ft.Icons.VISIBILITY_OUTLINED,

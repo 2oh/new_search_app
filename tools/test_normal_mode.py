@@ -73,7 +73,7 @@ async def run(root):
                 app.main(page)
                 sys.setprofile(old_profile)
                 normal = scope['normal_mode']
-                assert normal.search_controls.controls == [normal.search_button, normal.query]
+                assert normal.search_controls.controls == [normal.search_button, normal.search_indicator, normal.query]
                 assert normal.tabs.length == 2
                 normal.query.value = 'abc'
                 normal.caret_end()
@@ -90,6 +90,26 @@ async def run(root):
                 await normal.search()
                 assert normal.files is None
                 normal.query.value = 'F123/SS400'
+                started_search, finish_search = asyncio.Event(), asyncio.Event()
+                original_worker = normal.worker
+                async def held_worker(work):
+                    started_search.set()
+                    await finish_search.wait()
+                    reports = []
+                    result = work(reports.append)
+                    assert not reports  # No scanned-file count replaces the search status.
+                    return result
+                normal.worker = held_worker
+                pending = asyncio.create_task(normal.search())
+                await started_search.wait()
+                assert normal.search_indicator.visible and scope['message'].value == '検索中…'
+                finish_search.set()
+                await pending
+                normal.worker = original_worker
+                assert not normal.search_indicator.visible
+                with patch.object(normal, 'worker', new_callable=AsyncMock, side_effect=OSError('search failed')):
+                    await normal.search()
+                assert not normal.search_indicator.visible and not normal.busy()
                 await normal.search()
                 assert len(normal.results) == 2
                 # Search itself must discover newly added files, without a refresh button.
@@ -181,7 +201,17 @@ async def run(root):
                     assert normal.preview_panel.visible == (width >= 1700)
                     assert len(normal.result_table.columns) == (6 if width < 1700 else 5)
                     assert len(normal.stack_table.columns) == len(normal.result_table.columns) + 1
-                    assert normal.result_table.columns[1].fixed_width >= 450
+                    previous_width = max(1200, width - 400) if width >= 1700 else max(600, width - 60)
+                    expected_path = min(600, max(450, previous_width - 900))
+                    assert normal.result_table.columns[1].fixed_width == expected_path
+                    assert normal.stack_table.columns[1].fixed_width == expected_path
+                    if width >= 1700:
+                        assert normal.lists.width < previous_width - 150
+                        assert width - normal.lists.width > 550
+                    name_text = normal.stack_table.rows[0].cells[2].content.content
+                    path_text = normal.stack_table.rows[0].cells[1].content.content
+                    assert name_text.max_lines == 2 and not name_text.no_wrap
+                    assert path_text.max_lines == 1 and path_text.no_wrap
                     assert normal.result_table.columns[-1].label.controls[0].value == '追加'
                     assert normal.stack_table.columns[-1].label.controls[0].value == '選択'
                     assert len(normal.stack_table.rows) == 3
