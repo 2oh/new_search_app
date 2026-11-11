@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import threading
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -97,21 +98,53 @@ async def run(root):
                     await finish_search.wait()
                     reports = []
                     result = work(reports.append)
-                    assert not reports  # No scanned-file count replaces the search status.
+                    assert reports[0] == ('ファイル名を検索中：0/3件', 0.0)
+                    assert reports[-1] == ('ファイル名を検索中：3/3件', 1.0)
                     return result
                 normal.worker = held_worker
                 pending = asyncio.create_task(normal.search())
                 await started_search.wait()
-                assert normal.search_indicator.visible and scope['message'].value == '検索中…'
+                assert normal.search_indicator.visible and scope['message'].value == 'PDF一覧を取得中：0件'
+                assert normal.search_indicator.value is None
                 finish_search.set()
                 await pending
                 normal.worker = original_worker
                 assert not normal.search_indicator.visible
+                # Exercise queued progress on the real UI worker, not from the worker thread.
+                release_progress = threading.Event()
+                def slow_progress(report):
+                    report(('照合中：1/2件', 0.5))
+                    release_progress.wait(3)
+                task = asyncio.create_task(original_worker(slow_progress))
+                try:
+                    for _ in range(20):
+                        await asyncio.sleep(0.05)
+                        if normal.search_indicator.value == 0.5:
+                            break
+                    assert normal.search_indicator.value == 0.5
+                    assert scope['message'].value == '照合中：1/2件'
+                finally:
+                    release_progress.set()
+                    await task
+                original_collect = normal.collect
+                def counted_collect(folder, report):
+                    report(1000)
+                    return original_collect(folder)
+                def assert_progress(work):
+                    reports = []
+                    result = work(reports.append)
+                    assert reports[0] == ('PDF一覧を取得中：1000件', None)
+                    assert reports[-1][1] == 1.0
+                    return result
+                with patch.object(normal, 'collect', side_effect=counted_collect), patch.object(
+                        normal, 'worker', new_callable=AsyncMock, side_effect=assert_progress):
+                    await normal.search()
                 with patch.object(normal, 'worker', new_callable=AsyncMock, side_effect=OSError('search failed')):
                     await normal.search()
                 assert not normal.search_indicator.visible and not normal.busy()
                 await normal.search()
                 assert len(normal.results) == 2
+                assert scope['message'].value == '検索結果：2件。'
                 # Search itself must discover newly added files, without a refresh button.
                 extra = pdfs / 'F123 SS400 EXTRA.pdf'
                 extra.write_bytes((pdfs / 'F123 AL.pdf').read_bytes())
@@ -148,6 +181,7 @@ async def run(root):
                 await normal.export()
                 output = list(Path('export').glob('*.pdf'))
                 assert len(output) == 1
+                assert not normal.search_indicator.visible
                 with helper.fitz.open(output[0]) as doc:
                     assert len(doc) == 2
                     assert 'first' in doc[0].get_text() and 'third' in doc[1].get_text()
@@ -174,6 +208,7 @@ async def run(root):
                 await normal.export()
                 assert len(list(Path('export').glob('*.pdf'))) == 1
                 assert '参照できない' in scope['message'].value
+                assert not normal.search_indicator.visible
                 await normal.commit(selected)
                 # A slow activation read must not replace newer search metadata.
                 started, release = asyncio.Event(), asyncio.Event()
@@ -189,11 +224,19 @@ async def run(root):
                     release.set()
                     await activation
                 assert normal.metadata == metadata_before
+                scope['message'].value = 'PDF出力完了：99件'
                 scope['mode_dropdown'].value = '構成部品表'
                 scope['on_mode_change'](None)
+                assert scope['message'].value == ''
                 assert not normal.view.visible and scope['result_area'].visible
+                scope['message'].value = 'PDF出力完了：88件'
                 scope['mode_dropdown'].value = '通常'
                 scope['on_mode_change'](None)
+                assert scope['message'].value == f'検索結果：{len(normal.results)}件。'
+                normal.load_error = 'ストック読込エラー'
+                normal.activate(True)
+                assert scope['message'].value == normal.load_error
+                normal.load_error = ''
                 assert normal.items == selected
                 for width in (1200, 1920, 1699, 1700):
                     page.width = width

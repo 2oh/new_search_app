@@ -21,7 +21,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.2.2"
+APP_VERSION = "v1.2.3"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -1019,6 +1019,7 @@ def main(page: ft.Page):
         if pdf_action_state["processing"]:
             return
         save_config()
+        message.value = ""
         update_mode_fields()
 
     mode_row = ft.Row(
@@ -3495,7 +3496,12 @@ def main(page: ft.Page):
             while True:
                 await asyncio.sleep(0.1)
                 try:
-                    message.value = updates.get_nowait()
+                    update = updates.get_nowait()
+                    if isinstance(update, tuple):
+                        # Normal mode supplies an optional fraction; BOM keeps text progress.
+                        message.value, normal_mode.search_indicator.value = update
+                    else:
+                        message.value = update
                 except queue.Empty:
                     continue
                 page.update()

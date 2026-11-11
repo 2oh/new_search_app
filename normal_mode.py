@@ -35,7 +35,7 @@ class NormalMode:
                                   expand=True, on_submit=self.search, on_focus=self.caret_end)
         self.search_button = ft.Button('検索', on_click=self.search, style=button_style)
         self.query.tooltip = self.query.hint_text
-        self.search_indicator = ft.ProgressRing(width=20, height=20, stroke_width=2, visible=False)
+        self.search_indicator = ft.ProgressBar(width=160, height=6, value=None, visible=False)
         self.search_controls = ft.Row([self.search_button, self.search_indicator, self.query], expand=True, spacing=8)
         self.result_count = ft.Text('検索結果：0件', weight=ft.FontWeight.BOLD)
         self.stack_count = ft.Text('', weight=ft.FontWeight.BOLD)
@@ -113,8 +113,7 @@ class NormalMode:
         self.preview_pending = None
         if active:
             self.resize()
-            if self.load_error:
-                self.message.value = self.load_error
+            self.message.value = self.load_error or f'検索結果：{len(self.results)}件。'
             self.page.run_task(self.activate_async)
 
     async def activate_async(self):
@@ -163,8 +162,9 @@ class NormalMode:
             await self.focus()
             return
         folder = self.folder().strip()
+        self.search_indicator.value = None
         self.search_indicator.visible = True
-        self.set_busy(True, '検索中…')
+        self.set_busy(True, 'PDF一覧を取得中：0件')
         self.activation_generation += 1
         self.preview_generation += 1
         self.preview_pending = None
@@ -172,8 +172,9 @@ class NormalMode:
             def work(report):
                 if not folder or not Path(folder).is_dir():
                     raise ValueError('有効な検索先フォルダを指定してください。')
-                cached = self.collect(folder)
-                results = search_files(words, cached)
+                cached = self.collect(folder, lambda count: report((f'PDF一覧を取得中：{count}件', None)))
+                results = search_files(words, cached, lambda current, total: report((
+                    f'ファイル名を検索中：{current}/{total}件', current / total if total else 1.0)))
                 return cached, results
             files, results = await self.worker(work)
             self.files, self.index_folder = files, path_key(folder)
@@ -182,7 +183,7 @@ class NormalMode:
             self.image.visible = False
             self.preview_label.value = ''
             self.tabs.selected_index = 0
-            self.message.value = f'検索結果：{len(results)}件。追加するPDFをチェックしてストックへ追加してください。'
+            self.message.value = f'検索結果：{len(results)}件。'
         except Exception as exc:
             self.message.value = f'検索できませんでした：{exc}'
         finally:
@@ -470,7 +471,9 @@ class NormalMode:
         if not folder:
             self.report_error('出力先フォルダを指定してください。')
             return
-        self.set_busy(True, 'PDFを結合しています…')
+        self.search_indicator.value = None
+        self.search_indicator.visible = True
+        self.set_busy(True, '出力するPDFを確認中…')
         try:
             def work(report):
                 missing = [path for path in paths if not Path(path).is_file()]
@@ -482,7 +485,7 @@ class NormalMode:
                 target = output / name
                 temporary = output / f'.normal-{uuid.uuid4().hex}.tmp'
                 try:
-                    self.merge(paths, str(temporary), lambda i, total, path: report(f'PDF結合中：{i}/{total}'))
+                    self.merge(paths, str(temporary), lambda i, total, path: report((f'PDF結合中：{i}/{total}件', i / total if total else 1.0)))
                     os.replace(temporary, target)
                 finally:
                     temporary.unlink(missing_ok=True)
@@ -493,6 +496,7 @@ class NormalMode:
         except Exception as exc:
             self.message.value = f'PDFを出力できませんでした：{exc}'
         finally:
+            self.search_indicator.visible = False
             self.set_busy(False)
             self.render()
             self.page.update()

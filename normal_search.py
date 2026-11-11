@@ -36,16 +36,21 @@ def path_key(path):
     return os.path.normcase(os.path.abspath(os.path.normpath(path)))
 
 
-def search_files(words, files):
+def search_files(words, files, progress_callback=None):
     """Only the stem matches; neither directory names nor .pdf is searchable."""
     if not words:
         return []
     results = []
-    for path in files:
+    total = len(files)
+    if progress_callback:
+        progress_callback(0, total)
+    for number, path in enumerate(files, 1):
         path = Path(path)
         stem = unicodedata.normalize('NFKC', path.stem).casefold()
         if all(word in stem for word in words):
             results.append(file_info(str(path.absolute())))
+        if progress_callback and (number % 100 == 0 or number == total):
+            progress_callback(number, total)
     return sorted(results, key=lambda item: (
         path_key(str(Path(item['path']).parent)),
         -(item['modified'] if item['modified'] is not None else float('-inf')),

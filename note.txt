@@ -5009,6 +5009,110 @@ Get-Content (Join-Path $selftestDir 'SELFTEST_PASS.json')
 git status -sb
 
 
+2026/11/11
+
+【v1.2.3 改修要件・いつもの作業手順】
+
+【今回の範囲】
+1. 通常検索のPDF一覧収集件数を再表示する。
+   PDF一覧の収集中は全件数が未確定のため、動くバー＋取得済み件数を表示する。
+   全件数が判明した後の照合等は、処理済み／対象件数に基づく工程別の進捗バーを表示する。
+   総件数を知る目的だけで共有フォルダを二重に走査しない。
+   バーは件数ベースの工程の進み具合であり、全体の残り時間を保証しない。
+2. 通常検索完了の「追加するPDFをチェックしてストックへ追加してください」を削除する。
+   検索結果の件数表示は残す。
+3. モード切替時に、他モードの出力完了メッセージ・件数を引き継がないようにする。
+   現行はメッセージ欄を共有している。切替時に不要な通知を消し、切替先の状態を表示する。
+   検索結果や選択データそのものは保持する。ストック読込エラー等の必要な警告は隠さない。
+
+【維持する仕様】
+・プレビューとパス／ファイル名の幅配分、ファイル名2行表示はv1.2.2のまま。
+・検索は毎回最新のPDF一覧を取得する。
+・プログレスバーの試行は通常モードのみ。構成部品表モードの進捗表示は変更しない。
+・Excel初期フォルダは既存のconfig（excel_folder）による保存・復元を維持し、今回は調査・改修の対象外とする。
+
+【相談のみ・今回実装しない事項】
+アプリCのように、PDFのパス・ファイル名・更新日時を索引DBへ登録する案。
+ローカルDBの検索で毎回の共有フォルダ走査を省ける一方、追加・改名・移動・削除を反映する更新処理が必要。
+更新端末／更新頻度／起動時同期／情報の鮮度を検討してから別改修として扱う。
+PDF本文まで索引化するかどうかは別の話で、現状のファイル名検索には不要。
+
+【手順について】
+進捗だけを理由にこのnoteを書き換えない。要件や実行手順に変更がある場合のみ更新する。
+既存のnote.txtへの追記とGit操作は利用者が行う。git add -Aの前後に変更対象を確認する。
+
+【1．正本と状態の確認】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git branch --show-current
+git diff --check
+
+【2．実装前に作業ブランチを作成】
+mainが最新で未コミット変更がないことを確認してから実行する。
+git switch -c release-v1.2.3
+git status -sb
+既にrelease-v1.2.3にいる場合は作成不要。別ブランチや未コミット変更がある場合は先に内容を確認する。
+作業ブランチを作成してから実装する。Git操作は利用者が行う。
+
+【3．実装後の起動確認】
+& 'C:\dev\new_search_app\Scripts\python.exe' main.py
+・通常モードのPDF一覧収集中に取得済み件数と動くバーが表示されることを確認。
+・通常モードの総件数が分かる工程では処理済み／対象件数と割合のバーを確認。短い工程は一瞬で完了してよい。
+・成功・失敗後にバーが残らないこと、検索結果の件数は従来どおり確認できることを確認。
+・「追加するPDFをチェックしてストックへ追加してください」が表示されないことを確認。
+・構成部品表でPDF出力後、通常モードへ切り替えたときに他モードの出力件数が残らないことを確認。
+・モード往復後も検索結果・ストック・選択内容が保持されることを確認。
+・note.txtへの追記を保存する。
+
+【4．確認・ステージ・コミット】
+git status -sb
+git diff --check
+git diff --stat
+利用者データや生成物が追加対象でないことを確認する。
+git add -A
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+今回の修正とnoteのみであることを確認して実行する。
+git commit -m "fix: improve progress and isolate mode status"
+git status -sb
+
+【5．作業ブランチをpush】
+git push -u origin release-v1.2.3
+
+【6．mainへ統合】
+未コミット変更がないことを確認して進む。
+git switch main
+git fetch origin
+git merge --ff-only origin/main
+git merge --ff-only release-v1.2.3
+git push origin main
+失敗したら止めて確認する。強制pushやresetはしない。
+
+【7．タグ】
+git tag --list v1.2.3
+未作成であることを確認して進む。
+git tag -a v1.2.3 -m "Release v1.2.3"
+git show --no-patch v1.2.3
+git push origin v1.2.3
+
+【8．EXE作成】
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
+生成先：dist\図面PDF検索結合ツール (v1.2.3).exe
+
+【9．EXEセルフテスト】
+$selftestDir = Join-Path $PWD ('work\v123-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$exePath = Join-Path $PWD 'dist\図面PDF検索結合ツール (v1.2.3).exe'
+$testProcess = Start-Process -FilePath $exePath -ArgumentList @('--self-test', ('"' + $selftestDir + '"')) -WindowStyle Hidden -Wait -PassThru
+$testProcess.ExitCode
+Get-Content (Join-Path $selftestDir 'SELFTEST_PASS.json')
+終了コード0、frozen=true、version=v1.2.3を確認。
+
+【10．現地確認】
+前版を残し、実際のEXEで手順3を確認する。
+既存のconfig.jsonとnormal_stack.jsonは維持し、他の人への配布物には含めない。
+git status -sb
+
 
 
 
