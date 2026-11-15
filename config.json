@@ -1,7 +1,7 @@
 {
   "search_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\pdf_output",
   "output_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\new_search_app\\work\\test_data\\pdf_output",
-  "search_mode": "通常",
+  "search_mode": "構成部品表",
   "excel_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\work\\xlsx_folder",
   "pdf_folder": "C:\\Users\\shini\\OneDrive\\codes_od\\new_search_app\\work\\test_data\\pdf_folder",
   "target_columns": [
@@ -13,5 +13,6 @@
       "value": "16",
       "description": "品番・PG名が16で始まるものを除外"
     }
-  ]
+  ],
+  "pdf_index_publish": "C:\\Users\\shini\\OneDrive\\codes_od\\new_search_app\\work\\pdf-index-demo\\published"
 }

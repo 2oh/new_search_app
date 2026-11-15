@@ -17,6 +17,7 @@ async def run(root):
     app = load('normal_test_app', root / 'main.py')
     helper = load('normal_helper', root / 'tools/frozen_selftest.py')
     import normal_search as logic
+    import pdf_catalog
     assert logic.parse_search_query('Ｆ123 ss400 "MAIN BRACKET"') == ['f123', 'ss400', 'main bracket']
     assert logic.parse_search_query('err / pp ') == ['err ', ' pp ']
     assert logic.parse_search_query('err pp') == ['err', 'pp']
@@ -74,16 +75,38 @@ async def run(root):
                 app.main(page)
                 sys.setprofile(old_profile)
                 normal = scope['normal_mode']
+                normal.index_database = Path(temp) / 'local-pdf.sqlite'
+                normal.refresh_index_label()
                 assert normal.search_controls.controls == [normal.search_button, normal.search_indicator, normal.query]
                 assert normal.tabs.length == 2
                 normal.query.value = 'abc'
                 normal.caret_end()
                 assert normal.query.selection.base_offset == normal.query.selection.extent_offset == 3
                 normal.focus = AsyncMock()
+                normal.query.value = 'F123'
+                await normal.search()
+                assert '未取得' in scope['message'].value and not normal.results
+                source_database = Path(temp) / 'update.sqlite'
+                publication = Path(temp) / 'publication'
+                pdf_catalog.ingest(pdfs, source_database)
+                pdf_catalog.publish(source_database, publication)
+                normal.publish_field.value = str(publication)
+                await normal.sync_index()
+                assert normal.index_database.is_file() and normal.index_root == str(pdfs)
+                assert normal.root_field.read_only and not normal.busy()
+                before_db = normal.index_database.read_bytes()
+                with patch.object(pdf_catalog, 'sync', side_effect=OSError('offline')):
+                    await normal.sync_index()
+                assert '前回取得したDBで検索できます' in normal.index_label.value
+                assert before_db == normal.index_database.read_bytes()
+                await normal.startup_sync()
+                assert '取得失敗' not in normal.index_label.value
+                normal.publish_field.value = ''  # no asynchronous startup work on restart tests
                 scope['mode_dropdown'].value = '通常'
                 scope['on_mode_change'](None)
                 assert normal.view.visible and not scope['result_area'].visible
                 assert not scope['excel_control_row'].visible
+                assert scope['folder_settings_row'].controls[0] is normal.index_controls
                 scope['search_folder_field'].value = str(pdfs)
                 scope['output_folder_field'].value = str(Path(temp) / 'export')
                 assert not normal.results
@@ -104,7 +127,7 @@ async def run(root):
                 normal.worker = held_worker
                 pending = asyncio.create_task(normal.search())
                 await started_search.wait()
-                assert normal.search_indicator.visible and scope['message'].value == 'PDF一覧を取得中：0件'
+                assert normal.search_indicator.visible and scope['message'].value == 'PDF索引を検索中…'
                 assert normal.search_indicator.value is None
                 finish_search.set()
                 await pending
@@ -126,17 +149,13 @@ async def run(root):
                 finally:
                     release_progress.set()
                     await task
-                original_collect = normal.collect
-                def counted_collect(folder, report):
-                    report(1000)
-                    return original_collect(folder)
                 def assert_progress(work):
                     reports = []
                     result = work(reports.append)
-                    assert reports[0] == ('PDF一覧を取得中：1000件', None)
+                    assert reports[0] == ('ファイル名を検索中：0/3件', 0.0)
                     assert reports[-1][1] == 1.0
                     return result
-                with patch.object(normal, 'collect', side_effect=counted_collect), patch.object(
+                with patch.object(normal, 'collect', side_effect=AssertionError('検索中に共有先を走査した')), patch.object(
                         normal, 'worker', new_callable=AsyncMock, side_effect=assert_progress):
                     await normal.search()
                 with patch.object(normal, 'worker', new_callable=AsyncMock, side_effect=OSError('search failed')):
@@ -145,12 +164,16 @@ async def run(root):
                 await normal.search()
                 assert len(normal.results) == 2
                 assert scope['message'].value == '検索結果：2件。'
-                # Search itself must discover newly added files, without a refresh button.
+                # New PDFs stay invisible until the daily snapshot is rebuilt and acquired.
                 extra = pdfs / 'F123 SS400 EXTRA.pdf'
                 extra.write_bytes((pdfs / 'F123 AL.pdf').read_bytes())
                 await normal.search()
+                assert len(normal.results) == 2
+                pdf_catalog.ingest(pdfs, normal.index_database)
+                await normal.search()
                 assert len(normal.results) == 3
                 extra.unlink()
+                pdf_catalog.ingest(pdfs, normal.index_database)
                 await normal.search()
                 assert len(normal.results) == 2
                 assert normal.folder_label(str(pdfs / 'nested' / 'F123 SS400.PDF')) == 'nested'
@@ -229,6 +252,7 @@ async def run(root):
                 scope['on_mode_change'](None)
                 assert scope['message'].value == ''
                 assert not normal.view.visible and scope['result_area'].visible
+                assert scope['folder_settings_row'].controls[0] is normal.index_controls
                 scope['message'].value = 'PDF出力完了：88件'
                 scope['mode_dropdown'].value = '通常'
                 scope['on_mode_change'](None)

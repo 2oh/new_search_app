@@ -8,7 +8,7 @@ from pathlib import Path
 import shutil
 import sys
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import fitz
 from flet.controls.context import _context_page
@@ -64,7 +64,28 @@ async def run_test(app, bundle, destination):
         scope['on_sheet_change'](None)
         await scope['on_extract_click'](None)
         scope['search_folder_field'].value = str(destination / 'pdfs')
+        if hasattr(app, 'snapshot_paths'):
+            import pdf_catalog
+            normal = scope['normal_mode']
+            normal.index_database = destination / 'selftest-pdf.sqlite'
+            pdf_catalog.ingest(destination / 'pdfs', normal.index_database)
+            normal.refresh_index_label()
         await scope['on_pdf_candidate_search'](None)
+        if hasattr(app, 'snapshot_paths'):
+            before = inspect.getclosurevars(scope['render_table_from_df']).nonlocals['current_df'].copy(deep=True)
+            # Snapshot lookup must work even while the shared PDF root is offline.
+            (destination / 'pdfs').rename(destination / 'offline-pdfs')
+            try:
+                with patch.object(app, 'collect_pdf_files', side_effect=AssertionError('unexpected network scan')):
+                    await scope['on_pdf_candidate_search'](None)
+                after = inspect.getclosurevars(scope['render_table_from_df']).nonlocals['current_df']
+                assert before.equals(after)
+                scope['output_folder_field'].value = str(destination / 'unavailable-export')
+                await scope['on_pdf_export'](None)
+                assert '見つかりません' in scope['message'].value
+                assert not list((destination / 'unavailable-export').glob('*.pdf'))
+            finally:
+                (destination / 'offline-pdfs').rename(destination / 'pdfs')
         scope['on_select_pdf_candidate'](1)
         assert 'TEST001.pdf' in list(visible_texts(scope['table']))
         dialog['apply_candidate_selection'](str(destination / 'pdfs/nested/12345_B.pdf'))
@@ -115,6 +136,11 @@ async def run_test(app, bundle, destination):
         normal_checks = []
         if 'normal_mode' in scope:
             normal = scope['normal_mode']
+            if hasattr(normal, 'index_database'):
+                import pdf_catalog
+                normal.index_database = destination / 'selftest-pdf.sqlite'
+                pdf_catalog.ingest(scope['search_folder_field'].value, normal.index_database)
+                normal.refresh_index_label()
             # MemoryConnection has no native client to acknowledge focus calls.
             normal.focus = AsyncMock()
             bom_before = current.copy(deep=True)

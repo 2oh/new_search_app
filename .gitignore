@@ -9,3 +9,6 @@ config.json
 dist-size-check/
 normal_stack.json
 normal_stack.json.*.tmp
+pdf_index_config.json
+storage/pdf-index*
+logs/pdf-index/

@@ -1,0 +1,6 @@
+{
+  "root": "\\\\SERVER\\SHARE\\PDF",
+  "database": "storage/pdf-index.sqlite",
+  "publish": "\\\\SERVER\\SHARE\\PDF_INDEX",
+  "logs": "logs/pdf-index"
+}

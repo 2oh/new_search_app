@@ -152,10 +152,22 @@ async def verify(root, baseline):
             await read_excel()
             scope["sheet_dropdown"].value = "基本確認"
             scope["search_folder_field"].value = str(root / "tools/fixtures/pdfs")
+            import pdf_catalog
+            normal = scope['normal_mode']
+            normal.index_database = tmp / 'ui-pdf.sqlite'
+            # Initial missing DB: keep the extraction and release all operation locks.
+            await scope['on_extract_click'](None)
+            before_missing = current().copy(deep=True)
+            await scope['on_pdf_candidate_search'](None)
+            assert '未取得' in scope['message'].value
+            assert before_missing.equals(current()) and not scope['pdf_action_state']['processing']
+            pdf_catalog.ingest(root / 'tools/fixtures/pdfs', normal.index_database)
+            normal.refresh_index_label()
+            assert scope['folder_settings_row'].controls[0] is normal.index_controls
             scope["output_folder_field"].value = str(tmp / "ui-export")
             await held(app.pd, "read_excel", scope["on_extract_click"])
             check(0)
-            await held(app, "collect_pdf_files", scope["on_pdf_candidate_search"])
+            await held(app, "snapshot_paths", scope["on_pdf_candidate_search"])
             check(1)
             scope["toggle_all"](False)
             check(0)
@@ -191,7 +203,7 @@ async def verify(root, baseline):
             assert not list((tmp / "ui-export").glob("*.csv")), "CSV OFF was ignored"
             for owner, name, callback in (
                 (app.pd, "read_excel", scope["on_extract_click"]),
-                (app, "collect_pdf_files", scope["on_pdf_candidate_search"]),
+                (app, "snapshot_paths", scope["on_pdf_candidate_search"]),
                 (app, "merge_pdfs", scope["on_pdf_export"]),
             ):
                 await held(owner, name, callback, fail=True)

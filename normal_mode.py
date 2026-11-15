@@ -7,17 +7,35 @@ import uuid
 
 import flet as ft
 import flet_datatable2 as dt2
+import pdf_catalog
 from normal_search import StackStore, add_to_stack, file_info, parse_search_query, path_key, search_files
 
 
 class NormalMode:
     def __init__(self, page, *, folder, output_folder, collect, preview, open_pdf,
-                 merge, busy, set_busy, worker, message, completed, version, button_style):
+                 merge, busy, set_busy, worker, message, completed, version, button_style,
+                 index_database=None, index_publish='', save_publish=None):
         self.page = page
         self.folder, self.output_folder = folder, output_folder
         self.collect, self.make_preview, self.open_pdf, self.merge = collect, preview, open_pdf, merge
         self.busy, self.set_busy, self.worker = busy, set_busy, worker
         self.message, self.completed, self.version = message, completed, version
+        self.index_database = Path(index_database) if index_database else Path(
+            os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'DrawingPdfSearch' / 'pdf_catalog.sqlite'
+        self.index_root = ''
+        self.folder = lambda: self.index_root
+        self.save_publish = save_publish
+        self.publish_field = ft.TextField(label='PDF索引 公開フォルダ', value=index_publish,
+                                         expand=True, on_change=self.on_publish_change)
+        self.index_label = ft.Text('PDF索引DBは未取得です', size=12)
+        self.root_field = ft.TextField(label='PDF検索先（索引DBから取得）', value='', read_only=True, expand=True)
+        self.sync_button = ft.Button('最新データ取得', on_click=self.sync_index, style=button_style)
+        self.publish_picker = ft.FilePicker()
+        self.index_controls = ft.Column([
+            ft.Row([self.publish_field, ft.TextButton('参照', on_click=self.pick_publish), self.sync_button]),
+            self.root_field, self.index_label,
+        ], spacing=4, expand=True)
+        self.refresh_index_label()
         self.store = StackStore('normal_stack.json')
         self.load_error = ''
         try:
@@ -77,6 +95,68 @@ class NormalMode:
                            vertical_alignment=ft.CrossAxisAlignment.STRETCH)
         self.view = ft.Container(content=self.body, expand=True, visible=False)
         self.render()
+
+    def on_publish_change(self, event=None):
+        if self.save_publish:
+            self.save_publish(self.publish_field.value or '')
+
+    async def pick_publish(self, event=None):
+        if self.busy():
+            return
+        selected = await self.publish_picker.get_directory_path()
+        if selected and not self.busy():
+            self.publish_field.value = selected
+            self.on_publish_change()
+            self.page.update()
+
+    def refresh_index_label(self):
+        try:
+            info = pdf_catalog.metadata(self.index_database)
+            self.index_root = info['root']
+            self.root_field.value = self.index_root
+            updated = datetime.fromisoformat(info['updated']).astimezone().strftime('%Y/%m/%d %H:%M:%S')
+            self.index_label.value = f'データ更新日時：{updated} / PDF：{info["count"]}件'
+        except Exception:
+            self.index_root = ''
+            self.root_field.value = ''
+            self.index_label.value = '利用可能なPDF索引DBがありません。公開先を設定して最新データ取得を実行してください。'
+
+    async def sync_index(self, event=None):
+        if self.busy():
+            return
+        folder = (self.publish_field.value or '').strip()
+        if not folder:
+            self.report_error('PDF索引の公開フォルダを指定してください。')
+            return
+        self.set_busy(True, 'PDF索引の最新版を確認しています…')
+        self.index_controls.disabled = True
+        self.page.update()
+        try:
+            changed = await asyncio.to_thread(pdf_catalog.sync, folder, self.index_database)
+            self.refresh_index_label()
+            if changed:
+                self.activation_generation += 1
+                self.results, self.selection = [], set()
+                self.files = None
+                self.clear_preview()
+            self.message.value = 'PDF索引の最新データを取得しました。' if changed else 'PDF索引は最新です。'
+        except Exception as exc:
+            self.refresh_index_label()
+            suffix = '前回取得したDBで検索できます。' if self.index_root else '検索用DBは利用できません。'
+            self.index_label.value += f' / 最新版取得失敗：{suffix}'
+            self.message.value = f'PDF索引を取得できませんでした：{exc} {suffix}'
+        finally:
+            self.index_controls.disabled = False
+            self.set_busy(False)
+            self.render()
+            self.page.update()
+
+    async def startup_sync(self):
+        if (self.publish_field.value or '').strip():
+            # Avoid replacing a DB while another app operation owns the shared busy flag.
+            while self.busy():
+                await asyncio.sleep(0.1)
+            await self.sync_index()
 
     @staticmethod
     def new_table():
@@ -161,23 +241,19 @@ class NormalMode:
             self.report_error('検索文字列を入力してください。')
             await self.focus()
             return
-        folder = self.folder().strip()
         self.search_indicator.value = None
         self.search_indicator.visible = True
-        self.set_busy(True, 'PDF一覧を取得中：0件')
+        self.set_busy(True, 'PDF索引を検索中…')
         self.activation_generation += 1
         self.preview_generation += 1
         self.preview_pending = None
         try:
             def work(report):
-                if not folder or not Path(folder).is_dir():
-                    raise ValueError('有効な検索先フォルダを指定してください。')
-                cached = self.collect(folder, lambda count: report((f'PDF一覧を取得中：{count}件', None)))
-                results = search_files(words, cached, lambda current, total: report((
+                return pdf_catalog.search(self.index_database, words, lambda current, total: report((
                     f'ファイル名を検索中：{current}/{total}件', current / total if total else 1.0)))
-                return cached, results
-            files, results = await self.worker(work)
-            self.files, self.index_folder = files, path_key(folder)
+            info, results = await self.worker(work)
+            self.index_root = info['root']
+            self.files, self.index_folder = None, path_key(self.index_root)
             self.results, self.selection = results, set()
             self.metadata.update({path_key(item['path']): item for item in results})
             self.image.visible = False

@@ -14,6 +14,7 @@ import queue
 import tempfile
 from windows_file_actions import create_explorer_shortcut
 from normal_mode import NormalMode
+from pdf_catalog import snapshot_paths
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
@@ -21,7 +22,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.2.3"
+APP_VERSION = "v1.3.0"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -752,6 +753,7 @@ def main(page: ft.Page):
 
     # DataTable状態管理用
     current_df = pd.DataFrame()
+    bom_pdf_root = ''
     search_text_fields = {}
     output_checkboxes = {}
 
@@ -1003,6 +1005,7 @@ def main(page: ft.Page):
             set_excel_ui_enabled(False)
 
         normal_active = mode_dropdown.value == "通常"
+        folder_settings_row.controls[0] = normal_mode.index_controls
         normal_mode.activate(normal_active)
         excel_heading.visible = not normal_active
         excel_control_row.visible = not normal_active
@@ -1971,7 +1974,7 @@ def main(page: ft.Page):
             return ""
 
         path_text = str(pdf_path).strip()
-        search_root = search_folder_field.value.strip()
+        search_root = bom_pdf_root or normal_mode.index_root
 
         if not search_root:
             return path_text
@@ -3578,18 +3581,9 @@ def main(page: ft.Page):
             if idx in current_df.index:
                 current_df.at[idx, "出力対象"] = bool(checkbox.value)
 
-    def search_pdf_dataframe(df, pdf_root, report):
-        def update_pdf_collect_progress(count: int):
-            report(f"PDF一覧を取得中です... {count}件")
-
-        pdf_files = collect_pdf_files(
-            pdf_root,
-            progress_callback=update_pdf_collect_progress
-        )
-
-        if not pdf_files:
-            report("検索先フォルダ配下にPDFが見つかりませんでした。")
-            return None
+    def search_pdf_dataframe(df, database, report):
+        report('PDF索引DBを読み込んでいます...')
+        info, pdf_files = snapshot_paths(database)
 
         report(f"PDF検索用データを作成中です... {len(pdf_files)}件")
 
@@ -3652,10 +3646,10 @@ def main(page: ft.Page):
         df = update_adopted_pdf_duplicate_info(df)
         df = apply_duplicate_output_defaults(df)
 
-        return df
+        return df, info['root']
 
     async def on_pdf_candidate_search(e):
-        nonlocal current_df
+        nonlocal current_df, bom_pdf_root
 
         # 処理中に再度イベントが届いても何もしない
         if pdf_action_state["processing"]:
@@ -3667,31 +3661,19 @@ def main(page: ft.Page):
             page.update()
             return
 
-        pdf_root = search_folder_field.value.strip()
-
-        if not pdf_root or not os.path.isdir(pdf_root):
-            message.value = "検索先フォルダが正しくありません。"
-            page.show_dialog(ft.SnackBar(ft.Text("検索先フォルダが正しくありません。")))
-            page.update()
-            return
-
         set_pdf_action_processing(
             True,
-            "PDF一覧を取得中です...",
+            "PDF索引DBを読み込んでいます...",
         )
 
         try:
             sync_table_state_to_current_df()
 
-            searched_df = await run_worker_with_progress(
-                lambda report: search_pdf_dataframe(current_df.copy(deep=True), pdf_root, report)
+            searched_df, searched_root = await run_worker_with_progress(
+                lambda report: search_pdf_dataframe(current_df.copy(deep=True), normal_mode.index_database, report)
             )
-            if searched_df is None:
-                message.value = "検索先フォルダ配下にPDFが見つかりませんでした。"
-                page.show_dialog(ft.SnackBar(ft.Text(message.value)))
-                page.update()
-                return
             current_df = searched_df
+            bom_pdf_root = searched_root
 
             render_table_from_df(current_df)
 
@@ -4043,6 +4025,7 @@ def main(page: ft.Page):
         ],
         spacing=12,
     )
+    bom_search_folder_controls = folder_settings_row.controls[0]
 
     excel_control_row = ft.Row(
         [
@@ -4059,6 +4042,10 @@ def main(page: ft.Page):
         spacing=10,
     )
 
+    def save_pdf_index_publish(value):
+        config['pdf_index_publish'] = value
+        save_config()
+
     normal_mode = NormalMode(
         page, folder=lambda: search_folder_field.value or "",
         output_folder=lambda: output_folder_field.value or "",
@@ -4068,6 +4055,8 @@ def main(page: ft.Page):
         worker=run_worker_with_progress, message=message,
         completed=show_pdf_export_completed_dialog, version=APP_VERSION,
         button_style=BUTTON_STYLE_PRIMARY,
+        index_publish=config.get('pdf_index_publish', ''),
+        save_publish=save_pdf_index_publish,
     )
     excel_heading = ft.Text("🔍 構成部品表選択", size=20, weight="bold")
 
@@ -4178,6 +4167,7 @@ def main(page: ft.Page):
 
     update_hover_preview_visibility()
     update_mode_fields()
+    page.run_task(normal_mode.startup_sync)
 
 
 if __name__ == "__main__":
