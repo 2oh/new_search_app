@@ -8,6 +8,8 @@ import sys
 
 from pdf_catalog import ingest, operation_lock, publish
 
+APP_VERSION = 'v1.3.1'
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='PDF索引を作成して公開します')
@@ -33,6 +35,7 @@ def main(argv=None):
         handler = logging.FileHandler(paths['logs'] / f'pdf-index-{datetime.now():%Y%m%d}.log', encoding='utf-8')
         handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
         logger.addHandler(handler)
+        logger.info('PDF索引更新ツール %s / 設定：%s', APP_VERSION, config_file)
         with operation_lock(paths['database'].with_suffix('.update.lock')):
             logger.info('PDF索引の更新開始')
             ingest(paths['root'], paths['database'], logger.info)

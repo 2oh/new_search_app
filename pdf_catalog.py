@@ -11,6 +11,7 @@ import sqlite3
 import tempfile
 import unicodedata
 import uuid
+from urllib.parse import quote
 
 from normal_search import path_key
 
@@ -21,7 +22,10 @@ MANIFEST = 'pdf-latest.json'
 @contextmanager
 def connect(path, readonly=False):
     path = Path(path).absolute()
-    db = sqlite3.connect(path.as_uri() + '?mode=ro', uri=True) if readonly else sqlite3.connect(path)
+    # Match the BOM catalog: native UNC backslashes belong in the filename,
+    # not in a URI authority (file://server), which stock SQLite rejects.
+    uri = 'file:' + quote(str(path), safe='/:') + '?mode=ro'
+    db = sqlite3.connect(uri, uri=True) if readonly else sqlite3.connect(path)
     db.row_factory = sqlite3.Row
     try:
         yield db
@@ -48,13 +52,22 @@ def validate(path):
         count = 0
         for row in db.execute('SELECT path,name,stem,mtime_ns,size FROM files'):
             relative = Path(row['path'])
+            def invalid(reason):
+                raise ValueError(
+                    '\nPDF索引の検証に失敗しました。'
+                    f'\n対象PDF：{Path(info["root"]) / relative}'
+                    f'\n理由：{reason}'
+                    f'\n相対パス（記録値）：{row["path"]!r}'
+                    f'\nファイル名（記録値）：{row["name"]!r}'
+                    f'\n判定された拡張子：{relative.suffix!r}'
+                    f'\n検証件数：{count + 1} / {info["count"]}')
             if (relative.is_absolute() or relative.drive or '..' in relative.parts
                     or relative.name != row['name'] or relative.suffix.lower() != '.pdf'):
-                raise ValueError('PDF索引内のパスが不正です')
+                invalid('相対パス・ファイル名・PDF拡張子の整合性条件を満たしません')
             if row['stem'] != unicodedata.normalize('NFKC', relative.stem).casefold():
-                raise ValueError('PDF索引内の検索文字列が不正です')
+                invalid('検索用文字列がファイル名から生成した値と一致しません')
             if type(row['mtime_ns']) is not int or type(row['size']) is not int or row['size'] < 0:
-                raise ValueError('PDF索引内のファイル情報が不正です')
+                invalid('更新日時またはファイルサイズの形式が不正です')
             count += 1
         if count <= 0 or count != int(info['count']):
             raise ValueError('PDF索引の件数が不正です')
@@ -120,7 +133,7 @@ def ingest(root, database, report=lambda text: None):
                 CREATE TABLE files(path TEXT PRIMARY KEY,name TEXT NOT NULL,
                     stem TEXT NOT NULL,mtime_ns INTEGER NOT NULL,size INTEGER NOT NULL);
             ''')
-            count = 0
+            count, skipped = 0, 0
             for folder, directories, names in os.walk(root, onerror=fail, followlinks=False):
                 # The existing collector does not traverse directory symlinks either.
                 report(f'フォルダを確認中：{folder}')
@@ -128,6 +141,10 @@ def ingest(root, database, report=lambda text: None):
                     if not name.lower().endswith('.pdf'):
                         continue
                     path = Path(folder) / name
+                    if name.lower() == '.pdf':
+                        skipped += 1
+                        report(f'除外PDF：{path} / 理由：ファイル名が.pdfのみ')
+                        continue
                     stat = path.stat()  # disappearance/access failure aborts this generation
                     db.execute('INSERT INTO files VALUES (?,?,?,?,?)', (
                         str(path.relative_to(root)), name,
@@ -136,15 +153,17 @@ def ingest(root, database, report=lambda text: None):
                     count += 1
                     if count % 1000 == 0:
                         report(f'PDF登録：{count}件')
+            report(f'PDF走査完了：登録対象 {count}件 / .pdfのみの除外 {skipped}件')
             if not count:
                 raise ValueError('PDFが0件のため更新・公開を中止しました。対象フォルダを確認してください。')
             info = {'kind': 'pdf-index', 'schema': VERSION, 'root': str(root),
-                    'updated': datetime.now(timezone.utc).isoformat(), 'count': str(count)}
+                    'updated': datetime.now(timezone.utc).isoformat(), 'count': str(count),
+                    'skipped_extension_only': str(skipped)}
             db.executemany('INSERT INTO metadata VALUES (?,?)', info.items())
             db.commit()
         validate(temporary)
         os.replace(temporary, database)
-        report(f'索引作成完了：{count}件')
+        report(f'索引作成完了：{count}件 / 除外：{skipped}件')
         return info
     finally:
         temporary.unlink(missing_ok=True)

@@ -5413,6 +5413,246 @@ git status -sb
 
 
 
+2026/11/17
+
+【v1.3.1 改修要件・作業手順】
+作成日：2026-11-17
+
+本資料はv1.3.1の改修要件と作業手順。以下の確認状況を参照する。
+今回の既存note.txtへの追記とGit操作は利用者が行う。
+作業ブランチ：codex/pdf-index-v1.3.1（利用者が切替済み）。
+
+【実装・確認状況】
+・4点の実装と、索引処理14件・通常モード・構成部品表モードの回帰テストが完了。
+・作業用コピーで検証用更新EXEを作成し、2つのcmdを実際に通して確認。
+・EXEなし／設定なしは終了コード2、正常は0、異常は1。手動cmdも終了コードを保持。
+・日本語・空白・&を含む配置先、起動フォルダ非依存、除外ログ、旧公開版保持を確認。
+・画面テストはFletのメモリ上のセッションによるもの。実画面の見やすさは手順6で利用者が確認する。
+・実NASへの公開、配布用クライアントEXE作成、現地確認は未実施。
+・Gitのステージ・コミット・push・統合・タグ作成は未実施。
+
+【1．今回の改修範囲】
+
+① NAS公開時のUNCパス対応
+・現在のinvalid uri authority: landisk-01はSQLiteへ渡すURIの形式が原因。
+・構成部品表DB側で採用済みのUNCパス対応をPDF索引側にも適用する。
+・ローカルDB・NAS上の公開DBの読み取り検証をともに利用可能にする。
+・公開失敗・転送検証失敗時に前回の正常版を保持する仕組みは維持。
+・権限変更やbatの設定で回避するのではなく、コード側のパス処理を修正する。
+
+② ファイル名が.pdfだけのファイルを読み飛ばす
+・大文字小文字を区別せず、名前が.pdfだけのファイルを索引登録対象から除外。
+・読み飛ばしたPDFのフルパスと理由を画面・ログへ記録し、除外件数を最後に表示する。
+・元ファイルの削除・改名・書換えはしない。
+・先頭がドットでも、.sample.pdf等の通常のPDF名は除外しない。
+・以前の診断版は判定を維持していたが、正式なv1.3.1ではこの条件を読み飛ばす。
+・それ以外の不正パス、アクセス失敗、DB検証失敗は一律に読み飛ばさない。
+・検証エラーは対象PDFのフルパス、理由、記録値を画面・ログへ表示。
+・登録できるPDFが0件なら公開を中止し、前回の公開版を保持。
+
+③ 実行用.cmdを追加
+・manual_pdf_index.cmd：ダブルクリックで実行し、完了・失敗後に画面を残す。
+・daily_pdf_index.cmd：日次タスク用。画面を止めず、EXEの終了コードを返す。
+・両方とも自身の配置先のpdf_index_update.exeとpdf_index_config.jsonを使用。
+・起動時のカレントフォルダに依存させず、スペース・日本語を含む配置先に対応。
+・実行後のpause等でEXEの終了コードを失わない。
+・文字化けを避けるため、cmd自身の文言はASCIIを基本とし、日本語の処理結果はEXE側に任せる。
+・上記.cmd名は今回作成する予定名。実装完了前には存在する前提で実行しない。
+
+④ アプリの名称・画面配置変更（両モード共通）
+・「PDF索引 公開フォルダ」→「PDF索引データ配信元フォルダ」
+・索引用の「参照」ボタン→「フォルダを選択」
+・「PDF検索先（索引DBから取得）」→「PDF検索先フォルダ」
+・「出力先フォルダ」→「PDF出力先フォルダ」
+
+最上段：
+  左：PDF検索先フォルダ（DB由来・編集不可）
+  右：PDF出力先フォルダ＋フォルダを選択
+
+2段目：
+  左から：PDF索引データ配信元フォルダ＋フォルダを選択＋最新データ取得＋データ更新日時
+  右端：×終了
+
+・配信元の入力欄だけで画面の全幅を使わない。
+・更新日時は最新データ取得ボタン付近に表示。件数・取得失敗等も確認できるようにする。
+・終了ボタンは現在の行から移し、二重に配置しない。
+・その下に検索モードなどの既存操作行を置く。
+・既存の最小幅1200を含め、ボタンや終了操作が隠れないように確認。
+・取得・検索・出力中の多重操作防止は維持。
+
+【2．今回変更しないもの】
+・構成部品表のExcel抽出、品名生成、品番・PGの検索キー生成。
+・通常モード／構成部品表モードそれぞれの候補照合ルール。
+・候補の選択、ストック、出力順、PDFプレビューの現行配置。
+・両モードが同じPDF索引を参照する仕組み。
+・PDF本文は読み込まず、索引は日次更新・端末取得方式とする。
+・検索モードの名称変更・複合モード・仕様DBは後続。
+・既存の設定キーは表示名変更だけを理由に変更せず、設定とストックを維持。
+
+【3．確認項目】
+・.pdf／.PDFを読み飛ばし、有効PDFは登録されること。
+・除外ファイルのパスと件数が画面・ログに出ること。
+・全件が除外対象なら旧DB・公開版を保持すること。
+・別の検証エラーで対象・理由が分かること。
+・UNC形式を使う読み取りURIと、日本語・空白・記号を含むパスを確認。
+・公開・取得・検索の既存テスト、通常モード・構成部品表モードの回帰テスト。
+・手動cmdが画面を残し、日次cmdが終了コード0／非0を正しく返すこと。
+・EXEと設定が見つからない場合も分かる表示となること。
+・両モードで最上段・2段目・終了ボタンの表示と操作を確認。
+・実NASへの公開は現地で別途確認。ローカルテストだけで現地成功とは扱わない。
+
+【4．正本とブランチの確認】
+正本：C:\Users\shini\OneDrive\codes_od\new_search_app
+確認時点：main、APP_VERSION=v1.3.0、タグv1.3.0あり。
+未コミット変更：PDF_INDEX_SETUP.md（前回の現地向け手順書への改訂）。
+
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git branch --show-current
+git diff --check
+git diff -- PDF_INDEX_SETUP.md
+
+手順書の変更は残し、今回のブランチへ引き継ぐ。破棄・reset・強制上書きはしない。
+他の変更がある場合も、まず内容を確認する。
+
+【5．作業ブランチ作成】
+mainから次を実行する。未コミットの手順書変更は通常そのまま引き継がれる。
+
+git switch -c codex/pdf-index-v1.3.1
+git status -sb
+
+既に同名ブランチがある場合や切替が拒否された場合は止めて確認する。
+利用者の切替完了後、アシスタントが実装・テストを行う。
+
+【6．実装後の起動確認】
+ここから先はv1.3.1の実装完了後に実行する。
+
+& 'C:\dev\new_search_app\Scripts\python.exe' main.py
+
+・タイトルのv1.3.1を確認。
+・両モードで新しい名称と2行の設定配置を確認。
+・取得ボタン、出力先選択、終了ボタンを確認。
+・取得済みの索引で候補検索・プレビュー・ストック・PDF出力を確認。
+・確認後に必要なnote追記を保存する。
+
+自動テストを再実行する場合：
+& 'C:\dev\new_search_app\Scripts\python.exe' -m unittest discover -s tests -p test_pdf_catalog.py -v
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/test_normal_mode.py .
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/test_ui_state.py .
+
+cmd検証は更新用EXE作成後に実行できる（手順13）。
+
+【7．差分確認・コミット・push】
+git status -sb
+git diff --check
+git diff --stat
+git ls-files --others --exclude-standard
+
+利用者設定・DB・ログ・PDF・生成EXEが追加対象でないことを確認する。
+PDF_INDEX_SETUP.mdの既存改訂と今回の更新も対象に含める。
+
+git add -A
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+
+問題がなければ実行：
+git commit -m "fix: support UNC PDF indexes and improve update workflow"
+git status -sb
+git push -u origin codex/pdf-index-v1.3.1
+
+【8．mainへ統合】
+未コミット変更がないことを確認して、各行の成功を確認しながら進む。
+
+git switch main
+git fetch origin
+git merge --ff-only origin/main
+git merge --ff-only codex/pdf-index-v1.3.1
+git push origin main
+
+失敗したら止めて確認する。強制push・resetはしない。
+
+【9．タグ】
+git tag --list v1.3.1
+git ls-remote --tags origin refs/tags/v1.3.1
+
+未作成であることを確認：
+git tag -a v1.3.1 -m "Release v1.3.1"
+git show --no-patch v1.3.1
+git push origin v1.3.1
+
+既存タグは削除・上書きしない。
+
+【10．クライアントEXE作成】
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
+$LASTEXITCODE
+
+終了コード0を確認。
+生成予定：dist\図面PDF検索結合ツール (v1.3.1).exe
+管理用：dist\図面PDF検索結合ツール (v1.3.1).build.json
+
+【11．クライアントEXEセルフテスト】
+$selftestDir = Join-Path $PWD ('work\v131-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$exePath = Join-Path $PWD 'dist\図面PDF検索結合ツール (v1.3.1).exe'
+$testProcess = Start-Process -FilePath $exePath -ArgumentList @('--self-test', ('"' + $selftestDir + '"')) -WindowStyle Hidden -Wait -PassThru
+$testProcess.ExitCode
+Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
+
+終了コード0、frozen=true、version=v1.3.1を確認。
+
+【12．更新用EXE作成】
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_pdf_index_exe.py
+$LASTEXITCODE
+
+終了コード0を確認。
+生成予定：dist\pdf_index_update.exe
+クライアントと同じv1.3.1の配布フォルダで管理し、診断版と混ぜない。
+
+【13．持ち出し前のEXE・cmd確認】
+更新用EXEのビルド時に、2つのcmdもdistへコピーされる。
+作成済み更新用EXEとソースのcmdを使う自動検証：
+
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/test_pdf_index_cmd.py
+
+一時フォルダのサンプルで、有効PDFと.pdfのみのファイル、正常／異常の終了コードを検証する。本番設定は使わない。
+検証終了時にPASSが表示されることを確認。
+手動で確認する場合はdistの両cmd・更新EXEを同じテスト用フォルダへ置き、テスト用pdf_index_config.jsonを用意する。
+manual_pdf_index.cmdを実行し、処理後に画面が残ることを確認する。
+クライアントEXEの新しい設定画面、取得、検索、プレビュー、出力も確認する。
+現地NASの確認は手順15で行う。
+
+【14．現地へ持っていくもの】
+利用端末用：
+・図面PDF検索結合ツール (v1.3.1).exe
+
+更新用端末用：
+・pdf_index_update.exe
+・manual_pdf_index.cmd
+・daily_pdf_index.cmd
+
+説明用：
+・更新したPDF_INDEX_SETUP.md
+・pdf_index_config.example.json（新規設定時の参考。現地の設定は上書きしない）
+
+現地のpdf_index_config.json、アプリのconfig.json、normal_stack.jsonは保持。
+開発環境の設定・サンプルDBは配布しない。旧EXEと診断版は区別して退避する。
+
+【15．現地で公開先をNASへ戻して確認】
+・更新処理が動いていないことを確認して更新用EXEとcmdを配置。
+・現地のpdf_index_config.jsonのpublishを、目的のNAS公開フォルダへ設定する。
+・root、database、logsは正しい既存設定を維持する。
+・manual_pdf_index.cmdで実行する。
+・.pdfが存在する場合、除外パス・除外件数が記録されることを確認。
+・終了コード0、NAS上のpdf-latest.jsonと世代別DBの作成を確認。
+・利用端末の配信元フォルダをNAS公開先へ設定し、「最新データ取得」を実行。
+・更新日時・検索先を確認し、構成部品表モードと通常モードで検索・出力を確認。
+・手動成功後、タスクスケジューラをdaily_pdf_index.cmdへ切り替え、実行結果とログを確認。
+・翌日の自動実行から利用端末への取得まで一巡して確認。
+
+アシスタントの自動テスト・EXEセルフテスト・実画面確認・現地確認は区別して記録する。
+単なる進捗ではnoteを書き換えず、要件・手順が変わった場合に更新する。
+
+
 
 
 

@@ -22,7 +22,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.3.0"
+APP_VERSION = "v1.3.1"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -893,7 +893,7 @@ def main(page: ft.Page):
 
     # ---- UI構成 ----
     search_folder_field = ft.TextField(label="検索先フォルダ", value=config.get("pdf_folder", ""), expand=True)
-    output_folder_field = ft.TextField(label="出力先フォルダ", value=config.get("output_folder", ""), expand=True)
+    output_folder_field = ft.TextField(label="PDF出力先フォルダ", value=config.get("output_folder", ""), expand=True)
 
     search_folder_field.on_change = save_config
     output_folder_field.on_change = save_config
@@ -929,6 +929,13 @@ def main(page: ft.Page):
         read_only=True,
         expand=True,
         color=ft.Colors.AMBER_200,
+        bgcolor="#302A1E",
+        border=ft.OutlineInputBorder(side=ft.BorderSide(1, "#806C43")),
+        label_style=ft.TextStyle(color=ft.Colors.AMBER_200),
+        can_request_focus=False,
+        enable_interactive_selection=False,
+        show_cursor=False,
+        tooltip="自動適用される除外条件です。ここでは変更できません。",
     )
 
     exit_button = ft.OutlinedButton(
@@ -985,7 +992,6 @@ def main(page: ft.Page):
                     spacing=12,
                     expand=True,
                 ),
-                settings_action_row,
             ]
             set_excel_ui_enabled(True)
 
@@ -1000,12 +1006,11 @@ def main(page: ft.Page):
                     spacing=12,
                     expand=True,
                 ),
-                settings_action_row,
             ]
             set_excel_ui_enabled(False)
 
         normal_active = mode_dropdown.value == "通常"
-        folder_settings_row.controls[0] = normal_mode.index_controls
+        bom_bottom_separator.visible = not normal_active
         normal_mode.activate(normal_active)
         excel_heading.visible = not normal_active
         excel_control_row.visible = not normal_active
@@ -3539,7 +3544,7 @@ def main(page: ft.Page):
         """
         pdf_action_state["processing"] = processing
         if processing:
-            controls = [folder_settings_row, mode_dropdown, excel_control_row,
+            controls = [folder_settings_row, index_settings_row, mode_dropdown, excel_control_row,
                         table_header, table_area, exit_button,
                         normal_mode.view, normal_mode.search_controls]
             pdf_action_state["disabled_before"] = [(c, c.disabled) for c in controls]
@@ -4016,7 +4021,7 @@ def main(page: ft.Page):
                     ft.Button(
                         "フォルダを選択",
                         on_click=pick_output_folder,
-                        style=BUTTON_STYLE_SECONDARY,
+                        style=BUTTON_STYLE_PRIMARY,
                     ),
                 ],
                 expand=True,
@@ -4058,6 +4063,10 @@ def main(page: ft.Page):
         index_publish=config.get('pdf_index_publish', ''),
         save_publish=save_pdf_index_publish,
     )
+    folder_settings_row.controls[0] = normal_mode.root_display
+    index_settings_row = ft.Row([normal_mode.index_controls, settings_action_row], spacing=32)
+    index_settings_panel = ft.Container(index_settings_row, padding=ft.Padding.symmetric(vertical=10))
+    bom_bottom_separator = ft.Column([ft.Container(height=4), ft.Divider(height=1)], spacing=8)
     excel_heading = ft.Text("🔍 構成部品表選択", size=20, weight="bold")
 
     fixed_controls = ft.Container(
@@ -4065,6 +4074,7 @@ def main(page: ft.Page):
             [
                 ft.Text("⚙️ 設定", size=20, weight="bold"),
                 folder_settings_row,
+                index_settings_panel,
                 mode_row,
 
                 ft.Container(height=4),
@@ -4075,8 +4085,7 @@ def main(page: ft.Page):
                 mode_notice,
                 excel_control_row,
 
-                ft.Container(height=4),
-                ft.Divider(height=1),
+                bom_bottom_separator,
 
                 table_header,
                 message,
@@ -4147,6 +4156,7 @@ def main(page: ft.Page):
         return changed
 
     def on_page_resize(e):
+        normal_mode.resize_settings()
         if mode_dropdown.value == "通常":
             normal_mode.resize()
             page.update()

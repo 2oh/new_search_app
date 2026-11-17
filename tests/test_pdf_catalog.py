@@ -5,6 +5,7 @@ import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.parse import urlsplit, unquote
 
 import pdf_catalog as catalog
 from normal_search import parse_search_query, search_files
@@ -40,6 +41,68 @@ class PdfCatalogTests(unittest.TestCase):
             expected = search_files(words, files)
             actual = catalog.search(self.database, words)[1]
             self.assertEqual(expected, actual, query)
+
+    def test_unc_readonly_uri_has_no_authority(self):
+        unc = r'\\landisk-01\share\日本語 # 100% ?\index.sqlite'
+        with patch.object(catalog.sqlite3, 'connect') as connect:
+            with catalog.connect(unc, True):
+                pass
+        uri = connect.call_args.args[0]
+        self.assertEqual('', urlsplit(uri).netloc)
+        self.assertEqual(unc, unquote(uri[5:].split('?mode=ro')[0]))
+        self.assertTrue(connect.call_args.kwargs['uri'])
+
+    def test_local_uri_reserved_characters_and_readonly(self):
+        parent = self.base / '日本語 # 100%'
+        parent.mkdir()
+        self.database = parent / 'index.sqlite'
+        self.build()
+        self.assertEqual('4', catalog.validate(self.database)['count'])
+        with catalog.connect(self.database, True) as db:
+            with self.assertRaises(sqlite3.OperationalError):
+                db.execute('DELETE FROM files')
+
+    def test_extension_only_skipped_and_logged_but_other_dot_name_kept(self):
+        for folder, name in [('a', '.pdf'), ('b', '.PDF'), ('a', '.sample.pdf')]:
+            (self.root / folder / name).write_bytes(b'fixture')
+        reports = []
+        info = catalog.ingest(self.root, self.database, reports.append)
+        self.assertEqual('2', info['skipped_extension_only'])
+        self.assertEqual('5', info['count'])
+        output = '\n'.join(reports)
+        self.assertIn(str(self.root / 'a/.pdf'), output)
+        self.assertIn(str(self.root / 'b/.PDF'), output)
+        self.assertIn('除外：2件', output)
+        paths = catalog.snapshot_paths(self.database)[1]
+        self.assertIn(self.root / 'a/.sample.pdf', paths)
+        self.assertNotIn(self.root / 'a/.pdf', paths)
+        catalog.publish(self.database, self.public)
+        catalog.sync(self.public, self.local)
+        self.assertEqual(paths, catalog.snapshot_paths(self.local)[1])
+
+    def test_only_excluded_preserves_previous_database_and_manifest(self):
+        self.build()
+        before_db = self.database.read_bytes()
+        before_public = (self.public / catalog.MANIFEST).read_bytes()
+        empty = self.base / 'only-excluded'
+        empty.mkdir()
+        (empty / '.pdf').write_bytes(b'fixture')
+        reports = []
+        with self.assertRaises(ValueError):
+            catalog.ingest(empty, self.database, reports.append)
+        self.assertIn('登録対象 0件 / .pdfのみの除外 1件', '\n'.join(reports))
+        self.assertEqual(before_db, self.database.read_bytes())
+        self.assertEqual(before_public, (self.public / catalog.MANIFEST).read_bytes())
+
+    def test_invalid_row_reports_path_and_reason(self):
+        self.build()
+        with catalog.connect(self.database) as db:
+            db.execute("UPDATE files SET stem='invalid' WHERE path=?", (str(Path('a') / 'Ｆ123 SS400.pdf'),))
+            db.commit()
+        with self.assertRaises(ValueError) as failure:
+            catalog.validate(self.database)
+        self.assertIn(str(self.root / 'a/Ｆ123 SS400.pdf'), str(failure.exception))
+        self.assertIn('理由：検索用文字列', str(failure.exception))
 
     def test_search_offline_and_generation_changes(self):
         self.build()

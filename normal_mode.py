@@ -25,16 +25,26 @@ class NormalMode:
         self.index_root = ''
         self.folder = lambda: self.index_root
         self.save_publish = save_publish
-        self.publish_field = ft.TextField(label='PDF索引 公開フォルダ', value=index_publish,
-                                         expand=True, on_change=self.on_publish_change)
-        self.index_label = ft.Text('PDF索引DBは未取得です', size=12)
-        self.root_field = ft.TextField(label='PDF検索先（索引DBから取得）', value='', read_only=True, expand=True)
+        self.publish_field = ft.TextField(label='PDF索引データ配信元フォルダ', value=index_publish,
+                                         width=480, on_change=self.on_publish_change)
+        self.index_label = ft.Text('PDF索引DBは未取得です', size=12, max_lines=3,
+                                   overflow=ft.TextOverflow.ELLIPSIS)
+        self.root_field = ft.TextField(label='PDF検索先フォルダ', value='',
+                                      read_only=True, expand=True, can_request_focus=False,
+                                      enable_interactive_selection=False, show_cursor=False,
+                                      bgcolor='#173247', color=ft.Colors.BLUE_100,
+                                      border=ft.OutlineInputBorder(side=ft.BorderSide(1, ft.Colors.BLUE_400)),
+                                      label_style=ft.TextStyle(color=ft.Colors.BLUE_200))
+        self.root_display = ft.Container(self.root_field, width=480, ignore_interactions=True,
+            tooltip='索引データから取得した検索先です。ここでは編集できません。')
         self.sync_button = ft.Button('最新データ取得', on_click=self.sync_index, style=button_style)
         self.publish_picker = ft.FilePicker()
-        self.index_controls = ft.Column([
-            ft.Row([self.publish_field, ft.TextButton('参照', on_click=self.pick_publish), self.sync_button]),
-            self.root_field, self.index_label,
-        ], spacing=4, expand=True)
+        self.publish_button = ft.Button('フォルダを選択', on_click=self.pick_publish, style=button_style)
+        self.index_controls = ft.Row([
+            self.publish_field, self.publish_button, self.sync_button,
+            ft.Container(self.index_label, expand=True),
+        ], spacing=8, expand=True)
+        self.resize_settings()
         self.refresh_index_label()
         self.store = StackStore('normal_stack.json')
         self.load_error = ''
@@ -49,7 +59,7 @@ class NormalMode:
         self.activation_generation = 0
         self.preview_running = False
         self.preview_pending = None
-        self.query = ft.TextField(label='検索文字列', hint_text='空白区切り（例：A B）でAND検索。ファイル名内のA・Bの出現順に関係なく検索されます。空白を含む文字列は " " で囲みます（例："A B"）。',
+        self.query = ft.TextField(label='検索文字列', hint_text='空白区切り（例：A B）でAND検索。ファイル名内のA・Bの出現順に関係なく検索されます。空白を含む文字列は " " で囲みます（例："ab c"）。',
                                   expand=True, on_submit=self.search, on_focus=self.caret_end)
         self.search_button = ft.Button('検索', on_click=self.search, style=button_style)
         self.query.tooltip = self.query.hint_text
@@ -100,6 +110,10 @@ class NormalMode:
         if self.save_publish:
             self.save_publish(self.publish_field.value or '')
 
+    def resize_settings(self):
+        self.publish_field.width = max(400, min(1000, (self.page.width or 1400) - 720))
+        self.root_display.width = self.publish_field.width
+
     async def pick_publish(self, event=None):
         if self.busy():
             return
@@ -114,19 +128,22 @@ class NormalMode:
             info = pdf_catalog.metadata(self.index_database)
             self.index_root = info['root']
             self.root_field.value = self.index_root
+            self.root_field.tooltip = self.index_root
             updated = datetime.fromisoformat(info['updated']).astimezone().strftime('%Y/%m/%d %H:%M:%S')
-            self.index_label.value = f'データ更新日時：{updated} / PDF：{info["count"]}件'
+            self.index_label.value = f'データ更新日時：{updated}\nPDF：{info["count"]}件'
         except Exception:
             self.index_root = ''
             self.root_field.value = ''
-            self.index_label.value = '利用可能なPDF索引DBがありません。公開先を設定して最新データ取得を実行してください。'
+            self.root_field.tooltip = None
+            self.index_label.value = 'PDF索引DBは未取得です。\n配信元を設定して最新データ取得を実行してください。'
+        self.index_label.tooltip = self.index_label.value
 
     async def sync_index(self, event=None):
         if self.busy():
             return
         folder = (self.publish_field.value or '').strip()
         if not folder:
-            self.report_error('PDF索引の公開フォルダを指定してください。')
+            self.report_error('PDF索引データ配信元フォルダを指定してください。')
             return
         self.set_busy(True, 'PDF索引の最新版を確認しています…')
         self.index_controls.disabled = True
@@ -144,6 +161,7 @@ class NormalMode:
             self.refresh_index_label()
             suffix = '前回取得したDBで検索できます。' if self.index_root else '検索用DBは利用できません。'
             self.index_label.value += f' / 最新版取得失敗：{suffix}'
+            self.index_label.tooltip = self.index_label.value
             self.message.value = f'PDF索引を取得できませんでした：{exc} {suffix}'
         finally:
             self.index_controls.disabled = False
@@ -193,7 +211,7 @@ class NormalMode:
         self.preview_pending = None
         if active:
             self.resize()
-            self.message.value = self.load_error or f'検索結果：{len(self.results)}件。'
+            self.message.value = self.load_error or f'検索結果：{len(self.results)}件'
             self.page.run_task(self.activate_async)
 
     async def activate_async(self):
@@ -259,7 +277,7 @@ class NormalMode:
             self.image.visible = False
             self.preview_label.value = ''
             self.tabs.selected_index = 0
-            self.message.value = f'検索結果：{len(results)}件。'
+            self.message.value = f'検索結果：{len(results)}件'
         except Exception as exc:
             self.message.value = f'検索できませんでした：{exc}'
         finally:

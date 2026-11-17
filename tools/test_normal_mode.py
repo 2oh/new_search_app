@@ -93,7 +93,8 @@ async def run(root):
                 normal.publish_field.value = str(publication)
                 await normal.sync_index()
                 assert normal.index_database.is_file() and normal.index_root == str(pdfs)
-                assert normal.root_field.read_only and not normal.busy()
+                assert normal.root_field.read_only and not normal.root_field.can_request_focus and not normal.busy()
+                assert normal.root_display.ignore_interactions and not normal.root_field.enable_interactive_selection
                 before_db = normal.index_database.read_bytes()
                 with patch.object(pdf_catalog, 'sync', side_effect=OSError('offline')):
                     await normal.sync_index()
@@ -106,7 +107,15 @@ async def run(root):
                 scope['on_mode_change'](None)
                 assert normal.view.visible and not scope['result_area'].visible
                 assert not scope['excel_control_row'].visible
-                assert scope['folder_settings_row'].controls[0] is normal.index_controls
+                assert scope['folder_settings_row'].controls[0] is normal.root_display
+                assert scope['index_settings_row'].controls[0] is normal.index_controls
+                assert normal.publish_field.label == 'PDF索引データ配信元フォルダ'
+                assert normal.root_field.label == 'PDF検索先フォルダ'
+                assert scope['output_folder_field'].label == 'PDF出力先フォルダ'
+                assert normal.publish_button.content == 'フォルダを選択'
+                assert scope['index_settings_row'].controls[-1].controls == [scope['exit_button']]
+                assert scope['settings_action_row'] not in scope['mode_row'].controls
+                assert not scope['bom_bottom_separator'].visible
                 scope['search_folder_field'].value = str(pdfs)
                 scope['output_folder_field'].value = str(Path(temp) / 'export')
                 assert not normal.results
@@ -163,7 +172,7 @@ async def run(root):
                 assert not normal.search_indicator.visible and not normal.busy()
                 await normal.search()
                 assert len(normal.results) == 2
-                assert scope['message'].value == '検索結果：2件。'
+                assert scope['message'].value == '検索結果：2件'
                 # New PDFs stay invisible until the daily snapshot is rebuilt and acquired.
                 extra = pdfs / 'F123 SS400 EXTRA.pdf'
                 extra.write_bytes((pdfs / 'F123 AL.pdf').read_bytes())
@@ -252,11 +261,13 @@ async def run(root):
                 scope['on_mode_change'](None)
                 assert scope['message'].value == ''
                 assert not normal.view.visible and scope['result_area'].visible
-                assert scope['folder_settings_row'].controls[0] is normal.index_controls
+                assert scope['bom_bottom_separator'].visible
+                assert scope['folder_settings_row'].controls[0] is normal.root_display
+                assert scope['index_settings_row'].controls[0] is normal.index_controls
                 scope['message'].value = 'PDF出力完了：88件'
                 scope['mode_dropdown'].value = '通常'
                 scope['on_mode_change'](None)
-                assert scope['message'].value == f'検索結果：{len(normal.results)}件。'
+                assert scope['message'].value == f'検索結果：{len(normal.results)}件'
                 normal.load_error = 'ストック読込エラー'
                 normal.activate(True)
                 assert scope['message'].value == normal.load_error
@@ -265,6 +276,9 @@ async def run(root):
                 for width in (1200, 1920, 1699, 1700):
                     page.width = width
                     scope['on_page_resize'](None)
+                    assert normal.publish_field.width == max(400, min(1000, width - 720))
+                    assert normal.root_display.width == normal.publish_field.width
+                    assert not scope['bom_bottom_separator'].visible
                     assert normal.preview_panel.visible == (width >= 1700)
                     assert len(normal.result_table.columns) == (6 if width < 1700 else 5)
                     assert len(normal.stack_table.columns) == len(normal.result_table.columns) + 1

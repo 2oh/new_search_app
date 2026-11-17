@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import sys
+import shutil
 
 
 if __name__ == '__main__':
@@ -12,3 +13,5 @@ if __name__ == '__main__':
                     '--console', '--name', 'pdf_index_update', '--distpath', str(root / 'dist'),
                     '--workpath', str(build), '--specpath', str(build),
                     '--paths', str(root), str(root / 'pdf_index_batch.py')], cwd=root, check=True)
+    for name in ('daily_pdf_index.cmd', 'manual_pdf_index.cmd'):
+        shutil.copy2(root / name, root / 'dist' / name)
