@@ -14,6 +14,7 @@ import queue
 import tempfile
 from windows_file_actions import create_explorer_shortcut
 from normal_mode import NormalMode
+from composite_mode import CompositeMode
 from pdf_catalog import snapshot_paths
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +23,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.3.1"
+APP_VERSION = "v1.4.0"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -905,8 +906,8 @@ def main(page: ft.Page):
     )
     mode_dropdown = ft.Dropdown(
         label="検索モード",
-        options=[ft.DropdownOption("構成部品表"), ft.DropdownOption("通常")],
-        value=config.get("search_mode", "構成部品表"),
+        options=[ft.DropdownOption("PDFファイル名"), ft.DropdownOption("複合"), ft.DropdownOption("構成部品表")],
+        value=("PDFファイル名" if config.get("search_mode") == "通常" else config.get("search_mode", "構成部品表")),
         width=150
     )
 
@@ -996,7 +997,7 @@ def main(page: ft.Page):
             set_excel_ui_enabled(True)
 
         else:
-            manual_field = normal_mode.search_controls
+            manual_field = composite_mode.search_controls if mode_dropdown.value == "複合" else normal_mode.search_controls
             mode_row.controls = [
                 ft.Row(
                     controls=[
@@ -1009,15 +1010,17 @@ def main(page: ft.Page):
             ]
             set_excel_ui_enabled(False)
 
-        normal_active = mode_dropdown.value == "通常"
-        bom_bottom_separator.visible = not normal_active
+        normal_active = mode_dropdown.value == "PDFファイル名"
+        bom_active = mode_dropdown.value == "構成部品表"
+        composite_mode.activate(mode_dropdown.value == "複合")
+        bom_bottom_separator.visible = bom_active
         normal_mode.activate(normal_active)
-        excel_heading.visible = not normal_active
-        excel_control_row.visible = not normal_active
-        mode_notice.visible = not normal_active
-        table_header.visible = not normal_active
-        result_area.visible = not normal_active
-        if normal_active:
+        excel_heading.visible = bom_active
+        excel_control_row.visible = bom_active
+        mode_notice.visible = bom_active
+        table_header.visible = bom_active
+        result_area.visible = bom_active
+        if not bom_active:
             clear_hover_preview()
         else:
             update_hover_preview_visibility()
@@ -3546,7 +3549,7 @@ def main(page: ft.Page):
         if processing:
             controls = [folder_settings_row, index_settings_row, mode_dropdown, excel_control_row,
                         table_header, table_area, exit_button,
-                        normal_mode.view, normal_mode.search_controls]
+                        normal_mode.view, normal_mode.search_controls, composite_mode.view, composite_mode.search_controls]
             pdf_action_state["disabled_before"] = [(c, c.disabled) for c in controls]
             for control in controls:
                 control.disabled = True
@@ -4063,6 +4066,12 @@ def main(page: ft.Page):
         index_publish=config.get('pdf_index_publish', ''),
         save_publish=save_pdf_index_publish,
     )
+    composite_mode = CompositeMode(page, normal_mode)
+    normal_mode.sync_other = composite_mode.sync_index
+    normal_mode.on_pdf_updated = composite_mode.pdf_updated
+    normal_mode.publish_field.label = '検索データ配信元フォルダ'
+    normal_mode.index_controls.controls[-1] = ft.Container(
+        ft.Column([normal_mode.index_label, composite_mode.index_label], spacing=2), expand=True)
     folder_settings_row.controls[0] = normal_mode.root_display
     index_settings_row = ft.Row([normal_mode.index_controls, settings_action_row], spacing=32)
     index_settings_panel = ft.Container(index_settings_row, padding=ft.Padding.symmetric(vertical=10))
@@ -4113,6 +4122,7 @@ def main(page: ft.Page):
             fixed_controls,
             result_area,
             normal_mode.view,
+            composite_mode.view,
         ],
         expand=True,
     )
@@ -4157,11 +4167,11 @@ def main(page: ft.Page):
 
     def on_page_resize(e):
         normal_mode.resize_settings()
-        if mode_dropdown.value == "通常":
+        if mode_dropdown.value == "PDFファイル名":
             normal_mode.resize()
             page.update()
             return
-        if pdf_action_state["processing"]:
+        if mode_dropdown.value == "複合" or pdf_action_state["processing"]:
             page.update()
             return
         changed = update_hover_preview_visibility()

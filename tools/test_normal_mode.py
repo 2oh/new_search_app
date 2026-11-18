@@ -103,13 +103,13 @@ async def run(root):
                 await normal.startup_sync()
                 assert '取得失敗' not in normal.index_label.value
                 normal.publish_field.value = ''  # no asynchronous startup work on restart tests
-                scope['mode_dropdown'].value = '通常'
+                scope['mode_dropdown'].value = 'PDFファイル名'
                 scope['on_mode_change'](None)
                 assert normal.view.visible and not scope['result_area'].visible
                 assert not scope['excel_control_row'].visible
                 assert scope['folder_settings_row'].controls[0] is normal.root_display
                 assert scope['index_settings_row'].controls[0] is normal.index_controls
-                assert normal.publish_field.label == 'PDF索引データ配信元フォルダ'
+                assert normal.publish_field.label == '検索データ配信元フォルダ'
                 assert normal.root_field.label == 'PDF検索先フォルダ'
                 assert scope['output_folder_field'].label == 'PDF出力先フォルダ'
                 assert normal.publish_button.content == 'フォルダを選択'
@@ -265,7 +265,7 @@ async def run(root):
                 assert scope['folder_settings_row'].controls[0] is normal.root_display
                 assert scope['index_settings_row'].controls[0] is normal.index_controls
                 scope['message'].value = 'PDF出力完了：88件'
-                scope['mode_dropdown'].value = '通常'
+                scope['mode_dropdown'].value = 'PDFファイル名'
                 scope['on_mode_change'](None)
                 assert scope['message'].value == f'検索結果：{len(normal.results)}件'
                 normal.load_error = 'ストック読込エラー'
@@ -313,7 +313,7 @@ async def run(root):
                 await asyncio.sleep(0.05)
                 assert logic.StackStore('normal_stack.json').load() == selected
                 # A fresh main() must restore both modes from the persisted config.
-                for mode in ('構成部品表', '通常'):
+                for mode in ('構成部品表', '通常', 'PDFファイル名', '複合'):
                     scope['mode_dropdown'].value = mode
                     scope['on_mode_change'](None)
                     assert json.loads(Path('config.json').read_text(encoding='utf-8'))['search_mode'] == mode
@@ -331,8 +331,10 @@ async def run(root):
                             app.main(restart.page)
                             sys.setprofile(old_profile)
                             await asyncio.sleep(0.05)
-                        assert fresh['mode_dropdown'].value == mode
-                        assert fresh['normal_mode'].view.visible == (mode == '通常')
+                        expected = 'PDFファイル名' if mode == '通常' else mode
+                        assert fresh['mode_dropdown'].value == expected
+                        assert fresh['normal_mode'].view.visible == (expected == 'PDFファイル名')
+                        assert fresh['composite_mode'].view.visible == (expected == '複合')
                     finally:
                         sys.setprofile(old_profile)
                         restart.close()

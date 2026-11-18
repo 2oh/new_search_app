@@ -24,3 +24,4 @@ rich==15.0.0
 six==1.17.0
 typing_extensions==4.16.0
 tzdata==2026.4
+pywin32==312; sys_platform == "win32"

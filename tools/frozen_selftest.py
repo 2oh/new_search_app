@@ -144,7 +144,7 @@ async def run_test(app, bundle, destination):
             # MemoryConnection has no native client to acknowledge focus calls.
             normal.focus = AsyncMock()
             bom_before = current.copy(deep=True)
-            scope['mode_dropdown'].value = '通常'
+            scope['mode_dropdown'].value = 'PDFファイル名'
             scope['on_mode_change'](None)
             assert normal.view.visible and not scope['result_area'].visible
             await normal.commit([])
@@ -171,6 +171,15 @@ async def run_test(app, bundle, destination):
             after = inspect.getclosurevars(scope['render_table_from_df']).nonlocals['current_df']
             assert after.equals(bom_before) and scope['result_area'].visible
             normal_checks = ['normal search', 'persistent stack', 'normal PDF order', 'BOM state preserved across modes']
+        if 'composite_mode' in scope:
+            from test_composite_ui import exercise
+            import pythoncom
+            import win32com.client
+            import win32timezone
+            await normal.commit([])
+            sample = destination / 'composite-check'
+            sample.mkdir()
+            normal_checks += await exercise(scope, sample)
         (destination / 'SELFTEST_PASS.json').write_text(json.dumps({
             'frozen': bool(getattr(sys, 'frozen', False)),
             'version': app.APP_VERSION,

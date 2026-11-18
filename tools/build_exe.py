@@ -41,7 +41,7 @@ def main():
                '--add-data', f'{client};flet-client',
                '--add-data', f'{tools / "fixtures/app_a_excel_test.xlsx"};selftest_data',
                '--add-data', f'{tools / "fixtures/pdfs"};selftest_data/pdfs',
-               '--hidden-import', 'flet_desktop', '--collect-data', 'flet',
+               '--hidden-import', 'flet_desktop', '--hidden-import', 'win32timezone', '--collect-data', 'flet',
                '--copy-metadata', 'flet', '--copy-metadata', 'flet-desktop', str(tools / 'entry.py')]
     subprocess.run(command, cwd=root, check=True)
     exe = output / (name + '.exe')

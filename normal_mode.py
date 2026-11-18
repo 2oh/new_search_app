@@ -25,6 +25,8 @@ class NormalMode:
         self.index_root = ''
         self.folder = lambda: self.index_root
         self.save_publish = save_publish
+        self.sync_other = None
+        self.on_pdf_updated = None
         self.publish_field = ft.TextField(label='PDF索引データ配信元フォルダ', value=index_publish,
                                          width=480, on_change=self.on_publish_change)
         self.index_label = ft.Text('PDF索引DBは未取得です', size=12, max_lines=3,
@@ -156,6 +158,8 @@ class NormalMode:
                 self.results, self.selection = [], set()
                 self.files = None
                 self.clear_preview()
+            if changed and self.on_pdf_updated:
+                self.on_pdf_updated()
             self.message.value = 'PDF索引の最新データを取得しました。' if changed else 'PDF索引は最新です。'
         except Exception as exc:
             self.refresh_index_label()
@@ -164,6 +168,9 @@ class NormalMode:
             self.index_label.tooltip = self.index_label.value
             self.message.value = f'PDF索引を取得できませんでした：{exc} {suffix}'
         finally:
+            if self.sync_other:
+                other_status = await self.sync_other(folder)
+                self.message.value += ' / ' + other_status
             self.index_controls.disabled = False
             self.set_busy(False)
             self.render()
