@@ -15,6 +15,7 @@ import tempfile
 from windows_file_actions import create_explorer_shortcut
 from normal_mode import NormalMode
 from composite_mode import CompositeMode
+from part_rules import eligible as part_eligible, is_zero_quantity
 from pdf_catalog import snapshot_paths
 from datetime import datetime
 from pathlib import Path
@@ -23,7 +24,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.4.0"
+APP_VERSION = "v1.4.1"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -908,7 +909,7 @@ def main(page: ft.Page):
         label="検索モード",
         options=[ft.DropdownOption("PDFファイル名"), ft.DropdownOption("複合"), ft.DropdownOption("構成部品表")],
         value=("PDFファイル名" if config.get("search_mode") == "通常" else config.get("search_mode", "構成部品表")),
-        width=150
+        width=200
     )
 
     def get_search_exclusion_description() -> str:
@@ -988,7 +989,6 @@ def main(page: ft.Page):
                 ft.Row(
                     controls=[
                         mode_dropdown,
-                        search_exclusion_field,
                     ],
                     spacing=12,
                     expand=True,
@@ -1113,20 +1113,6 @@ def main(page: ft.Page):
             pass
 
         return s
-
-    def is_zero_quantity(v) -> bool:
-        if pd.isna(v):
-            return False
-
-        s = str(v).strip()
-
-        if s == "":
-            return False
-
-        try:
-            return float(s.replace(",", "")) == 0.0
-        except ValueError:
-            return False
 
     def is_output_ineligible(row) -> bool:
         """
@@ -2969,37 +2955,6 @@ def main(page: ft.Page):
 
             return s.strip()
 
-        def matches_search_exclusion_rule(text) -> bool:
-            """
-            構成部品表モードの検索除外ルールに該当するか判定する。
-
-            現在は config の startswith ルールに対応する。
-            「16で始まる」の意味をそのまま保つため、
-            PDF検索用の加工は行わず、Excel上の値をstripした文字列で判定する。
-            """
-            if pd.isna(text):
-                return False
-
-            source_text = str(text).strip()
-
-            if not source_text or source_text.lower() in ("nan", "none"):
-                return False
-
-            for rule in config.get("search_exclusion_rules", []):
-                if not isinstance(rule, dict):
-                    continue
-
-                match_type = str(rule.get("match_type", "") or "").strip().lower()
-                value = str(rule.get("value", "") or "").strip()
-
-                if not value:
-                    continue
-
-                if match_type == "startswith" and source_text.startswith(value):
-                    return True
-
-            return False
-
         def resolve_pg_names_for_search(pg_series: pd.Series) -> dict:
             """
             検索文字列生成用にPG名を補正する。
@@ -3065,49 +3020,10 @@ def main(page: ft.Page):
         ]
 
         def decide_output_eligibility(row):
-            """
-            Excel上の条件から、自動出力処理の対象にしてよいかを判定する。
-
-            不可条件:
-            - 数量が0
-            - 数量セル色あり
-            - 品番・PG名がともに空欄
-            - 検索除外条件に該当
-            """
-            def is_blank_value(value) -> bool:
-                if pd.isna(value):
-                    return True
-
-                s = str(value).strip()
-
-                return s == "" or s.lower() in ("nan", "none")
-
-            zero_qty = False
-
-            if "数量" in df.columns:
-                zero_qty = is_zero_quantity(row.get("数量"))
-
-            colored = bool(str(row.get("数量セル色", "") or "").strip())
-
-            part_number_blank = is_blank_value(row.get("品番", ""))
-            pg_name_blank = is_blank_value(row.get("PG名", ""))
-
-            missing_identifier = part_number_blank and pg_name_blank
-
-            # 検索除外条件。
-            # 品番または検索用に補正したPG名が該当する場合、
-            # 品番・PG名が空欄の行と同じ「出力不可」扱いにする。
-            excluded_by_search_rule = (
-                matches_search_exclusion_rule(row.get("品番", ""))
-                or matches_search_exclusion_rule(
-                    resolved_pg_names.get(row.name, row.get("PG名", ""))
-                )
-            )
-
-            if zero_qty or colored or missing_identifier or excluded_by_search_rule:
-                return "不可"
-
-            return "可"
+            allowed = part_eligible(row.get("品番"), row.get("PG名"),
+                resolved_pg_names.get(row.name, ""), row.get("数量"), row.get("数量セル色"),
+                config.get("search_exclusion_rules", []))
+            return "可" if allowed else "不可"
 
         df["出力可否"] = df.apply(decide_output_eligibility, axis=1)
 
@@ -4066,12 +3982,12 @@ def main(page: ft.Page):
         index_publish=config.get('pdf_index_publish', ''),
         save_publish=save_pdf_index_publish,
     )
-    composite_mode = CompositeMode(page, normal_mode)
+    composite_mode = CompositeMode(page, normal_mode, rules=config.get("search_exclusion_rules", []))
     normal_mode.sync_other = composite_mode.sync_index
     normal_mode.on_pdf_updated = composite_mode.pdf_updated
     normal_mode.publish_field.label = '検索データ配信元フォルダ'
     normal_mode.index_controls.controls[-1] = ft.Container(
-        ft.Column([normal_mode.index_label, composite_mode.index_label], spacing=2), expand=True)
+        ft.Column([normal_mode.index_label, composite_mode.index_label, normal_mode.sync_status], spacing=2), expand=True)
     folder_settings_row.controls[0] = normal_mode.root_display
     index_settings_row = ft.Row([normal_mode.index_controls, settings_action_row], spacing=32)
     index_settings_panel = ft.Container(index_settings_row, padding=ft.Padding.symmetric(vertical=10))

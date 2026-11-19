@@ -10,6 +10,10 @@ import main as application
 
 
 def run():
+    if '--open-sheet' in sys.argv:
+        from composite_desktop import run_open_sheet
+        start = sys.argv.index('--open-sheet') + 1
+        raise SystemExit(run_open_sheet(*sys.argv[start:start+2]))
     bundle = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
     home = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path.cwd()
     os.environ['FLET_VIEW_PATH'] = str(bundle / 'flet-client')

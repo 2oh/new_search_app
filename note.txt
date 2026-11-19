@@ -5658,8 +5658,8 @@ manual_pdf_index.cmdを実行し、処理後に画面が残ることを確認す
 【v1.4.0 複合モード初回：改修範囲・作業手順案】
 作成日：2026-11-18
 
-本資料は実装前の範囲提案。コード・Git・既存note.txtは変更していない。
-今回の区切りに合意した後、利用者が作業ブランチへ切り替えてから実装する。
+本資料はv1.4.0の改修範囲・作業手順。Git操作は利用者が行う。
+既存note.txtへの貼り付けは利用者側で行う。
 進捗だけでは本資料を更新せず、要件・手順が変わる場合に更新する。
 
 【1．初回の区切り：部品を探す→図面を確認する→ストック→部品一覧Excel】
@@ -5775,7 +5775,7 @@ PDF結合出力は既存PDFストックへ選んだPDFを追加して行う案�
 ・初回に一方が未取得でも、取得済みDBで可能な機能まで一律に停止しない。
 ・構成部品表DBなしなら複合検索不可。PDF索引なしなら図面未検出と誤表示せず「PDF索引未取得」と案内する。
 ・仕様DBを必要条件にしない。後続で3つ目を追加する。
-・共通配信元へ移行する際の既存PDF設定・Cの設定の扱いは、実装時に移行手順へ明記する。
+・既存PDF配信元設定を引き継ぎ、画面名を「検索データ配信元フォルダ」とする。C設定は自動転記しない。COMPOSITE_SETUP.mdに移行手順を記載。
 ・Cのコードを参照・移植する場合もAの中で名前を分離し、稼働中のC本体を直接変更しない。
 
 【7．検証と完了条件】
@@ -5819,9 +5819,21 @@ git status -sb
 【10．実装後の起動・確認】
 & 'C:\dev\new_search_app\Scripts\python.exe' main.py
 
-手順7の操作を分離したサンプルで確認する。
-新しいテスト・サンプル準備コマンドは、実装が確定した時点でこの節に追記する。
-現地公開先へテストDBを混ぜない。
+通常の起動は上記main.py。分離サンプルは次で起動：
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/composite_demo.py
+
+毎回storage/composite-demo-...以下だけで設定・ローカルDB・ストック・出力を使用。
+本番配信先へテストDBを混ぜず、既存config.jsonも変更しない。
+例：ID 0001、含む SS400 → U123＋SS400の1部品、PDF候補2件。
+ストック追加後、ID 1002、含む 取付金具 → 同じ部品へ使用箇所が追加される。
+含む A5052 → 同じU123でも別材料の部品。
+
+自動テスト：
+& 'C:\dev\new_search_app\Scripts\python.exe' -m unittest discover -s tests -v
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/test_composite_ui.py
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/test_normal_mode.py .
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/test_ui_state.py .
+各コマンドの終了コード0を確認。実画面の操作と現地NASでの確認は別に行う。
 
 【11．差分確認・コミット・push】
 git status -sb
@@ -5858,7 +5870,11 @@ git push origin v1.4.0
 失敗したら止める。強制push・タグ上書きはしない。
 
 【13．配布EXE作成・セルフテスト】
-既存ビルド手順を入口にするが、指定シート起動用依存関係等が追加になるため、実装時に必要な差分を明記する。
+指定シート起動にpywin32を追加。新しい環境では次を実行：
+& 'C:\dev\new_search_app\Scripts\python.exe' -m pip install -r requirements.txt
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' -m pip install -r requirements-build.txt
+
+既に依存関係を反映済みなら再インストール不要。利用端末ではPython不要だが、元シート起動にはMicrosoft Excelが必要。
 
 & 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
 $LASTEXITCODE
@@ -5883,9 +5899,213 @@ Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
 ・使用箇所から元シートを開き、プレビューと新規部品一覧Excelを確認する。
 ・PDFファイル名モード・構成部品表モードが従来どおり使用できることを確認する。
 
-配布物と移行手順の最終一覧は実装時に追記する。EXE名以外の未確定ファイルを現段階で作成済みとは扱わない。
+配布物：
+・dist\図面PDF検索結合ツール (v1.4.0).exe
+・COMPOSITE_SETUP.md（共通配信先への移行と操作）
+・DB_TASK_SETUP.md（テスト運用のサインイン後タスク登録）
+・RELEASE_NOTES.txt
+設定config.json、normal_stack.json、part_stock.jsonは各端末のものを維持する。
+PDF／構成部品表の更新EXEは今回再作成不要。両バッチのpublishを同じ共有先へ合わせる。
+作業用databaseは別々。最新manifestと対応SQLiteをセットで配信する。
 
 
+2026/11/19
+
+【v1.4.1：現地確認を受けた動作修正・次段階の整理】
+作成日：2026-11-19
+
+【1．作業の進め方】
+正本：C:\Users\shini\OneDrive\codes_od\new_search_app
+確認時点：main、未コミット変更なし。
+Git操作は従来どおり利用者が行う。切替後に実装する。
+既存note.txtには自動で貼り付けない。本資料は別テキストとして使用する。
+
+【2．今回のアプリ改修：v1.4.1】
+
+■複合検索の対象条件
+構成部品表モードと判定処理を共通化する。
+・数量0を除外。
+・数量セルに除外対象の色がある明細を除外。単に行のどこかに色があるだけでは除外しない。
+・品番／PGがない明細を除外。以前の「番号なしも残す」方針を変更する。
+・設定されている検索除外ルール（現在は品番／PGが16で始まる）を適用。
+・PG矢印参照は、除外前の元シート全行で解決する。
+・構成部品表モードの既存の抽出表示／出力不可表示と、複合検索の対象除外を区別する。
+・構成部品表モードの「16～除外」の専用表示は外す。ルールは操作説明に残す。
+・代表品名を決める母集団にも対象条件を適用し、除外行だけの品名を代表にしない。
+・保存済み部品ストックを新しい条件で自動削除しない。再検索後の結果から確認する。
+
+■操作の遅さ・ちらつき
+・PDFストックのチェック変更で画面全体を無効化／再描画する処理を見直す。
+・変更したチェックと件数・出力可否だけを更新する。
+・永続化は維持する。連続操作時の保存順序と保存失敗時の表示整合性を検証する。
+・PDF検索0件時の遅延を、索引検索／描画／フォーカス復帰に分けて測定し、原因に応じて修正する。
+・PDFファイル名検索に「除く文字列」を追加。含む条件は従来どおり、除く条件はいずれかの語に一致したPDFを除外。
+・使用箇所から開くExcelが背面に回る現象を調査し、起動・前面化を改善する。
+
+■検索中・取得状態の表示
+・複合検索は処理段階と進行中表示を追加。
+・総件数を把握できる段階は件数と進捗率、初期読込等は不定表示とする。
+・正確に算出できない全工程の残り時間・一律の総合進捗率は表示しない。
+・DB取得結果は検索結果メッセージと分け、取得ボタン／更新日時の近くへ配置。
+・取得に失敗したDBと利用可能な旧版の状態を区別する。
+・DB更新日時に今日／昨日／N日前を付記。日付境界で判定し、画面更新時に再計算する。
+・検索モード欄を広げ「PDFファイル名」を省略しない。
+・元Excel更新日の見出しが折り返されないよう調整する。
+
+【3．併行して準備するバッチ診断・タスク手順】
+アプリと構成部品表バッチは別の配布物として扱う。
+
+■構成部品表バッチの公開時間
+確認済みの現象：差分時の公開段階が全件時の約2倍、5秒ごとの表示が約10行。
+繰り返し表示の説明だけで解決扱いにしない。
+全件／差分とも、公開段階はDB全体のコピー・整合性検証・ハッシュ計算を行っている。
+次を個別計測し、全件と差分で比較できるログを用意する。
+・元DBのサイズとページ情報。
+・配信用DBコピーの時間とコピー先サイズ。
+・整合性検証の時間。
+・ハッシュ計算の時間。
+・manifest公開の時間と公開工程の合計時間。
+原因確定前にVACUUMや公開スキップ等を無条件に追加しない。
+既存の検証・前回正常版維持を保つ。正本の配置を確認してからバッチ側を反映する。
+
+■タスクの遅延
+プルダウンの粗い候補では実用にならないため、任意の遅延を指定する手順を用意する。
+例：3分＝PT3M、10分＝PT10M。
+対象のタスク名とトリガーを確認してから、その遅延だけを変更するPowerShell手順とする。
+元設定のエクスポート、変更後の値の確認、戻し方を含める。
+タスクの自動登録・勝手な変更は行わない。
+
+【4．次段階：一覧とプレビューの再配置】
+以下は取り下げではなく、動作修正と分けて実装する。
+・タイトル行を設け、選択／品番・PG／代表品名／材料／PDF／使用箇所を横方向に配置。
+・プレビューを閉じた時は幅を活用し、不要な2段表示を減らす。
+・PDFは件数だけでなく、パスとファイル名の2段表示とし、クリックで開く。複数候補も保持。
+・使用箇所は小さめのクリック可能なラベル「1002（ASSY名）」とする。
+・多い使用箇所は「ほかN件」で折りたたみ／展開。
+・プレビュー領域拡大、上下キーによる部品移動と候補PDF移動の整理。
+・プレビュー開閉時の一覧全体再構築を減らす。
+・シート選択ダイアログを拡大し、似た表記を比較・複数選択しやすくする。
+・検索した元品名と代表品名が異なる場合、ヒット理由を確認できる表示を検討。
+・構成部品表モードの検索文字列編集は、参照専用化／必要時だけ編集を検討。今回勝手に削除しない。
+
+【5．最終目標：部品情報の登録・整備・検索】
+日次抽出DBとは別に、人が登録する部品情報を蓄積する。
+その情報自体を条件検索し、Excel出力やブラウザでの閲覧に利用する。
+現アプリ拡張／別アプリのどちらでも利用できるよう、画面とデータ・検索処理を分離する。
+
+管理する情報：
+・グループ、形状の分類。
+・分類ごとに持つべき項目、必須／任意、入力型。
+・正式品名など、部品ごとの登録値。
+・未分類／必須項目未設定／設定済み等の状態。
+・「未設定」と「該当なし」の区別。
+・品番／PG共通の情報と、品番／PG＋材料に固有の情報。
+
+表記対応表：
+・材料（例：SPHt4.5とSPH t4.5）。
+・シート名／ASSY分類。
+元値は保持し、曖昧な自動統合はしない。類似候補の提示と人が確定する対応付けを分ける。
+登録情報は日次DB更新で消さない。共有方法・同時編集・バックアップ・識別キーを設計時に決める。
+
+【6．ブランチ切替】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git switch -c codex/composite-v1.4.1
+git status -sb
+
+既に同名ブランチがある場合は、新規作成エラーのまま先に進めず状態を確認する。
+切替後に実装。コード確認・サンプル確認後、コミット／push／main統合／タグ／EXE作成へ進む。
+実装で確定するテスト・配布コマンドは、手順変更として本資料に追記する。
+
+
+
+【7．起動・操作確認】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/composite_demo.py
+
+分離サンプルは今回も使用可能。既存設定・ストックには触れない。
+本来のデータと設定を使う場合：
+& 'C:\dev\new_search_app\Scripts\python.exe' main.py
+
+確認する操作：
+・同じ元シートについて、数量0／数量セル色／番号なし／16開始が複合検索の対象から外れる。
+・矢印のPGは、直前のPG行が対象外でも解決できる。
+・PDFファイル名モードの除く文字列、0件検索、ストックの連続チェック。
+・データ取得結果の表示位置、更新日時の今日／昨日等、モード名の省略がないこと。
+・Excelが前面に読み取り専用で開くこと。
+・以前登録した部品ストックは自動削除しない。新条件で確認する場合は再検索する。
+
+自動テスト：
+& 'C:\dev\new_search_app\Scripts\python.exe' -m unittest discover -s tests -v
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/test_normal_mode.py .
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/test_composite_ui.py
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/test_ui_state.py .
+& .\tools\test_task_delay.ps1
+
+【8．コミット・push・main統合・タグ】
+各コマンドの成功を確認して進める。失敗時は止め、強制操作はしない。
+git status -sb
+git diff --check
+git diff --stat
+git ls-files --others --exclude-standard
+
+設定・ストック・DB・ログ・生成ファイルが含まれないことを確認する。
+git add -A
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+git commit -m "fix: align composite eligibility and improve search feedback"
+git push -u origin codex/composite-v1.4.1
+
+未コミット変更がないことを確認して統合：
+git switch main
+git fetch origin
+git merge --ff-only origin/main
+git merge --ff-only codex/composite-v1.4.1
+git push origin main
+git tag --list v1.4.1
+git ls-remote --tags origin refs/tags/v1.4.1
+
+タグが未作成の場合のみ：
+git tag -a v1.4.1 -m "Release v1.4.1"
+git push origin v1.4.1
+
+【9．クライアントEXE作成】
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
+$LASTEXITCODE
+
+終了コード0を確認。
+$selftestDir = Join-Path $PWD ('work\v141-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$exePath = Join-Path $PWD 'dist\図面PDF検索結合ツール (v1.4.1).exe'
+$testProcess = Start-Process -FilePath $exePath -ArgumentList @('--self-test', ('"' + $selftestDir + '"')) -WindowStyle Hidden -Wait -PassThru
+$testProcess.ExitCode
+Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
+
+終了コード0、frozen=true、version=v1.4.1を確認。
+クライアントEXE、RELEASE_NOTES.txt、COMPOSITE_SETUP.md、DB_TASK_SETUP.mdを持参。
+現地で遅延設定スクリプトを使う場合はtools\set_task_delay.ps1も持参する。
+既存config.json、normal_stack.json、part_stock.jsonは上書きしない。
+今回、PDF索引バッチの再ビルドは不要。
+
+【10．構成部品表バッチの診断版】
+このバッチはA正本リポジトリとは別の場所にある。上記Gitコマンドに混ぜない。
+
+生成済みの診断用EXE：
+C:\Users\shini\Documents\ChatGPT\構成部品表関連処理\parts_name_search\dist\publish-diagnostics-20261119\parts_name_ingest_v0.1.4.exe
+
+説明書：
+C:\Users\shini\Documents\ChatGPT\構成部品表関連処理\parts_name_search\PUBLISH_DIAGNOSTICS.md
+
+現地では、旧バッチEXEを別フォルダに保管してから、このEXEのみ置き換える。
+ファイル名は既存CMDとの互換のため同じ。ログの「公開診断版 2026-11-19」で識別する。
+batch_config.json、DB、クライアントEXE、CMDは置き換えない。
+manual_batch.cmdで差分、manual_batch.cmd --fullで全件。
+通常の更新タイミングに合わせてログを採取し、「公開工程完了」の各時間を比較する。
+診断版は計測の追加であり、現地での遅延解消を確認済みという意味ではない。
+
+遅延設定はDB_TASK_SETUP.mdの「任意の遅延を設定する」を参照。
+-Applyなしは変更予定の表示のみ。対象名・トリガー番号を確認後に-Applyを付ける。
+アシスタントが実タスクを登録・変更することはない。
 
 
 

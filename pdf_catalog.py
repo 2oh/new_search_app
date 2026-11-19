@@ -229,7 +229,7 @@ def snapshot_paths(database):
     return info, paths
 
 
-def search(database, words, progress_callback=None):
+def search(database, words, progress_callback=None, excludes=()):
     """Search exclusively local data; return the same result shape/order as A."""
     if not Path(database).is_file():
         raise FileNotFoundError('PDF索引DBが未取得です。公開先を設定し、最新データ取得を実行してください。')
@@ -244,7 +244,7 @@ def search(database, words, progress_callback=None):
         if progress_callback:
             progress_callback(0, total)
         for number, row in enumerate(db.execute('SELECT * FROM files'), 1):
-            if words and all(word in row['stem'] for word in words):
+            if words and all(word in row['stem'] for word in words) and not any(word in row['stem'] for word in excludes):
                 results.append({'path': str(root / row['path']),
                                 'modified': row['mtime_ns'] / 1_000_000_000,
                                 'available': True})  # Availability is checked when actually used.

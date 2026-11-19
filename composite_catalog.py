@@ -10,6 +10,7 @@ import unicodedata
 import uuid
 
 from normal_search import parse_search_query
+from part_rules import eligible, DEFAULT_RULES
 from pdf_catalog import connect, digest, operation_lock
 
 
@@ -95,7 +96,7 @@ def date_bound(value, end=False):
 
 
 class Catalog:
-    def __init__(self, database):
+    def __init__(self, database, rules=DEFAULT_RULES):
         self.info = metadata(database)
         with connect(database, True) as db:
             self.rows = [dict(row) for row in db.execute('''
@@ -125,8 +126,9 @@ class Catalog:
             row['product_id'] = match[1] if match else ''
             identity = [identifier, material] if identifier else ['', material, row['path'], row['sheet'], row['row_number']]
             row['key'] = json.dumps(identity, ensure_ascii=False)
+            row['eligible'] = eligible(number, row['pg'], pg, row['quantity'], row['color'], rules)
             name = str(row['name'] or '').strip()
-            if name:
+            if name and row['eligible']:
                 # An unidentified workbook is one source, never guessed into a product ID.
                 names[row['key']][name].add(row['product_id'] or row['path'])
         self.names = {key: min(options, key=lambda name: (-len(options[name]), normalized(name), name))
@@ -134,7 +136,7 @@ class Catalog:
         self.folders = sorted({r['folder'] for r in self.rows})
         self.sheets = sorted({r['sheet'] for r in self.rows})
 
-    def search(self, *, contains='', excludes='', folders=(), sheets=(), ids='', start='', end=''):
+    def search(self, *, contains='', excludes='', folders=(), sheets=(), ids='', start='', end='', progress=None):
         includes, excludes = parse_search_query(contains), parse_search_query(excludes)
         ids = set(filter(None, re.split(r'[\s,、]+', ids.strip())))
         if any(not re.fullmatch('[0-9]{4}', value) for value in ids):
@@ -143,7 +145,12 @@ class Catalog:
         if begin is not None and finish is not None and begin >= finish:
             raise ValueError('元Excel更新日の開始日が終了日より後です')
         groups = {}
-        for row in self.rows:
+        total = len(self.rows)
+        for index, row in enumerate(self.rows, 1):
+            if progress and (index == 1 or index % 500 == 0 or index == total):
+                progress((f'明細検索・部品集約：{index}/{total}明細', index / total))
+            if not row['eligible']:
+                continue
             if folders and not any(row['folder'] == f or row['folder'].replace('\\', '/').startswith(f.replace('\\', '/').rstrip('/') + '/') for f in folders):
                 continue
             if sheets and row['sheet'] not in sheets or ids and row['product_id'] not in ids:
@@ -164,13 +171,15 @@ class Catalog:
         return sorted(groups.values(), key=lambda item: (item['identifier'], item['material'], item['key']))
 
 
-def attach_pdfs(groups, paths):
+def attach_pdfs(groups, paths, progress=None):
     """Match A's normalized substring semantics; cache repeats across materials."""
     def norm(text):
         return re.sub(r'\s+', ' ', str(text).strip().lower())
     index = [(str(p), norm(Path(p).name)) for p in paths]
     cache = {}
-    for group in groups:
+    for index_number, group in enumerate(groups, 1):
+        if progress and (index_number == 1 or index_number % 20 == 0 or index_number == len(groups)):
+            progress((f'PDF候補の照合：{index_number}/{len(groups)}部品', index_number / len(groups)))
         key = norm(group['keyword'])
         if key not in cache:
             cache[key] = [path for path, name in index if key and key in name]

@@ -63,9 +63,10 @@ async def exercise(scope, destination):
     scope['output_folder_field'].value = str(destination)
     await composite.export()
     assert list(destination.glob('部品一覧_*.xlsx')), scope['message'].value
-    with patch('composite_mode.open_sheet') as open_mock:
+    with patch.object(composite.launcher, 'launch_url', new_callable=AsyncMock) as open_mock:
         await composite.open_occurrence(group['occurrences'][0])
-        open_mock.assert_called_once_with(group['occurrences'][0]['path'], '架台')
+        open_mock.assert_awaited_once()
+        assert open_mock.call_args.args[0].endswith('.lnk')
     await composite.choose_sheets()
     scope['page'].pop_dialog()
     # Selection is the entire model, not the current viewport.

@@ -77,7 +77,7 @@ async def run(root):
                 normal = scope['normal_mode']
                 normal.index_database = Path(temp) / 'local-pdf.sqlite'
                 normal.refresh_index_label()
-                assert normal.search_controls.controls == [normal.search_button, normal.search_indicator, normal.query]
+                assert normal.search_controls.controls == [normal.search_button, normal.search_indicator, normal.query, normal.exclude]
                 assert normal.tabs.length == 2
                 normal.query.value = 'abc'
                 normal.caret_end()
@@ -194,6 +194,27 @@ async def run(root):
                 await normal.add_selected()
                 assert len(normal.items) == 2
                 assert normal.store.load() == normal.items
+                # Selection saves serialize, preserve controls, and never disable the whole view.
+                saved_rows = list(normal.stack_table.rows)
+                with patch.object(normal, 'render', side_effect=AssertionError('selection rebuilt list')), \
+                     patch.object(normal, 'set_busy', side_effect=AssertionError('selection disabled whole view')):
+                    await asyncio.gather(normal.save_selection(False, logic.path_key(normal.items[0]['path'])),
+                                         normal.save_selection(False, logic.path_key(normal.items[1]['path'])))
+                    assert not any(i['selected'] for i in normal.items)
+                    with patch.object(normal.store, 'save', side_effect=OSError('write denied')):
+                        assert not await normal.save_selection(True)
+                    assert not any(i['selected'] for i in normal.items)
+                    await normal.save_selection(True)
+                assert all(a is b for a,b in zip(saved_rows, normal.stack_table.rows))
+                assert normal.store.load() == normal.items and normal.pending_selection == 0
+                normal.query.value = 'no-such-pdf'
+                await normal.search()
+                assert not normal.results and all(a is b for a,b in zip(saved_rows, normal.stack_table.rows))
+                normal.query.value = 'F123'
+                normal.exclude.value = 'AL'
+                await normal.search()
+                assert len(normal.results) == 2
+                normal.exclude.value = ''
                 normal.select_all()
                 assert not normal.selection  # already stacked
                 normal.query.value = '"MAIN BRACKET"'

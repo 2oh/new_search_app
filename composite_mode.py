@@ -1,5 +1,6 @@
 """Composite search: row filters, part grouping, optional PDF preview and stock."""
 import asyncio
+import tempfile
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -7,15 +8,20 @@ from pathlib import Path
 import flet as ft
 import composite_catalog as catalog
 import composite_stock as stock
-from composite_desktop import open_sheet
+from composite_desktop import create_sheet_shortcut
 from composite_export import export_parts
 from normal_search import add_to_stack
 import pdf_catalog
+from part_rules import DEFAULT_RULES
+from update_age import format_updated
 
 
 class CompositeMode:
-    def __init__(self, page, normal, *, database=None, stock_path='part_stock.json'):
+    def __init__(self, page, normal, *, database=None, stock_path='part_stock.json', rules=DEFAULT_RULES):
         self.page, self.normal = page, normal
+        self.rules = rules
+        self.launcher = ft.UrlLauncher()
+        self.launch_directory = tempfile.TemporaryDirectory(prefix='part-sheet-launch-')
         self.database = Path(database) if database else normal.index_database.with_name('bom_catalog.sqlite')
         self.stock_path = Path(stock_path)
         self.results, self.selection, self.items = [], set(), []
@@ -34,12 +40,13 @@ class CompositeMode:
         self.refresh_index_label()
         self.query = ft.TextField(label='含む文字列', hint_text='空白区切りでAND検索（例："ab c"）', expand=True, on_submit=self.search)
         self.exclude = ft.TextField(label='除く文字列', hint_text='いずれかを含む明細を除外', expand=True, on_submit=self.search)
-        self.search_controls = ft.Row([self.query, self.exclude, ft.Button('検索', on_click=self.search)], expand=True)
+        self.progress = ft.ProgressBar(value=None, visible=False, width=140)
+        self.search_controls = ft.Row([self.progress, self.query, self.exclude, ft.Button('検索', on_click=self.search)], expand=True)
         self.folder_button = ft.OutlinedButton('対象フォルダ：すべて', on_click=self.choose_folders)
         self.sheet_button = ft.OutlinedButton('シート名：すべて', on_click=self.choose_sheets)
         self.ids = ft.TextField(label='製品ID', hint_text='1001, 1002', width=170, on_submit=self.search)
-        self.start = ft.TextField(label='元Excel更新日（開始）', hint_text='YYYY-MM-DD', width=175)
-        self.end = ft.TextField(label='元Excel更新日（終了）', hint_text='YYYY-MM-DD', width=175)
+        self.start = ft.TextField(label='Excel更新日・開始', hint_text='YYYY-MM-DD', width=175)
+        self.end = ft.TextField(label='Excel更新日・終了', hint_text='YYYY-MM-DD', width=175)
         self.filters = ft.Row([self.folder_button, self.sheet_button, self.ids, self.start, self.end], wrap=True)
         self.count = ft.Text()
         self.preview_button = ft.OutlinedButton('プレビューを表示', on_click=self.toggle_preview)
@@ -70,7 +77,7 @@ class CompositeMode:
     def refresh_index_label(self):
         try:
             info = catalog.metadata(self.database)
-            updated = datetime.fromisoformat(info['updated']).astimezone().strftime('%Y/%m/%d %H:%M:%S')
+            updated = format_updated(info['updated'])
             self.index_label.value = f'構成部品表：{updated}'
         except Exception:
             self.index_label.value = '構成部品表DBは未取得です'
@@ -102,11 +109,13 @@ class CompositeMode:
         self.view.visible = active
         self.preview_generation += 1
         if active:
+            self.refresh_index_label()
+            self.normal.refresh_index_label()
             self.normal.message.value = self.load_error or '構成部品表の明細を検索し、品番／PG＋材料でまとめます'
 
     async def ensure_catalog(self):
         if self.catalog is None:
-            self.catalog = await asyncio.to_thread(catalog.Catalog, self.database)
+            self.catalog = await asyncio.to_thread(catalog.Catalog, self.database, self.rules)
         return self.catalog
 
     async def choose_folders(self, event=None):
@@ -158,24 +167,27 @@ class CompositeMode:
     async def search(self, event=None):
         if self.normal.busy():
             return
-        self.normal.set_busy(True, '構成部品表を検索しています…')
+        self.progress.visible = True
+        self.progress.value = None
+        self.normal.set_busy(True, '構成部品表DBを読み込んでいます…')
         self.page.update()
         try:
             model = await self.ensure_catalog()
             conditions = dict(contains=self.query.value or '', excludes=self.exclude.value or '',
                               folders=set(self.folders), sheets=set(self.sheets), ids=self.ids.value or '',
                               start=self.start.value or '', end=self.end.value or '')
-            def run():
-                groups = model.search(**conditions)
+            def run(report):
+                groups = model.search(**conditions, progress=report)
+                report(('PDF索引を読み込んでいます…', None))
                 warning = ''
                 try:
                     _, paths = pdf_catalog.snapshot_paths(self.normal.index_database)
                 except Exception as exc:
                     warning = f'PDF索引を利用できません：{exc}'
                 else:
-                    catalog.attach_pdfs(groups, paths)
+                    catalog.attach_pdfs(groups, paths, progress=report)
                 return groups, warning
-            self.results, warning = await asyncio.to_thread(run)
+            self.results, warning = await self.run_search_worker(run)
             self.selection = set()
             self.stock_view = False
             self.clear_preview()
@@ -184,8 +196,33 @@ class CompositeMode:
         except Exception as exc:
             self.message(f'検索できません：{exc}')
         finally:
+            self.progress.visible = False
             self.normal.set_busy(False)
             self.page.update()
+
+    async def run_search_worker(self, worker):
+        import queue
+        updates = queue.SimpleQueue()
+        def report(update):
+            updates.put(update)
+        async def display():
+            while True:
+                await asyncio.sleep(0.1)
+                latest = None
+                while not updates.empty():
+                    latest = updates.get_nowait()
+                if latest:
+                    self.normal.message.value, self.progress.value = latest
+                    self.page.update()
+        task = asyncio.create_task(display())
+        try:
+            return await asyncio.to_thread(worker, report)
+        finally:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
     def show_results(self, event=None):
         self.stock_view = False
@@ -391,8 +428,9 @@ class CompositeMode:
         self.normal.set_busy(True, '元Excelを読み取り専用で開いています…')
         self.page.update()
         try:
-            await asyncio.to_thread(open_sheet, occurrence['path'], occurrence['sheet'])
-            self.message('元Excelの指定シートを読み取り専用で開きました')
+            shortcut = await asyncio.to_thread(create_sheet_shortcut, occurrence['path'], occurrence['sheet'], self.launch_directory.name)
+            await self.launcher.launch_url(shortcut.as_uri(), mode=ft.LaunchMode.EXTERNAL_APPLICATION)
+            self.message('元Excelの指定シートを読み取り専用で開く要求を送りました')
         except Exception as exc:
             self.message(f'元Excelを開けません：{exc}')
         finally:

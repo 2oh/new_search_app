@@ -8,6 +8,7 @@ import uuid
 import flet as ft
 import flet_datatable2 as dt2
 import pdf_catalog
+from update_age import format_updated
 from normal_search import StackStore, add_to_stack, file_info, parse_search_query, path_key, search_files
 
 
@@ -25,6 +26,10 @@ class NormalMode:
         self.index_root = ''
         self.folder = lambda: self.index_root
         self.save_publish = save_publish
+        self.sync_status = ft.Text(size=12, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
+        self.selection_lock = asyncio.Lock()
+        self.pending_selection = 0
+        self.selection_boxes = {False: {}, True: {}}
         self.sync_other = None
         self.on_pdf_updated = None
         self.publish_field = ft.TextField(label='PDF索引データ配信元フォルダ', value=index_publish,
@@ -63,10 +68,11 @@ class NormalMode:
         self.preview_pending = None
         self.query = ft.TextField(label='検索文字列', hint_text='空白区切り（例：A B）でAND検索。ファイル名内のA・Bの出現順に関係なく検索されます。空白を含む文字列は " " で囲みます（例："ab c"）。',
                                   expand=True, on_submit=self.search, on_focus=self.caret_end)
+        self.exclude = ft.TextField(label='除く文字列', hint_text='空白区切り・いずれか一致で除外', expand=True, on_submit=self.search)
         self.search_button = ft.Button('検索', on_click=self.search, style=button_style)
         self.query.tooltip = self.query.hint_text
         self.search_indicator = ft.ProgressBar(width=160, height=6, value=None, visible=False)
-        self.search_controls = ft.Row([self.search_button, self.search_indicator, self.query], expand=True, spacing=8)
+        self.search_controls = ft.Row([self.search_button, self.search_indicator, self.query, self.exclude], expand=True, spacing=8)
         self.result_count = ft.Text('検索結果：0件', weight=ft.FontWeight.BOLD)
         self.stack_count = ft.Text('', weight=ft.FontWeight.BOLD)
         self.export_button = ft.Button('PDF出力', on_click=self.export, style=button_style)
@@ -131,7 +137,7 @@ class NormalMode:
             self.index_root = info['root']
             self.root_field.value = self.index_root
             self.root_field.tooltip = self.index_root
-            updated = datetime.fromisoformat(info['updated']).astimezone().strftime('%Y/%m/%d %H:%M:%S')
+            updated = format_updated(info['updated'])
             self.index_label.value = f'データ更新日時：{updated}\nPDF：{info["count"]}件'
         except Exception:
             self.index_root = ''
@@ -147,7 +153,8 @@ class NormalMode:
         if not folder:
             self.report_error('PDF索引データ配信元フォルダを指定してください。')
             return
-        self.set_busy(True, 'PDF索引の最新版を確認しています…')
+        self.set_busy(True)
+        self.sync_status.value = '検索データの最新版を確認しています…'
         self.index_controls.disabled = True
         self.page.update()
         try:
@@ -160,20 +167,21 @@ class NormalMode:
                 self.clear_preview()
             if changed and self.on_pdf_updated:
                 self.on_pdf_updated()
-            self.message.value = 'PDF索引の最新データを取得しました。' if changed else 'PDF索引は最新です。'
+            self.sync_status.value = 'PDF索引の最新データを取得しました。' if changed else 'PDF索引は最新です。'
         except Exception as exc:
             self.refresh_index_label()
             suffix = '前回取得したDBで検索できます。' if self.index_root else '検索用DBは利用できません。'
             self.index_label.value += f' / 最新版取得失敗：{suffix}'
             self.index_label.tooltip = self.index_label.value
-            self.message.value = f'PDF索引を取得できませんでした：{exc} {suffix}'
+            self.sync_status.value = f'PDF索引を取得できませんでした：{exc} {suffix}'
         finally:
             if self.sync_other:
                 other_status = await self.sync_other(folder)
-                self.message.value += ' / ' + other_status
+                self.sync_status.value += ' / ' + other_status
             self.index_controls.disabled = False
             self.set_busy(False)
             self.render()
+            self.sync_status.tooltip = self.sync_status.value
             self.page.update()
 
     async def startup_sync(self):
@@ -217,6 +225,7 @@ class NormalMode:
         self.preview_generation += 1
         self.preview_pending = None
         if active:
+            self.refresh_index_label()
             self.resize()
             self.message.value = self.load_error or f'検索結果：{len(self.results)}件'
             self.page.run_task(self.activate_async)
@@ -258,6 +267,7 @@ class NormalMode:
             return
         try:
             words = parse_search_query(self.query.value)
+            excludes = parse_search_query(self.exclude.value)
         except ValueError as exc:
             self.report_error(exc)
             await self.focus()
@@ -275,7 +285,7 @@ class NormalMode:
         try:
             def work(report):
                 return pdf_catalog.search(self.index_database, words, lambda current, total: report((
-                    f'ファイル名を検索中：{current}/{total}件', current / total if total else 1.0)))
+                    f'ファイル名を検索中：{current}/{total}件', current / total if total else 1.0)), excludes=excludes)
             info, results = await self.worker(work)
             self.index_root = info['root']
             self.files, self.index_folder = None, path_key(self.index_root)
@@ -290,9 +300,9 @@ class NormalMode:
         finally:
             self.search_indicator.visible = False
             self.set_busy(False)
-            self.render()
+            self.render(results_only=True)
             self.page.update()
-            await self.focus()
+            self.page.run_task(self.focus)
 
     @staticmethod
     def header(label, count=None, color=ft.Colors.GREEN_100):
@@ -311,7 +321,7 @@ class NormalMode:
         except (ValueError, OSError):
             return str(Path(path).parent)
 
-    def render(self):
+    def render(self, results_only=False):
         stacked = {path_key(item['path']) for item in self.items}
         self.selection.difference_update(stacked)
         output_count = sum(i['selected'] for i in self.items)
@@ -319,12 +329,15 @@ class NormalMode:
         self.stack_count.value = f'ストック：{len(self.items)}件'
         self.result_tab.label = self.header('検索結果', len(self.results), ft.Colors.BLUE_100)
         self.stack_tab.label = self.header('ストック', len(self.items), ft.Colors.BLUE_100)
-        self.export_button.disabled = self.busy() or not output_count or bool(self.load_error)
+        self.export_button.disabled = self.busy() or self.pending_selection > 0 or not output_count or bool(self.load_error)
         self.open_button.disabled = self.export_button.disabled
         available_width = (max(1200, (self.page.width or 1200) - 400) if self.wide
                            else max(600, (self.page.width or 1200) - 60))
         path_width = min(600, max(450, available_width - 900))
         for table, items, is_stack in ((self.result_table, self.results, False), (self.stack_table, self.items, True)):
+            if results_only and is_stack:
+                continue
+            self.selection_boxes[is_stack] = {}
             columns = [('項番', 46), ('パス', path_width), ('ファイル名', None), ('更新日時', 96)]
             if not self.wide:
                 columns.append(('プレビュー', 80))
@@ -345,13 +358,14 @@ class NormalMode:
                     if self.busy():
                         return
                     if is_stack:
-                        await self.commit([dict(i, selected=bool(e.control.value)) if path_key(i['path']) == key else dict(i) for i in self.items])
+                        await self.save_selection(bool(e.control.value), key)
                     else:
                         self.selection.add(key) if e.control.value else self.selection.discard(key)
-                        self.render()
+                        self.refresh_selection()
                         self.page.update()
                 checkbox = ft.Checkbox(value=item['selected'] if is_stack else key in self.selection,
                     disabled=bool(self.load_error) or (not is_stack and key in stacked), on_change=change)
+                self.selection_boxes[is_stack][key] = checkbox
                 async def open_file(e, path=path):
                     self.caret_end()
                     await self.open_pdf(path, False)
@@ -434,8 +448,45 @@ class NormalMode:
         self.page.show_dialog(dialog)
         self.page.run_task(load)
 
-    async def commit(self, items):
+    def refresh_selection(self):
+        count = sum(item['selected'] for item in self.items)
+        self.export_button.disabled = self.open_button.disabled = bool(
+            self.busy() or self.pending_selection or not count or self.load_error)
+        for is_stack, table in ((False, self.result_table), (True, self.stack_table)):
+            values = {path_key(i['path']): i['selected'] for i in self.items} if is_stack else {
+                key: key in self.selection for key in self.selection_boxes[False]}
+            for key, checkbox in self.selection_boxes[is_stack].items():
+                checkbox.value = values.get(key, False)
+            if table.columns:
+                table.columns[-1].label = self.header('選択' if is_stack else '追加',
+                    count if is_stack else len(self.selection),
+                    ft.Colors.GREEN_100 if is_stack else ft.Colors.BLUE_100)
+
+    async def save_selection(self, value, key=None):
         if self.busy() or self.load_error:
+            self.refresh_selection()
+            self.page.update()
+            return False
+        self.pending_selection += 1
+        self.export_button.disabled = self.open_button.disabled = True
+        self.page.update()
+        try:
+            async with self.selection_lock:
+                items = [dict(i, selected=value) if key is None or path_key(i['path']) == key else dict(i)
+                         for i in self.items]
+                await asyncio.to_thread(self.store.save, items)
+                self.items = items
+            return True
+        except Exception as exc:
+            self.message.value = f'選択を保存できませんでした。前の状態へ戻します：{exc}'
+            return False
+        finally:
+            self.pending_selection -= 1
+            self.refresh_selection()
+            self.page.update()
+
+    async def commit(self, items):
+        if self.busy() or self.pending_selection or self.load_error:
             if self.load_error:
                 self.report_error(self.load_error)
             return False
@@ -471,20 +522,20 @@ class NormalMode:
             return
         stacked = {path_key(i['path']) for i in self.items}
         self.selection = {path_key(i['path']) for i in self.results} - stacked
-        self.render()
+        self.refresh_selection()
         self.page.update()
 
     def deselect_all(self, e=None):
         if not self.busy():
             self.selection.clear()
-            self.render()
+            self.refresh_selection()
             self.page.update()
 
     async def check_all(self, e=None):
-        await self.commit([dict(i, selected=True) for i in self.items])
+        await self.save_selection(True)
 
     async def uncheck_all(self, e=None):
-        await self.commit([dict(i, selected=False) for i in self.items])
+        await self.save_selection(False)
 
     def confirm_clear(self, e=None):
         if self.busy() or self.load_error or not self.items:
@@ -534,7 +585,7 @@ class NormalMode:
             self.preview_running = False
 
     async def open_selected(self, event=None):
-        if self.busy() or self.load_error:
+        if self.busy() or self.pending_selection or self.load_error:
             return
         paths = [item['path'] for item in self.items if item['selected']]
         if not paths:
@@ -562,7 +613,7 @@ class NormalMode:
             self.page.update()
 
     async def export(self, event=None):
-        if self.busy() or self.load_error:
+        if self.busy() or self.pending_selection or self.load_error:
             return
         paths = [item['path'] for item in self.items if item['selected']]
         if not paths:
