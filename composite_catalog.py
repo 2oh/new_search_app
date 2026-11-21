@@ -140,7 +140,7 @@ class Catalog:
         includes, excludes = parse_search_query(contains), parse_search_query(excludes)
         ids = set(filter(None, re.split(r'[\s,、]+', ids.strip())))
         if any(not re.fullmatch('[0-9]{4}', value) for value in ids):
-            raise ValueError('製品IDは4桁の数字を空白またはカンマで区切ってください')
+            raise ValueError('車番は4桁の数字を空白またはカンマで区切ってください')
         begin, finish = date_bound(start), date_bound(end, True)
         if begin is not None and finish is not None and begin >= finish:
             raise ValueError('元Excel更新日の開始日が終了日より後です')

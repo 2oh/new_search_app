@@ -45,7 +45,7 @@ class CompositeMode:
         self.search_button = ft.Button('検索', on_click=self.search)
         self.folder_button = ft.OutlinedButton('対象フォルダ：すべて', on_click=self.choose_folders)
         self.sheet_button = ft.OutlinedButton('シート名：すべて', on_click=self.choose_sheets)
-        self.ids = ft.TextField(label='製品ID', hint_text='1001, 1002', width=170, on_submit=self.search)
+        self.ids = ft.TextField(label='車番', hint_text='1001, 1002', width=170, on_submit=self.search)
         self.start = ft.TextField(label='Excel更新日・開始', hint_text='YYYY-MM-DD', width=175)
         self.end = ft.TextField(label='Excel更新日・終了', hint_text='YYYY-MM-DD', width=175)
         self.filters = ft.Row([self.folder_button, self.sheet_button, self.ids, self.start, self.end], wrap=True)
@@ -356,7 +356,7 @@ class CompositeMode:
                         await self.open_occurrence(occurrence)
                     label = (occurrence['product_id'] or Path(occurrence['path']).name) + ' / ' + occurrence['sheet']
                     links.append(ft.TextButton(label, on_click=launch))
-                controls.append(ft.Row([ft.Text('使用箇所：')] + links, wrap=True, spacing=4))
+                controls.append(ft.Row([ft.Text('使用ASSY：')] + links, wrap=True, spacing=4))
             controls.append(ft.Divider(height=1))
             rows.append(ft.Container(ft.Column(controls, spacing=2), padding=6))
         self.list.controls = rows

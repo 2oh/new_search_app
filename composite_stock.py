@@ -27,7 +27,7 @@ def validate(items):
             if (not isinstance(occurrence, dict) or any(not isinstance(occurrence.get(k), str) for k in
                     ('path', 'sheet', 'product_id', 'name')) or not Path(occurrence['path']).is_absolute()
                     or type(occurrence.get('row')) is not int):
-                raise ValueError('部品ストックの使用箇所が不正です')
+                raise ValueError('部品ストックの使用ASSYが不正です')
     return items
 
 

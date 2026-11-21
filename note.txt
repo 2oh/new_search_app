@@ -6243,6 +6243,86 @@ Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
 
 
 
+【v1.4.3：画面配置・名称・Monokai配色の調整】
+作成日：2026-11-21
+
+【1．今回の変更範囲】
+・参照データ右側のボタンを上から「最新データ取得」「設定」「終了」にする。
+・構成部品表モードのExcel選択／シート選択を、検索モード横の空き領域へ移す。
+  見出しのアイコンと「構成部品表選択」を除去し、ファイル欄を「構成部品表を選択」とする。
+  各欄の右に「Excelを選択」「抽出実行」。検索モードの下にはボタンを置かない。
+・PDFファイル名／複合の検索ボタンを統一し、モード欄の下で右寄せ。進捗表示はその左。
+・参照データの件数を「（全○○件）」とする。構成部品表はExcelファイル数。
+・ライトをMonokai風の暗色配色に置換。テーマ選択は「ダーク／Monokai」。
+・画面・Excel出力の「製品ID」を「車番」、「使用箇所」を「使用ASSY」に変更。
+  DBやストックの保存形式・照合ルールは変更しない。
+
+【2．ブランチ切替】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git switch -c codex/ui-v1.4.3
+git status -sb
+
+未コミット変更や同名ブランチのエラーがあれば、先に状況を確認する。
+切替後にお知らせください。原本への反映は切替を確認してから行います。
+既存のnote.txtは変更しません。Git操作は利用者が行います。
+
+【3．起動・確認（実装反映後）】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/composite_demo.py
+
+いつもの分離サンプルを再利用する。--new-sampleは付けない。
+・3モードを切り替えて、欄とボタン配置を確認。
+・検索、構成部品表の抽出、プレビュー、ストック追加を確認。
+・設定でMonokaiを選び、画面の読みやすさと再起動後の保持を確認。
+・複合の車番条件／使用ASSY表示、部品一覧Excelの使用車番列を確認。
+
+【4．コミット・push】
+git status -sb
+git diff --check
+git diff --stat
+git ls-files --others --exclude-standard
+
+設定・ストック・DB・ログ・キャッシュ等が対象に含まれないことを確認：
+git add -A
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+git commit -m "feat: refine mode controls and add Monokai theme"
+git push -u origin codex/ui-v1.4.3
+
+【5．main統合・タグ】
+未コミット変更がないことを確認して実行：
+git switch main
+git fetch origin
+git merge --ff-only origin/main
+git merge --ff-only codex/ui-v1.4.3
+git push origin main
+git tag --list v1.4.3
+git ls-remote --tags origin refs/tags/v1.4.3
+
+タグが未作成の場合のみ：
+git tag -a v1.4.3 -m "Release v1.4.3"
+git push origin v1.4.3
+
+【6．EXE作成と自己検証】
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
+$LASTEXITCODE
+
+終了コード0を確認した後：
+$selftestDir = Join-Path $PWD ('work\v143-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$exePath = Join-Path $PWD 'dist\図面PDF検索結合ツール (v1.4.3).exe'
+$testProcess = Start-Process -FilePath $exePath -ArgumentList @('--self-test', ('"' + $selftestDir + '"')) -WindowStyle Hidden -Wait -PassThru
+$testProcess.ExitCode
+Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
+
+終了コード0、frozen=true、version=v1.4.3を確認。
+
+【7．現地へ持っていくもの】
+・原本フォルダのdist\図面PDF検索結合ツール (v1.4.3).exe
+・原本フォルダのCOMPOSITE_SETUP.mdとRELEASE_NOTES.txt
+旧EXEを保管してから配置。現地のconfig.json、normal_stack.json、part_stock.jsonは上書きしない。
+DB構造とバッチは変更しないため、DB再作成やバッチEXE交換は不要。
 
 
 

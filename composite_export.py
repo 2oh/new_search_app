@@ -16,7 +16,7 @@ def export_parts(items, destination):
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = '部品一覧'
-    sheet.append(['代表品名', '品番／PG', '材料', 'PDFリンク', '使用製品ID'])
+    sheet.append(['代表品名', '品番／PG', '材料', 'PDFリンク', '使用車番'])
     sheet.freeze_panes = 'A2'
     sheet.sheet_view.zoomScale = 85
     for cell in sheet[1]:

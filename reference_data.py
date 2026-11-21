@@ -82,10 +82,10 @@ class ReferenceData:
         captions = dict(current='最新の配信データを取込済', pending='未取込配信データがあります', unknown='配信状況を確認できません')
         for i,state in enumerate(self.states):
             self.texts[i].value = ('索引DB参照　'+format_updated(state['updated'])+' 時点') if state['updated'] else '索引DB参照　未取得'
-            count = '' if state['count'] is None else f'（{state["count"]:,}' + ('件）' if i == 0 else 'ファイル）')
+            count = '' if state['count'] is None else f'（全{state["count"]:,}件）'
             self.status[i].value = captions[state['state']] + count
             self.status[i].color = ft.Colors.ERROR if state['state']=='unknown' else (ft.Colors.TERTIARY if state['state']=='pending' else None)
-            self.status[i].tooltip = state['error'] or '最後の確認時点の配信状況です。起動中は約5分ごとに確認します。'
+            self.status[i].tooltip = state['error'] or ('件数はPDFファイル数です。' if i == 0 else '件数は構成部品表Excelファイル数です。') + '最後の確認時点の配信状況です。起動中は約5分ごとに確認します。'
         self.rows[1].visible = self.mode != 'PDFファイル名'
         if self.mode == '構成部品表':
             self.texts[1].value = '原本直接参照'

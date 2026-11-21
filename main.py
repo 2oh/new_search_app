@@ -15,6 +15,7 @@ import tempfile
 from windows_file_actions import create_explorer_shortcut
 from input_focus import InputFocus
 from reference_data import ReferenceData
+from app_theme import apply_theme
 from normal_mode import NormalMode
 from composite_mode import CompositeMode
 from part_rules import eligible as part_eligible, is_zero_quantity
@@ -26,7 +27,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.4.2"
+APP_VERSION = "v1.4.3"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -895,7 +896,7 @@ def main(page: ft.Page):
     )
 
     config = load_config()
-    page.theme_mode = ft.ThemeMode.LIGHT if config.get("theme_mode") == "light" else ft.ThemeMode.DARK
+    config['theme_mode'] = apply_theme(page, config.get('theme_mode', 'dark'))
 
     # ---- UI構成 ----
     search_folder_field = ft.TextField(label="検索先フォルダ", value=config.get("pdf_folder", ""), expand=True)
@@ -994,8 +995,9 @@ def main(page: ft.Page):
         search_button = composite_mode.search_button if composite_active else normal_mode.search_button
         indicator = composite_mode.progress if composite_active else normal_mode.search_indicator
         mode_row.controls = [
-            ft.Column([mode_dropdown] + ([] if bom_active else [search_button, indicator]), spacing=6, width=200),
-            ft.Container(expand=True) if bom_active else manual_field,
+            ft.Column([mode_dropdown] + ([] if bom_active else [ft.Row(
+                [indicator, search_button], alignment=ft.MainAxisAlignment.END, spacing=8)]), spacing=6, width=200),
+            excel_control_row if bom_active else manual_field,
             reference_separator, reference_panel, reference_actions]
         mode_row.vertical_alignment = ft.CrossAxisAlignment.START
         set_excel_ui_enabled(bom_active)
@@ -1005,11 +1007,8 @@ def main(page: ft.Page):
         composite_mode.activate(mode_dropdown.value == "複合")
         reference_data.set_mode(mode_dropdown.value)
         composite_mode.filters.visible = mode_dropdown.value == "複合"
-        bom_bottom_separator.visible = bom_active
         normal_mode.activate(normal_active)
-        excel_heading.visible = bom_active
         excel_control_row.visible = bom_active
-        mode_notice.visible = bom_active
         table_header.visible = bom_active
         result_area.visible = bom_active
         if not bom_active:
@@ -1044,7 +1043,6 @@ def main(page: ft.Page):
         color=ft.Colors.PRIMARY,
     )
     
-    mode_notice = ft.Text("")
     table = dt2.DataTable2(
         columns=[ft.DataColumn(ft.Text("抽出結果"))],
         rows=[],
@@ -3906,17 +3904,12 @@ def main(page: ft.Page):
         sheet_dropdown.opacity = 1.0 if enabled else 0.5
         extract_btn.disabled = not enabled
 
-        if not enabled:
-            mode_notice.value = "通常モードでは構成部品表選択は無効です。"
-        else:
-            mode_notice.value = ""
-
         # Flet 1では初期描画前の個別updateはできないため、Page単位で更新する。
         page.update()
 
     # ---- レイアウト ----
     excel_file_field = ft.TextField(
-        label="選択中のExcelファイル",
+        label="構成部品表を選択",
         expand=True,
         read_only=True,
     )
@@ -3951,20 +3944,13 @@ def main(page: ft.Page):
     )
     bom_search_folder_controls = folder_settings_row.controls[0]
 
-    excel_control_row = ft.Row(
-        [
-            ft.Container(
-                content=excel_file_field,
-                expand=2,
-            ),
-            pick_excel_btn,
-            sheet_dropdown,
-            extract_btn,
-        ],
-        alignment="center",
-        vertical_alignment="center",
-        spacing=10,
-    )
+    sheet_dropdown.width = None
+    sheet_dropdown.expand = True
+    pick_excel_btn.width = extract_btn.width = 128
+    excel_control_row = ft.Column([
+        ft.Row([excel_file_field, pick_excel_btn], spacing=6),
+        ft.Row([sheet_dropdown, extract_btn], spacing=6),
+    ], expand=True, spacing=6)
 
     def save_pdf_index_publish(value):
         config['pdf_index_publish'] = value
@@ -3983,6 +3969,9 @@ def main(page: ft.Page):
         save_publish=save_pdf_index_publish,
     )
     composite_mode = CompositeMode(page, normal_mode, rules=config.get("search_exclusion_rules", []))
+    composite_mode.search_button.style = BUTTON_STYLE_PRIMARY
+    normal_mode.search_indicator.width = composite_mode.progress.width = 80
+    normal_mode.search_indicator.height = composite_mode.progress.height = 6
     for field in [normal_mode.query, normal_mode.exclude, normal_mode.publish_field,
                   composite_mode.query, composite_mode.exclude, composite_mode.ids,
                   composite_mode.start, composite_mode.end, output_folder_field]:
@@ -3992,13 +3981,12 @@ def main(page: ft.Page):
     normal_mode.publish_field.label = '検索データ配信元フォルダ'
     normal_mode.index_controls.controls = []
     def change_theme(e):
-        config['theme_mode'] = theme_picker.value
-        page.theme_mode = ft.ThemeMode.LIGHT if theme_picker.value == 'light' else ft.ThemeMode.DARK
+        config['theme_mode'] = apply_theme(page, theme_picker.value)
         save_config()
         page.update()
 
     theme_picker = ft.Dropdown(label='テーマ', value=config.get('theme_mode', 'dark'), width=220,
-        options=[ft.DropdownOption('dark', 'ダーク'), ft.DropdownOption('light', 'ライト')], on_select=change_theme)
+        options=[ft.DropdownOption('dark', 'ダーク'), ft.DropdownOption('monokai', 'Monokai')], on_select=change_theme)
     def open_data_settings(e=None):
         if pdf_action_state['processing']:
             return
@@ -4034,11 +4022,9 @@ def main(page: ft.Page):
     normal_mode.save_publish = save_reference_folder
     reference_panel = ft.Container(reference_data.view, width=460)
     reference_separator = ft.Container(ft.VerticalDivider(width=12, thickness=1), height=112, width=12)
-    reference_actions = ft.Column([exit_button, normal_mode.sync_button, data_settings_button], width=144, spacing=4,
+    reference_actions = ft.Column([normal_mode.sync_button, data_settings_button, exit_button], width=144, spacing=4,
         horizontal_alignment=ft.CrossAxisAlignment.END)
     folder_settings_row.controls[0] = normal_mode.root_display
-    bom_bottom_separator = ft.Column([ft.Container(height=4), ft.Divider(height=1)], spacing=8)
-    excel_heading = ft.Text("🔍 構成部品表選択", size=20, weight="bold")
 
     fixed_controls = ft.Container(
         content=ft.Column(
@@ -4048,12 +4034,6 @@ def main(page: ft.Page):
                 composite_mode.filters,
 
                 ft.Divider(height=1),
-
-                excel_heading,
-                mode_notice,
-                excel_control_row,
-
-                bom_bottom_separator,
 
                 table_header,
                 message,

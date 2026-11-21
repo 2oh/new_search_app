@@ -95,9 +95,9 @@ async def run(root):
                 with patch.object(normal.publish_picker, 'get_directory_path', new_callable=AsyncMock, return_value=None) as picker:
                     await normal.pick_publish()
                     picker.assert_awaited_once_with(initial_directory=str(publication))
-                scope['theme_picker'].value = 'light'
+                scope['theme_picker'].value = 'monokai'
                 scope['change_theme'](None)
-                assert json.loads(Path('config.json').read_text(encoding='utf-8'))['theme_mode'] == 'light'
+                assert json.loads(Path('config.json').read_text(encoding='utf-8'))['theme_mode'] == 'monokai'
                 scope['theme_picker'].value = 'dark'
                 scope['change_theme'](None)
                 await normal.sync_index()
@@ -124,9 +124,9 @@ async def run(root):
                 assert normal.root_field.label == 'PDF検索先フォルダ'
                 assert scope['output_folder_field'].label == 'PDF出力先フォルダ'
                 assert normal.publish_button.content == 'フォルダを選択'
-                assert scope['reference_actions'].controls == [scope['exit_button'], normal.sync_button, scope['data_settings_button']]
+                assert scope['reference_actions'].controls == [normal.sync_button, scope['data_settings_button'], scope['exit_button']]
                 assert scope['settings_action_row'] not in scope['mode_row'].controls
-                assert not scope['bom_bottom_separator'].visible
+                assert scope['excel_control_row'] not in scope['mode_row'].controls
                 scope['search_folder_field'].value = str(pdfs)
                 scope['output_folder_field'].value = str(Path(temp) / 'export')
                 assert not normal.results
@@ -302,7 +302,7 @@ async def run(root):
                 scope['on_mode_change'](None)
                 assert scope['message'].value == ''
                 assert not normal.view.visible and scope['result_area'].visible
-                assert scope['bom_bottom_separator'].visible
+                assert scope['excel_control_row'] in scope['mode_row'].controls
                 assert scope['folder_settings_row'].controls[0] is normal.root_display
                 assert scope['reference_panel'].content is scope['reference_data'].view
                 scope['message'].value = 'PDF出力完了：88件'
@@ -319,7 +319,7 @@ async def run(root):
                     scope['on_page_resize'](None)
                     assert normal.publish_field.width == max(280, min(620, width - 240))
                     assert normal.root_display.width == max(400, min(1000, width - 720))
-                    assert not scope['bom_bottom_separator'].visible
+                    assert scope['excel_control_row'] not in scope['mode_row'].controls
                     assert normal.preview_panel.visible == (width >= 1700)
                     assert len(normal.result_table.columns) == (6 if width < 1700 else 5)
                     assert len(normal.stack_table.columns) == len(normal.result_table.columns) + 1
