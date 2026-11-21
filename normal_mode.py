@@ -31,6 +31,8 @@ class NormalMode:
         self.pending_selection = 0
         self.selection_boxes = {False: {}, True: {}}
         self.sync_other = None
+        self.on_sync_finished = None
+        self.on_sync_started = None
         self.on_pdf_updated = None
         self.publish_field = ft.TextField(label='PDF索引データ配信元フォルダ', value=index_publish,
                                          width=480, on_change=self.on_publish_change)
@@ -39,9 +41,9 @@ class NormalMode:
         self.root_field = ft.TextField(label='PDF検索先フォルダ', value='',
                                       read_only=True, expand=True, can_request_focus=False,
                                       enable_interactive_selection=False, show_cursor=False,
-                                      bgcolor='#173247', color=ft.Colors.BLUE_100,
+                                      bgcolor=ft.Colors.SECONDARY_CONTAINER, color=ft.Colors.ON_SECONDARY_CONTAINER,
                                       border=ft.OutlineInputBorder(side=ft.BorderSide(1, ft.Colors.BLUE_400)),
-                                      label_style=ft.TextStyle(color=ft.Colors.BLUE_200))
+                                      label_style=ft.TextStyle(color=ft.Colors.ON_SECONDARY_CONTAINER))
         self.root_display = ft.Container(self.root_field, width=480, ignore_interactions=True,
             tooltip='索引データから取得した検索先です。ここでは編集できません。')
         self.sync_button = ft.Button('最新データ取得', on_click=self.sync_index, style=button_style)
@@ -72,7 +74,7 @@ class NormalMode:
         self.search_button = ft.Button('検索', on_click=self.search, style=button_style)
         self.query.tooltip = self.query.hint_text
         self.search_indicator = ft.ProgressBar(width=160, height=6, value=None, visible=False)
-        self.search_controls = ft.Row([self.search_button, self.search_indicator, self.query, self.exclude], expand=True, spacing=8)
+        self.search_controls = ft.Column([ft.Row([self.query]), ft.Row([self.exclude])], expand=True, spacing=6)
         self.result_count = ft.Text('検索結果：0件', weight=ft.FontWeight.BOLD)
         self.stack_count = ft.Text('', weight=ft.FontWeight.BOLD)
         self.export_button = ft.Button('PDF出力', on_click=self.export, style=button_style)
@@ -81,16 +83,16 @@ class NormalMode:
         self.stack_table = self.new_table()
         self.result_section = ft.Column([
             ft.Row([self.result_count, ft.Container(expand=True), ft.TextButton('全選択', on_click=self.select_all),
-                    ft.TextButton('全解除', on_click=self.deselect_all),
+                    ft.TextButton('全解除', on_click=self.deselect_all), ft.TextButton('選択を反転', on_click=self.invert_results),
                     ft.Button('ストックへ追加', on_click=self.add_selected, style=button_style)]),
             ft.Container(content=self.result_table, expand=True),
         ], expand=True, spacing=4)
         self.stack_section = ft.Container(content=ft.Column([
             ft.Row([self.stack_count, ft.Container(expand=True), ft.TextButton('全選択', on_click=self.check_all),
-                    ft.TextButton('全解除', on_click=self.uncheck_all),
+                    ft.TextButton('全解除', on_click=self.uncheck_all), ft.TextButton('選択を反転', on_click=self.invert_stock),
                     ft.TextButton('全削除', on_click=self.confirm_clear), self.open_button, self.export_button]),
             ft.Container(content=self.stack_table, expand=True),
-        ], expand=True, spacing=4), bgcolor='#303438', padding=6, expand=True)
+        ], expand=True, spacing=4), bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, padding=6, expand=True)
         self.wide = False
         self.result_tab = ft.Tab(label='検索結果')
         self.stack_tab = ft.Tab(label='ストック')
@@ -104,7 +106,7 @@ class NormalMode:
             ], expand=True, spacing=4))
         self.lists = ft.Container(content=self.tabs, expand=True)
         self.image = ft.Image(src='', fit=ft.BoxFit.CONTAIN, expand=True, visible=False)
-        self.preview_label = ft.Text('', size=14, color=ft.Colors.BLUE_100,
+        self.preview_label = ft.Text('', size=14, color=ft.Colors.PRIMARY,
                                      weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
         self.preview_panel = ft.Container(content=ft.Column([self.preview_label, self.image],
             expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
@@ -119,13 +121,14 @@ class NormalMode:
             self.save_publish(self.publish_field.value or '')
 
     def resize_settings(self):
-        self.publish_field.width = max(400, min(1000, (self.page.width or 1400) - 720))
-        self.root_display.width = self.publish_field.width
+        self.publish_field.width = max(280, min(620, (self.page.width or 1400) - 240))
+        self.root_display.width = max(400, min(1000, (self.page.width or 1400) - 720))
 
     async def pick_publish(self, event=None):
         if self.busy():
             return
-        selected = await self.publish_picker.get_directory_path()
+        initial = (self.publish_field.value or '').strip()
+        selected = await self.publish_picker.get_directory_path(initial_directory=initial or None)
         if selected and not self.busy():
             self.publish_field.value = selected
             self.on_publish_change()
@@ -138,12 +141,12 @@ class NormalMode:
             self.root_field.value = self.index_root
             self.root_field.tooltip = self.index_root
             updated = format_updated(info['updated'])
-            self.index_label.value = f'データ更新日時：{updated}\nPDF：{info["count"]}件'
+            self.index_label.value = f'PDF索引：{updated}　{info["count"]}件'
         except Exception:
             self.index_root = ''
             self.root_field.value = ''
             self.root_field.tooltip = None
-            self.index_label.value = 'PDF索引DBは未取得です。\n配信元を設定して最新データ取得を実行してください。'
+            self.index_label.value = 'PDF索引：未取得（設定から配信元を指定してください）'
         self.index_label.tooltip = self.index_label.value
 
     async def sync_index(self, event=None):
@@ -153,6 +156,8 @@ class NormalMode:
         if not folder:
             self.report_error('PDF索引データ配信元フォルダを指定してください。')
             return
+        if self.on_sync_started:
+            self.on_sync_started()
         self.set_busy(True)
         self.sync_status.value = '検索データの最新版を確認しています…'
         self.index_controls.disabled = True
@@ -167,7 +172,7 @@ class NormalMode:
                 self.clear_preview()
             if changed and self.on_pdf_updated:
                 self.on_pdf_updated()
-            self.sync_status.value = 'PDF索引の最新データを取得しました。' if changed else 'PDF索引は最新です。'
+            self.sync_status.value = 'PDF索引の最新データを取得しました。' if changed else '配信済みの最新版と一致'
         except Exception as exc:
             self.refresh_index_label()
             suffix = '前回取得したDBで検索できます。' if self.index_root else '検索用DBは利用できません。'
@@ -177,12 +182,14 @@ class NormalMode:
         finally:
             if self.sync_other:
                 other_status = await self.sync_other(folder)
-                self.sync_status.value += ' / ' + other_status
+                # The BOM result is displayed on its own row.
             self.index_controls.disabled = False
             self.set_busy(False)
             self.render()
             self.sync_status.tooltip = self.sync_status.value
             self.page.update()
+            if self.on_sync_finished:
+                await self.on_sync_finished()
 
     async def startup_sync(self):
         if (self.publish_field.value or '').strip():
@@ -195,7 +202,7 @@ class NormalMode:
     def new_table():
         return dt2.DataTable2(columns=[ft.DataColumn(ft.Text('PDF'))], rows=[],
                               fixed_top_rows=1, data_row_height=72, heading_row_height=48,
-                              heading_row_color=ft.Colors.BLUE_GREY_900,
+                              heading_row_color=ft.Colors.SURFACE_CONTAINER_HIGHEST,
                               column_spacing=8, horizontal_margin=8, min_width=620,
                               visible_horizontal_scroll_bar=True, visible_vertical_scroll_bar=True)
 
@@ -399,8 +406,8 @@ class NormalMode:
                 def centered(control):
                     return ft.DataCell(ft.Container(control, alignment=ft.Alignment.CENTER))
                 cells = [centered(ft.Text(str(number), size=14)),
-                    ft.DataCell(link(folder, open_folder, ft.Colors.WHITE, str(Path(path).parent))),
-                    ft.DataCell(link(label + status, open_file, ft.Colors.BLUE_200, path + status, lines=2)),
+                    ft.DataCell(link(folder, open_folder, ft.Colors.ON_SURFACE, str(Path(path).parent))),
+                    ft.DataCell(link(label + status, open_file, ft.Colors.PRIMARY, path + status, lines=2)),
                     ft.DataCell(ft.Text(date, size=14, no_wrap=True, max_lines=2))]
                 if not self.wide:
                     cells.append(centered(ft.IconButton(icon=ft.Icons.VISIBILITY_OUTLINED,
@@ -472,7 +479,7 @@ class NormalMode:
         self.page.update()
         try:
             async with self.selection_lock:
-                items = [dict(i, selected=value) if key is None or path_key(i['path']) == key else dict(i)
+                items = [dict(i, selected=(not i['selected'] if value is None else value)) if key is None or path_key(i['path']) == key else dict(i)
                          for i in self.items]
                 await asyncio.to_thread(self.store.save, items)
                 self.items = items
@@ -530,6 +537,18 @@ class NormalMode:
             self.selection.clear()
             self.refresh_selection()
             self.page.update()
+
+    def invert_results(self, e=None):
+        if self.busy():
+            return
+        stacked = {path_key(i['path']) for i in self.items}
+        eligible = {path_key(i['path']) for i in self.results} - stacked
+        self.selection = eligible - self.selection
+        self.refresh_selection()
+        self.page.update()
+
+    async def invert_stock(self, e=None):
+        await self.save_selection(None)
 
     async def check_all(self, e=None):
         await self.save_selection(True)

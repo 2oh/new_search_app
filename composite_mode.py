@@ -37,17 +37,20 @@ class CompositeMode:
         self.preview_group = None
         self.pdf_selection = set()
         self.index_label = ft.Text(size=12, max_lines=3, overflow=ft.TextOverflow.ELLIPSIS)
+        self.sync_status = ft.Text(size=12, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
         self.refresh_index_label()
         self.query = ft.TextField(label='含む文字列', hint_text='空白区切りでAND検索（例："ab c"）', expand=True, on_submit=self.search)
         self.exclude = ft.TextField(label='除く文字列', hint_text='いずれかを含む明細を除外', expand=True, on_submit=self.search)
         self.progress = ft.ProgressBar(value=None, visible=False, width=140)
-        self.search_controls = ft.Row([self.progress, self.query, self.exclude, ft.Button('検索', on_click=self.search)], expand=True)
+        self.search_button = ft.Button('検索', on_click=self.search)
         self.folder_button = ft.OutlinedButton('対象フォルダ：すべて', on_click=self.choose_folders)
         self.sheet_button = ft.OutlinedButton('シート名：すべて', on_click=self.choose_sheets)
         self.ids = ft.TextField(label='製品ID', hint_text='1001, 1002', width=170, on_submit=self.search)
         self.start = ft.TextField(label='Excel更新日・開始', hint_text='YYYY-MM-DD', width=175)
         self.end = ft.TextField(label='Excel更新日・終了', hint_text='YYYY-MM-DD', width=175)
         self.filters = ft.Row([self.folder_button, self.sheet_button, self.ids, self.start, self.end], wrap=True)
+        # Filters stay below the entire search/reference row.
+        self.search_controls = ft.Column([ft.Row([self.query]), ft.Row([self.exclude])], spacing=6, expand=True)
         self.count = ft.Text()
         self.preview_button = ft.OutlinedButton('プレビューを表示', on_click=self.toggle_preview)
         self.result_button = ft.TextButton('検索結果', on_click=self.show_results)
@@ -56,7 +59,7 @@ class CompositeMode:
         self.remove_button = ft.TextButton('選択部品を削除', on_click=self.remove_selected, visible=False)
         self.export_button = ft.Button('部品一覧Excel出力', on_click=self.export, visible=False)
         self.toolbar = ft.Row([self.result_button, self.stock_button, self.count,
-                              ft.TextButton('全選択', on_click=self.select_all), ft.TextButton('全解除', on_click=self.select_none),
+                              ft.TextButton('全選択', on_click=self.select_all), ft.TextButton('全解除', on_click=self.select_none), ft.TextButton('選択を反転', on_click=self.invert_selection),
                               self.add_button, self.remove_button, self.export_button, self.preview_button], wrap=True)
         self.list = ft.ListView(expand=True, spacing=0, build_controls_on_demand=True)
         self.image = ft.Image(src='', fit=ft.BoxFit.CONTAIN, width=400, expand=True, visible=False)
@@ -64,8 +67,8 @@ class CompositeMode:
         self.candidates = ft.ListView(height=160, spacing=0)
         self.preview_panel = ft.Container(ft.Column([
             self.preview_label, self.candidates, ft.Button('選択PDFをPDFストックへ追加', on_click=self.add_pdfs), self.image,
-        ], expand=True), width=420, padding=8, bgcolor='#202D39', visible=False)
-        self.list_panel = ft.Column([self.filters, self.toolbar, self.list], expand=True, spacing=6)
+        ], expand=True), width=420, padding=8, bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, visible=False)
+        self.list_panel = ft.Column([self.toolbar, self.list], expand=True, spacing=6)
         self.body = ft.Row([self.list_panel, self.preview_panel], expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
         self.view = ft.Container(self.body, expand=True, visible=False)
         self.render()
@@ -91,12 +94,14 @@ class CompositeMode:
                 self.catalog = None
                 self.results, self.selection = [], set()
                 self.clear_preview()
-            status = '構成部品表の最新データを取得しました' if changed else '構成部品表は最新です'
+            status = '構成部品表の最新データを取得しました' if changed else '配信済みの最新版と一致'
         except Exception as exc:
             self.refresh_index_label()
             status = f'構成部品表の取得失敗（既存DBは保持）：{exc}'
             self.index_label.value += ' / 取得失敗'
             self.index_label.tooltip = status
+        self.sync_status.value = status
+        self.sync_status.tooltip = status
         self.render()
         return status
 
@@ -267,13 +272,17 @@ class CompositeMode:
     async def select_none(self, event=None):
         await self.set_selection(False)
 
+    async def invert_selection(self, event=None):
+        await self.set_selection(None)
+
     async def set_selection(self, value):
         if self.normal.busy():
             return
         if self.stock_view:
-            await self.commit([dict(item, selected=value) for item in self.items])
+            await self.commit([dict(item, selected=(not item['selected'] if value is None else value)) for item in self.items])
         else:
-            self.selection = {g['key'] for g in self.results} if value else set()
+            keys = {g['key'] for g in self.results}
+            self.selection = keys - self.selection if value is None else (keys if value else set())
             self.render()
             self.page.update()
 

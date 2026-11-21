@@ -77,7 +77,8 @@ async def run(root):
                 normal = scope['normal_mode']
                 normal.index_database = Path(temp) / 'local-pdf.sqlite'
                 normal.refresh_index_label()
-                assert normal.search_controls.controls == [normal.search_button, normal.search_indicator, normal.query, normal.exclude]
+                assert normal.search_controls.controls[0].controls == [normal.query]
+                assert normal.search_controls.controls[1].controls == [normal.exclude]
                 assert normal.tabs.length == 2
                 normal.query.value = 'abc'
                 normal.caret_end()
@@ -91,6 +92,14 @@ async def run(root):
                 pdf_catalog.ingest(pdfs, source_database)
                 pdf_catalog.publish(source_database, publication)
                 normal.publish_field.value = str(publication)
+                with patch.object(normal.publish_picker, 'get_directory_path', new_callable=AsyncMock, return_value=None) as picker:
+                    await normal.pick_publish()
+                    picker.assert_awaited_once_with(initial_directory=str(publication))
+                scope['theme_picker'].value = 'light'
+                scope['change_theme'](None)
+                assert json.loads(Path('config.json').read_text(encoding='utf-8'))['theme_mode'] == 'light'
+                scope['theme_picker'].value = 'dark'
+                scope['change_theme'](None)
                 await normal.sync_index()
                 assert normal.index_database.is_file() and normal.index_root == str(pdfs)
                 assert normal.root_field.read_only and not normal.root_field.can_request_focus and not normal.busy()
@@ -108,12 +117,14 @@ async def run(root):
                 assert normal.view.visible and not scope['result_area'].visible
                 assert not scope['excel_control_row'].visible
                 assert scope['folder_settings_row'].controls[0] is normal.root_display
-                assert scope['index_settings_row'].controls[0] is normal.index_controls
+                assert scope['reference_panel'].content is scope['reference_data'].view
+                assert not scope['reference_data'].rows[1].visible
+                assert normal.publish_field not in normal.index_controls.controls
                 assert normal.publish_field.label == '検索データ配信元フォルダ'
                 assert normal.root_field.label == 'PDF検索先フォルダ'
                 assert scope['output_folder_field'].label == 'PDF出力先フォルダ'
                 assert normal.publish_button.content == 'フォルダを選択'
-                assert scope['index_settings_row'].controls[-1].controls == [scope['exit_button']]
+                assert scope['reference_actions'].controls == [scope['exit_button'], normal.sync_button, scope['data_settings_button']]
                 assert scope['settings_action_row'] not in scope['mode_row'].controls
                 assert not scope['bom_bottom_separator'].visible
                 scope['search_folder_field'].value = str(pdfs)
@@ -188,6 +199,10 @@ async def run(root):
                 assert normal.folder_label(str(pdfs / 'nested' / 'F123 SS400.PDF')) == 'nested'
                 normal.select_all()
                 checked = set(normal.selection)
+                normal.invert_results()
+                assert not normal.selection
+                normal.invert_results()
+                assert normal.selection == checked
                 with patch.object(normal.store, 'save', side_effect=OSError('disk full')):
                     await normal.add_selected()
                 assert normal.selection == checked and not normal.items
@@ -205,6 +220,11 @@ async def run(root):
                         assert not await normal.save_selection(True)
                     assert not any(i['selected'] for i in normal.items)
                     await normal.save_selection(True)
+                    await normal.invert_stock()
+                    assert not any(i["selected"] for i in normal.items)
+                    await asyncio.gather(normal.invert_stock(), normal.invert_stock())
+                    assert not any(i["selected"] for i in normal.items)
+                    await normal.invert_stock()
                 assert all(a is b for a,b in zip(saved_rows, normal.stack_table.rows))
                 assert normal.store.load() == normal.items and normal.pending_selection == 0
                 normal.query.value = 'no-such-pdf'
@@ -284,7 +304,7 @@ async def run(root):
                 assert not normal.view.visible and scope['result_area'].visible
                 assert scope['bom_bottom_separator'].visible
                 assert scope['folder_settings_row'].controls[0] is normal.root_display
-                assert scope['index_settings_row'].controls[0] is normal.index_controls
+                assert scope['reference_panel'].content is scope['reference_data'].view
                 scope['message'].value = 'PDF出力完了：88件'
                 scope['mode_dropdown'].value = 'PDFファイル名'
                 scope['on_mode_change'](None)
@@ -297,8 +317,8 @@ async def run(root):
                 for width in (1200, 1920, 1699, 1700):
                     page.width = width
                     scope['on_page_resize'](None)
-                    assert normal.publish_field.width == max(400, min(1000, width - 720))
-                    assert normal.root_display.width == normal.publish_field.width
+                    assert normal.publish_field.width == max(280, min(620, width - 240))
+                    assert normal.root_display.width == max(400, min(1000, width - 720))
                     assert not scope['bom_bottom_separator'].visible
                     assert normal.preview_panel.visible == (width >= 1700)
                     assert len(normal.result_table.columns) == (6 if width < 1700 else 5)

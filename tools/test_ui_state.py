@@ -118,7 +118,7 @@ async def verify(root, baseline):
                             break
                         await asyncio.sleep(0.01)
                     assert started.is_set()
-                    for key in ("folder_settings_row", "index_settings_row", "mode_dropdown", "excel_control_row",
+                    for key in ("folder_settings_row", "reference_actions", "mode_dropdown", "excel_control_row",
                                 "table_header", "table_area", "exit_button"):
                         assert scope[key].disabled, key
                     before = current().copy(deep=True)
@@ -138,7 +138,7 @@ async def verify(root, baseline):
                     release.set()
                     await asyncio.wait_for(task, 10)
             assert not scope["pdf_action_state"]["processing"]
-            for key in ("folder_settings_row", "index_settings_row", "mode_dropdown", "excel_control_row",
+            for key in ("folder_settings_row", "reference_actions", "mode_dropdown", "excel_control_row",
                         "table_header", "table_area", "exit_button"):
                 assert not scope[key].disabled, key
             if fail:
@@ -164,7 +164,7 @@ async def verify(root, baseline):
             pdf_catalog.ingest(root / 'tools/fixtures/pdfs', normal.index_database)
             normal.refresh_index_label()
             assert scope['folder_settings_row'].controls[0] is normal.root_display
-            assert scope['index_settings_row'].controls[0] is normal.index_controls
+            assert scope['reference_panel'].content is scope['reference_data'].view
             scope["output_folder_field"].value = str(tmp / "ui-export")
             await held(app.pd, "read_excel", scope["on_extract_click"])
             check(0)
@@ -173,6 +173,10 @@ async def verify(root, baseline):
             scope["toggle_all"](False)
             check(0)
             scope["toggle_all"](True)
+            check(1)
+            scope["toggle_all"](None)
+            check(0)
+            scope["toggle_all"](None)
             check(1)
             checkbox = next(iter(scope["output_checkboxes"].values()))
             checkbox.value = False

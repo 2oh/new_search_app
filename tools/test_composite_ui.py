@@ -60,6 +60,11 @@ async def exercise(scope, destination):
     await composite.add_pdfs()
     assert len(normal.items) == 1 and normal.items[0]['path'] == group['pdfs'][1]
     composite.show_stock()
+    old_selection = [i["selected"] for i in composite.items]
+    await composite.invert_selection()
+    assert [i["selected"] for i in composite.items] == [not x for x in old_selection]
+    await composite.invert_selection()
+    assert [i["selected"] for i in composite.items] == old_selection
     scope['output_folder_field'].value = str(destination)
     await composite.export()
     assert list(destination.glob('部品一覧_*.xlsx')), scope['message'].value
@@ -74,6 +79,10 @@ async def exercise(scope, destination):
     composite.results = [dict(group,key=str(i)) for i in range(1500)]
     await composite.select_all()
     assert len(composite.selection) == 1500 and len(composite.list.controls) == 1500
+    await composite.invert_selection()
+    assert not composite.selection
+    await composite.invert_selection()
+    assert len(composite.selection) == 1500
     normal.index_database = destination/'missing.sqlite'
     await composite.search()
     assert composite.results[0]['pdf_status'] == 'PDF索引未取得'
@@ -97,6 +106,9 @@ async def exercise(scope, destination):
     scope['mode_dropdown'].value = '構成部品表'
     scope['on_mode_change'](None)
     assert scope['result_area'].visible and not composite.view.visible
+    assert scope['reference_data'].rows[1].visible
+    assert scope['reference_data'].texts[1].value == '原本直接参照'
+    assert '取得' in composite.sync_status.value
     return ['composite grouping and filters', 'part stock persistence', 'multiple PDF links',
             'preview toggle', 'PDF stock bridge', '1500 parts select all', 'source sheet dispatch']
 

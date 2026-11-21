@@ -6108,6 +6108,144 @@ manual_batch.cmdで差分、manual_batch.cmd --fullで全件。
 アシスタントが実タスクを登録・変更することはない。
 
 
+2026/11/21
+
+【v1.4.2：上部表示・検索条件・選択操作の整理】
+作成日：2026-11-21
+
+【1．作業の進め方】
+正本：C:\Users\shini\OneDrive\codes_od\new_search_app
+確認時点：main、未コミット変更なし。リリースノート最新v1.4.1。
+従来どおりGit操作は利用者が行い、ブランチ切替後に実装する。
+既存note.txtは変更せず、このテキストを手順用に使用する。
+
+【2．今回の変更範囲】
+・データ更新表示をPDF索引／構成部品表の行に整理し、それぞれに日時・取得結果を表示。PDF件数はPDF行へ。
+・「参照データ」を文字列条件の右側に縦区切り線付きでまとめ、終了／最新データ取得／設定を右端に縦配置。
+・起動時は自動取得。起動中は約5分ごとに配信情報を背景で確認し、未取込なら取得ボタンをオレンジ色で有効化、両DB取込済なら無効化。
+  配信状況確認ではDBや検索結果を置換しない。接続失敗時は確認できない旨を表示し、ボタンで再試行する。
+・構成部品表モードでは構成部品表DB日時の代わりに「選択したExcelを直接読み込みます」を表示。
+  Excel保存後は再読み込み・抽出が必要。PDFは引き続き索引を参照する。
+・配信元フォルダを設定ボタンから開く小さな画面へ移し、結果一覧の縦幅を確保。
+  最新データ取得・取得日時はメイン画面に残す。設定値や既存データは引き継ぐ。
+・PDFファイル名／複合の含む・除く文字列を上下に配置。
+  複合は文字列条件の下にシート名・ID・日付等を配置し、検索ボタンの位置を整理。
+  検索ボタンは検索モード欄の直下、複合の追加条件は参照データ欄の下の横幅を使用する。
+・設定にパス全文表示とダーク／ライト切替を追加。フォルダ選択の初期位置は設定中の配信元を指定する。
+・分離サンプルの通常起動は同じ専用フォルダを再利用し、設定・ストック・テーマを引き継ぐ。
+・全選択／全解除に「選択を反転」を追加。対象は操作する一覧の選択可能な行。
+  検索結果・ストックの状態を混同せず、保存失敗時の復元と連続操作の順序を維持。
+・別ウィンドウから戻る際の入力全文選択を再現確認し、カーソル位置・選択範囲の維持を改善。
+・文字サイズは小さくせず、余白・改行を見直す。
+
+【3．今回には含めず、後続で対応するもの】
+・結果一覧の列再配置、使用箇所のシート名別ID表示、プレビューとの領域切替、カーソルでのプレビュー移動。
+・PDF検索結果のフォルダツリーによる複数選択・絞り込み。
+・材料の空白を除いた集約キー。元表記も保持する。
+・シート名の完全一致対応表と未登録一覧の出力。未登録は元名で検索対象に残す。
+  元のシート名はExcelを開くために保持。対応表は追加可能にし、更新時に反映する。
+・部品情報の登録DBと、グループ／形状別の入力・検索。
+
+【4．現地確認事項】
+・Excel初期フォルダはconfigのexcel_folderを使用。利用者による再確認待ち。
+  今回、原因未確認のまま保存方式を変更しない。
+・構成部品表バッチの差分固有の公開遅延は、現地では問題ではなかった。
+・daily.cmdが本体。manual_batch.cmdはdaily.cmdへ引数を渡し、最後にpauseする手動確認用。
+
+【5．ブランチ切替】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git switch -c codex/ui-v1.4.2
+git status -sb
+
+未コミット変更や同名ブランチのエラーが出た場合は、その状態を確認してから進める。
+切替後に実装・検証する。検証・コミット・push・main統合・タグ・EXE作成の具体的な手順は、実装確定後に追記する。
+
+【6．起動・確認】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+
+分離サンプル（既存設定・ストックを使わない）：
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/composite_demo.py
+
+通常環境から分離したサンプル設定・ストックを使い、次回起動時にも引き継ぐ。
+旧方式からの初回移行は直近の小規模サンプルを選ぶ。参照先はstorage\composite-demo-current.jsonに保存する。
+サンプルを新規作成したい場合だけ、次を使用する（旧サンプルは削除しない）：
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/composite_demo.py --new-sample
+
+通常起動：
+& 'C:\dev\new_search_app\Scripts\python.exe' main.py
+
+確認内容：
+・配信元設定は「設定」ボタンから開けること。設定を変えなければ既存値をそのまま利用する。
+・取得結果が各DBの日時と同じ行に出ること。
+・複合では両DB、PDFファイル名ではPDFのみ、構成部品表ではPDF日時＋Excel直接読込の説明が出ること。
+・含む／除く文字列、複合の追加条件、検索ボタンが操作しやすいこと。
+・各一覧の「選択を反転」を2回押すと元に戻ること。PDF／部品ストック側の状態は再起動後も保存される。
+・入力欄の末尾・途中・部分選択で別ウィンドウへ移り、戻っても意図した位置から編集できること。
+・構成部品表の編集保存後、再度「抽出実行」を押すと反映すること。
+・取込済なら取得ボタンが無効で、配信元更新後は約5分で未取込表示と有効化に変わること。
+・設定でテーマを変更し、再起動後も同じテーマで開くこと。
+・設定のパス全文表示と、フォルダ選択の初期位置が配信元設定になっていること。
+
+自動テスト（各終了コード0を確認）：
+& 'C:\dev\new_search_app\Scripts\python.exe' -m unittest discover -s tests -v
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/test_normal_mode.py .
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/test_composite_ui.py
+& 'C:\dev\new_search_app\Scripts\python.exe' tools/test_ui_state.py .
+
+【7．コミット・push・main統合・タグ】
+各コマンドの成功を確認して進める。失敗時は止め、強制操作はしない。
+git status -sb
+git diff --check
+git diff --stat
+git ls-files --others --exclude-standard
+
+設定・ストック・DB・ログ等が含まれないことを確認して実行：
+git add -A
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+git commit -m "feat: refine search layout and add selection inversion"
+git push -u origin codex/ui-v1.4.2
+
+未コミット変更がないことを確認して統合：
+git switch main
+git fetch origin
+git merge --ff-only origin/main
+git merge --ff-only codex/ui-v1.4.2
+git push origin main
+git tag --list v1.4.2
+git ls-remote --tags origin refs/tags/v1.4.2
+
+タグが未作成の場合のみ：
+git tag -a v1.4.2 -m "Release v1.4.2"
+git push origin v1.4.2
+
+【8．クライアントEXE作成と自己検証】
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
+$LASTEXITCODE
+
+終了コード0を確認した後：
+$selftestDir = Join-Path $PWD ('work\v142-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$exePath = Join-Path $PWD 'dist\図面PDF検索結合ツール (v1.4.2).exe'
+$testProcess = Start-Process -FilePath $exePath -ArgumentList @('--self-test', ('"' + $selftestDir + '"')) -WindowStyle Hidden -Wait -PassThru
+$testProcess.ExitCode
+Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
+
+終了コード0、frozen=true、version=v1.4.2を確認。
+
+【9．現地へ持っていくもの】
+・原本フォルダのdist\図面PDF検索結合ツール (v1.4.2).exe
+・原本フォルダのCOMPOSITE_SETUP.mdとRELEASE_NOTES.txt
+
+旧EXEを保管してから新EXEを配置。現地のconfig.json、normal_stack.json、part_stock.jsonは上書きしない。
+今回DB構造とバッチの変更はないため、DBの再作成やバッチEXEの交換は不要。
+
+
+
+
+
+
 
 
 3. **Fletを更新**
