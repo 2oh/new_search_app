@@ -203,7 +203,8 @@ class CompositeRows:
             updated = datetime.fromtimestamp(stamp / 1_000_000_000).strftime('%Y-%m-%d %H:%M:%S') if stamp is not None else '未記録'
         except (TypeError, ValueError, OSError, OverflowError):
             updated = '未記録'
-        return f"{Path(occurrence['path']).name}\nExcel更新日時：{updated}"
+        excel_path = Path(occurrence['path'])
+        return f"構成部品表パス：{excel_path.parent.name}\nファイル名：{excel_path.name}\n更新日時：{updated}"
 
     def expand_row(self, key):
         if self.normal.busy():

@@ -16,7 +16,7 @@ class PublicationCheck:
 
     def inspect(self, folder, database, kind):
         database = Path(database)
-        result = dict(state='unknown', updated='', count=None, error='')
+        result = dict(state='unknown', updated='', root='', count=None, error='')
         try:
             stat = database.stat()
             signature = (str(database.resolve()), stat.st_mtime_ns, stat.st_size, kind)
@@ -26,12 +26,13 @@ class PublicationCheck:
                 info = (pdf_catalog.validate if kind == 'pdf' else composite_catalog.validate)(database)
                 with pdf_catalog.connect(database, True) as db:
                     count = db.execute('SELECT COUNT(*) FROM ' + ('files' if kind == 'pdf' else 'workbooks')).fetchone()[0]
-                local = dict(updated=info['updated'], count=count, digest=pdf_catalog.digest(database), size=stat.st_size)
+                local = dict(updated=info['updated'], root=info['root'], count=count,
+                    digest=pdf_catalog.digest(database), size=stat.st_size)
                 after = database.stat()
                 if (after.st_mtime_ns, after.st_size) != (stat.st_mtime_ns, stat.st_size):
                     raise OSError('ローカルデータ更新中です。再確認してください')
                 self.cache[kind] = (signature, local)
-            result.update(updated=local['updated'], count=local['count'])
+            result.update(updated=local['updated'], root=local['root'], count=local['count'])
         except Exception as exc:
             local = None
             result['error'] = str(exc)
@@ -64,7 +65,7 @@ class ReferenceData:
         self.running = False
         self.rerun = False
         self.mode = '複合'
-        self.states = [dict(state='unknown',updated='',count=None,error='未確認') for _ in range(2)]
+        self.states = [dict(state='unknown',updated='',root='',count=None,error='未確認') for _ in range(2)]
         self.texts = [ft.Text(size=12), ft.Text(size=12)]
         self.status = [ft.Text(size=12), ft.Text(size=12)]
         self.rows = [ft.Row([ft.Text(label, width=86, size=12),
@@ -82,6 +83,7 @@ class ReferenceData:
         captions = dict(current='最新の配信データを取込済', pending='未取込配信データがあります', unknown='配信状況を確認できません')
         for i,state in enumerate(self.states):
             self.texts[i].value = ('索引DB参照　'+format_updated(state['updated'])+' 時点') if state['updated'] else '索引DB参照　未取得'
+            self.texts[i].tooltip = f"索引DB作成元：{state['root'] or '未取得'}"
             count = '' if state['count'] is None else f'（全{state["count"]:,}件）'
             self.status[i].value = captions[state['state']] + count
             self.status[i].color = ft.Colors.ERROR if state['state']=='unknown' else (ft.Colors.TERTIARY if state['state']=='pending' else None)
@@ -89,6 +91,7 @@ class ReferenceData:
         self.rows[1].visible = self.mode != 'PDFファイル名'
         if self.mode == '構成部品表':
             self.texts[1].value = '原本直接参照'
+            self.texts[1].tooltip = None
             self.status[1].value = '選択したExcelを直接読み込む'
             self.status[1].color = None
             self.status[1].tooltip = 'Excel保存後に「抽出実行」を押すと反映します。'

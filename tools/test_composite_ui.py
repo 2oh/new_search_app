@@ -54,8 +54,9 @@ async def exercise(scope, destination):
     assy, _ = composite.assy_cell(dict(group,occurrences=[original,dict(original),different]), True)
     labels = assy.content.controls[0].content.controls[1].controls[0].controls
     assert len(labels)==2 and labels[0].tooltip != labels[1].tooltip
-    assert 'Excel更新日時：2026-11-11 ' in labels[0].tooltip, labels[0].tooltip
-    assert str(destination) not in labels[0].tooltip
+    assert labels[0].tooltip.splitlines()[2].startswith('更新日時：2026-11-11 '), labels[0].tooltip
+    source = Path(original['path'])
+    assert labels[0].tooltip.splitlines()[:2] == [f'構成部品表パス：{source.parent.name}', f'ファイル名：{source.name}']
     with patch.object(composite, 'open_occurrence', new_callable=AsyncMock) as opened:
         await labels[1].on_click(None)
         assert opened.call_args.args[0]['path']==different['path']
@@ -68,9 +69,10 @@ async def exercise(scope, destination):
     assert {o['product_id'] for o in composite.items[0]['occurrences']} == {'0001','1002'}
     await composite.show_candidates(group)
     assert composite.preview_panel.visible and composite.image.visible
+    assert composite.preview_button.content == 'PDFプレビューを閉じる'
     await composite.search()
     assert not composite.preview_panel.visible and composite.active_key is None
-    assert composite.preview_button.content == 'プレビューを表示'
+    assert composite.preview_button.content == 'PDFプレビューを表示'
     await composite.show_candidates(group)
     before = deepcopy(composite.items)
     selection = set(composite.selection)

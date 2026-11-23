@@ -16,6 +16,9 @@ from part_rules import DEFAULT_RULES
 from update_age import format_updated
 from composite_rows import CompositeRows
 
+SHOW_PDF_PREVIEW = 'PDFプレビューを表示'
+HIDE_PDF_PREVIEW = 'PDFプレビューを閉じる'
+
 
 class CompositeMode(CompositeRows):
     def __init__(self, page, normal, *, database=None, stock_path='part_stock.json', rules=DEFAULT_RULES):
@@ -61,7 +64,7 @@ class CompositeMode(CompositeRows):
         # Filters stay below the entire search/reference row.
         self.search_controls = ft.Column([ft.Row([self.query]), ft.Row([self.exclude])], spacing=6, expand=True)
         self.count = ft.Text()
-        self.preview_button = ft.OutlinedButton('プレビューを表示', on_click=self.toggle_preview)
+        self.preview_button = ft.OutlinedButton(SHOW_PDF_PREVIEW, on_click=self.toggle_preview)
         self.preview_hint = ft.Text('カーソルで上下移動', size=12, visible=False)
         self.result_tab = ft.Tab(label='検索結果')
         self.stock_tab = ft.Tab(label='部品ストック')
@@ -375,7 +378,7 @@ class CompositeMode(CompositeRows):
 
     def close_preview(self):
         self.preview_panel.visible = False
-        self.preview_button.content = 'プレビューを表示'
+        self.preview_button.content = SHOW_PDF_PREVIEW
         self.preview_hint.visible = False
         self.clear_preview()
         self.active_key = None
@@ -385,8 +388,9 @@ class CompositeMode(CompositeRows):
         if self.normal.busy():
             return
         self.preview_panel.visible = not self.preview_panel.visible
-        self.preview_button.content = 'プレビューを閉じる' if self.preview_panel.visible else 'プレビューを表示'
-        if not self.preview_panel.visible:
+        if self.preview_panel.visible:
+            self.preview_button.content = HIDE_PDF_PREVIEW
+        else:
             self.close_preview()
         self.preview_hint.visible = self.preview_panel.visible
         self.resize_rows()
@@ -415,7 +419,7 @@ class CompositeMode(CompositeRows):
         self.preview_group = group
         self.active_key = group['key']
         self.preview_panel.visible = True
-        self.preview_button.content = 'プレビューを閉じる'
+        self.preview_button.content = HIDE_PDF_PREVIEW
         self.preview_hint.visible = True
         self.preview_label.value = group['identifier'] + ' / ' + group['material'] + ' / ' + group['pdf_status']
         self.candidates.height = min(132, max(44, 44 * len(group['pdfs'])))

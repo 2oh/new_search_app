@@ -6468,6 +6468,50 @@ Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
 
 
 
+【v1.4.5 画面調整】
+
+・検索モードは前回選択したモードで起動する。既存の保存・復元処理を利用する。
+・構成部品表モードは上から「メッセージ → PDF候補抽出等のボタン → 一覧」。
+・複合の使用ASSYのホバーは上から「構成部品表パス：タイプB」のような親フォルダ名、「ファイル名：」、「更新日時：」の3行。
+・複合のボタンは「PDFプレビューを表示」「PDFプレビューを閉じる」。
+・索引DB参照にホバーすると「索引DB作成元」を表示。最新データ取得は終了の左。
+
+【1．原本のブランチを切り替える】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git switch -c codex/ui-v1.4.5
+git status -sb
+
+切替後に連絡する。反映後、以下の起動確認へ進む。
+
+【2．起動確認】
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/composite_demo.py
+
+・既存の分離サンプルを使い、モード切替後に終了して、同じモードで起動することを確認。
+・構成部品表モードでExcelを抽出した後、メッセージがPDF候補抽出などのボタンより上に出ることを確認。
+・複合検索後、使用ASSYの車番にホバーし、直近のフォルダ名、Excelファイル名、更新日時が別の行に出ることを確認。
+・PDFプレビューの表示中と閉じた状態でボタンの文言を確認。
+・索引DB参照にマウスを乗せ、元の検索対象フォルダが表示されることを確認。
+
+【3．コミット・配布】
+git status -sb
+git diff --check
+git add -- main.py composite_mode.py composite_rows.py reference_data.py tests/test_reference_data.py tools/test_composite_ui.py COMPOSITE_SETUP.md RELEASE_NOTES.txt
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+git commit -m "fix: refine BOM and composite search displays"
+git push -u origin codex/ui-v1.4.5
+
+以降はv1.4.4手順用noteと同様に、mainへfast-forward、タグを確認・作成し、EXE作成とセルフテストを行う。この版ではブランチ名を codex/ui-v1.4.5、タグとEXE名の版番号を v1.4.5 に読み替える。DB作成バッチの更新やDBの再作成は不要。
+
+【次段階の案】
+・複合のプレビューからPDFストックへ追加する導線を外す。PDFファイル名モードの結合出力用ストックは現行どおり使う前提。
+・複合のPDFプレビューは、一覧で上下キーを部品移動に使う。複数候補のある部品で右キーを押すと候補側へ移り、上下キーで表示PDFを選ぶ。左キーで部品一覧へ戻す。
+・シートストックを部品ストックとは別のタブで追加する。元Excelのフルパスとシート名で重複を除き、アプリCと同様に選んだシート全体を1つのExcelにまとめる。
+
+
+
 
 
 3. **Fletを更新**

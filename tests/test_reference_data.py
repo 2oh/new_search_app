@@ -25,6 +25,11 @@ class ReferenceTests(unittest.IsolatedAsyncioTestCase):
             assert checker.inspect(publication, local, 'pdf')['state'] == 'pending'
             pdf_catalog.sync(publication, local)
             assert checker.inspect(publication, local, 'pdf')['state'] == 'current'
+            assert checker.inspect(publication, local, 'pdf')['root'] == pdf_catalog.metadata(local)['root']
+            import composite_catalog
+            bom = first/'local.bom.sqlite'
+            composite_catalog.sync(publication, bom)
+            assert checker.inspect(publication, bom, 'bom')['root'] == composite_catalog.metadata(bom)['root']
             with patch('reference_data.pdf_catalog.digest', side_effect=AssertionError('rehashed unchanged DB')):
                 assert checker.inspect(publication, local, 'pdf')['state'] == 'current'
             before = local.read_bytes()
@@ -46,15 +51,21 @@ class ReferenceTests(unittest.IsolatedAsyncioTestCase):
             publish_field=SimpleNamespace(value='first'), index_database='pdf')
         composite = SimpleNamespace(database='bom')
         panel = ReferenceData(page,normal,composite,None)
-        current = dict(state='current',updated='',count=3,error='')
-        panel.states = [dict(current),dict(current)]
+        current = dict(state='current',updated='',root='図面フォルダ',count=3,error='')
+        panel.states = [dict(current),dict(current, root='構成部品表フォルダ')]
         panel.render()
+        assert [text.tooltip for text in panel.texts] == [
+            '索引DB作成元：図面フォルダ', '索引DB作成元：構成部品表フォルダ']
         assert normal.sync_button.disabled
         panel.states[1]['state']='pending'
         panel.render()
         assert not normal.sync_button.disabled
         panel.set_mode('構成部品表')
         assert panel.texts[1].value == '原本直接参照'
+        assert panel.texts[0].tooltip == '索引DB作成元：図面フォルダ'
+        assert panel.texts[1].tooltip is None
+        panel.set_mode('複合')
+        assert panel.texts[1].tooltip == '索引DB作成元：構成部品表フォルダ'
         panel.invalidate()
         assert not normal.sync_button.disabled
         def inspect(*args):
