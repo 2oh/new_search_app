@@ -56,6 +56,11 @@ class ReferenceTests(unittest.IsolatedAsyncioTestCase):
         panel.render()
         assert [text.tooltip for text in panel.texts] == [
             '索引DB作成元：図面フォルダ', '索引DB作成元：構成部品表フォルダ']
+        target = panel.reference_labels[1]
+        target.on_hover(SimpleNamespace(control=target, data=True))
+        assert panel.texts[1].color == ft.Colors.PRIMARY
+        target.on_hover(SimpleNamespace(control=target, data=False))
+        assert panel.texts[1].color is None
         assert normal.sync_button.disabled
         panel.states[1]['state']='pending'
         panel.render()
@@ -64,6 +69,8 @@ class ReferenceTests(unittest.IsolatedAsyncioTestCase):
         assert panel.texts[1].value == '原本直接参照'
         assert panel.texts[0].tooltip == '索引DB作成元：図面フォルダ'
         assert panel.texts[1].tooltip is None
+        target.on_hover(SimpleNamespace(control=target, data=True))
+        assert panel.texts[1].color is None
         panel.set_mode('複合')
         assert panel.texts[1].tooltip == '索引DB作成元：構成部品表フォルダ'
         panel.invalidate()

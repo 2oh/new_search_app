@@ -67,9 +67,10 @@ class ReferenceData:
         self.mode = '複合'
         self.states = [dict(state='unknown',updated='',root='',count=None,error='未確認') for _ in range(2)]
         self.texts = [ft.Text(size=12), ft.Text(size=12)]
+        self.reference_labels = [ft.Container(text, on_hover=self.highlight_reference) for text in self.texts]
         self.status = [ft.Text(size=12), ft.Text(size=12)]
         self.rows = [ft.Row([ft.Text(label, width=86, size=12),
-            ft.Column([self.texts[i], self.status[i]], spacing=0, expand=True)],
+            ft.Column([self.reference_labels[i], self.status[i]], spacing=0, expand=True)],
             vertical_alignment=ft.CrossAxisAlignment.START, spacing=2)
             for i,label in enumerate(['図面ＰＤＦ：','構成部品表：'])]
         self.view = ft.Column([ft.Text('参照データ',size=12,weight=ft.FontWeight.BOLD), *self.rows],spacing=3)
@@ -77,7 +78,15 @@ class ReferenceData:
 
     def set_mode(self, mode):
         self.mode = mode
+        for text in self.texts:
+            text.color = None
         self.render()
+
+    def highlight_reference(self, event):
+        label = event.control.content
+        hovered = event.data is True or event.data == 'true'
+        label.color = ft.Colors.PRIMARY if hovered and label.tooltip else None
+        self.page.update()
 
     def render(self):
         captions = dict(current='最新の配信データを取込済', pending='未取込配信データがあります', unknown='配信状況を確認できません')

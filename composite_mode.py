@@ -10,7 +10,6 @@ import composite_catalog as catalog
 import composite_stock as stock
 from composite_desktop import create_sheet_shortcut
 from composite_export import export_parts
-from normal_search import add_to_stack
 import pdf_catalog
 from part_rules import DEFAULT_RULES
 from update_age import format_updated
@@ -18,6 +17,8 @@ from composite_rows import CompositeRows
 
 SHOW_PDF_PREVIEW = 'PDFプレビューを表示'
 HIDE_PDF_PREVIEW = 'PDFプレビューを閉じる'
+PDF_CANDIDATE_HEIGHT = 44
+VISIBLE_PDF_CANDIDATES = 3
 
 
 class CompositeMode(CompositeRows):
@@ -40,7 +41,9 @@ class CompositeMode(CompositeRows):
         self.preview_generation = 0
         self.preview_group = None
         self.preview_lock = asyncio.Lock()
-        self.pdf_selection = set()
+        self.candidate_index = None
+        self.navigating_candidates = False
+        self.opening_candidate = False
         self.index_label = ft.Text(size=12, max_lines=3, overflow=ft.TextOverflow.ELLIPSIS)
         self.sync_status = ft.Text(size=12, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
         self.refresh_index_label()
@@ -65,7 +68,7 @@ class CompositeMode(CompositeRows):
         self.search_controls = ft.Column([ft.Row([self.query]), ft.Row([self.exclude])], spacing=6, expand=True)
         self.count = ft.Text()
         self.preview_button = ft.OutlinedButton(SHOW_PDF_PREVIEW, on_click=self.toggle_preview)
-        self.preview_hint = ft.Text('カーソルで上下移動', size=12, visible=False)
+        self.preview_hint = ft.Text('↑↓ 部品', size=12, visible=False)
         self.result_tab = ft.Tab(label='検索結果')
         self.stock_tab = ft.Tab(label='部品ストック')
         self.add_button = ft.Button('部品ストックへ追加', on_click=self.add_selected)
@@ -78,9 +81,9 @@ class CompositeMode(CompositeRows):
         self.list = ft.ListView(expand=True, spacing=0, build_controls_on_demand=True)
         self.image = ft.Image(src='', fit=ft.BoxFit.CONTAIN, width=400, expand=True, visible=False)
         self.preview_label = ft.Text('↑↓でプレビューする部品を移動できます', selectable=True)
-        self.candidates = ft.ListView(height=160, spacing=0)
+        self.candidates = ft.ListView(height=0, spacing=0, padding=0, visible=False)
         self.preview_panel = ft.Container(ft.Column([
-            self.preview_label, self.candidates, ft.Button('選択PDFをPDFストックへ追加', on_click=self.add_pdfs), self.image,
+            self.preview_label, self.candidates, self.image,
         ], expand=True), width=420, padding=8, bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, visible=False)
         self.init_rows()
         self.render()
@@ -123,6 +126,9 @@ class CompositeMode(CompositeRows):
         self.render()
 
     def activate(self, active):
+        if not active and self.preview_panel.visible:
+            self.close_preview()
+            self.resize_rows()
         self.view.visible = active
         self.preview_generation += 1
         if active:
@@ -371,12 +377,16 @@ class CompositeMode(CompositeRows):
     def clear_preview(self):
         self.preview_generation += 1
         self.preview_group = None
-        self.pdf_selection.clear()
+        self.candidate_index = None
+        self.navigating_candidates = False
         self.candidates.controls = []
+        self.candidates.visible = False
+        self.preview_hint.value = '↑↓ 部品'
         self.image.visible = False
         self.preview_label.value = '↑↓でプレビューする部品を移動できます'
 
     def close_preview(self):
+        self.navigation_sequence += 1
         self.preview_panel.visible = False
         self.preview_button.content = SHOW_PDF_PREVIEW
         self.preview_hint.visible = False
@@ -409,8 +419,8 @@ class CompositeMode(CompositeRows):
         if self.preview_group is None and self.groups():
             group = self.first_visible_group()
             await self.show_candidates(group)
-        elif self.preview_group and not self.image.visible and self.preview_group['pdfs']:
-            await self.preview(self.preview_group['pdfs'][0])
+        elif self.candidate_index is not None and not self.image.visible:
+            await self.preview(self.preview_group['pdfs'][self.candidate_index])
 
     async def show_candidates(self, group):
         if self.normal.busy():
@@ -422,28 +432,72 @@ class CompositeMode(CompositeRows):
         self.preview_button.content = HIDE_PDF_PREVIEW
         self.preview_hint.visible = True
         self.preview_label.value = group['identifier'] + ' / ' + group['material'] + ' / ' + group['pdf_status']
-        self.candidates.height = min(132, max(44, 44 * len(group['pdfs'])))
-        for path in group['pdfs']:
-            def check(event, path=path):
-                if event.control.value:
-                    self.pdf_selection.add(path)
-                else:
-                    self.pdf_selection.discard(path)
-                self.page.run_task(self.focus_navigation)
-            async def show(event, path=path):
-                await self.preview(path)
-                await self.focus_navigation()
+        paths = group['pdfs']
+        self.candidates.visible = bool(paths)
+        self.candidates.height = PDF_CANDIDATE_HEIGHT * min(VISIBLE_PDF_CANDIDATES, len(paths))
+        for index, path in enumerate(paths):
+            async def show(event, index=index):
+                if self.preview_group is group and not self.normal.busy():
+                    self.set_candidate_navigation(len(paths) > 1)
+                    self.page.run_task(self.focus_navigation)
+                    await self.select_candidate(index)
             async def launch(event, path=path):
                 await self.normal.open_pdf(path, False)
                 await self.focus_navigation()
-            self.candidates.controls.append(ft.Row([ft.Checkbox(on_change=check),
-                ft.TextButton(Path(path).name, tooltip=path, on_click=show, expand=True),
-                ft.IconButton(ft.Icons.OPEN_IN_NEW, tooltip='PDFを開く', on_click=launch)]))
+            name = ft.Text(Path(path).name, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+            self.candidates.controls.append(ft.Container(ft.Row([
+                ft.TextButton(name, tooltip=path, on_click=show, expand=True),
+                ft.IconButton(ft.Icons.OPEN_IN_NEW, tooltip='PDFを開く', on_click=launch),
+            ]), height=PDF_CANDIDATE_HEIGHT, border_radius=4))
         self.resize_rows()
         self.highlight_active()
-        self.page.update()
-        if group['pdfs']:
-            await self.preview(group['pdfs'][0])
+        if paths:
+            self.set_candidate_navigation(False)
+            await self.select_candidate(0)
+        else:
+            self.page.update()
+
+    def set_candidate_navigation(self, active):
+        self.navigating_candidates = active
+        multiple = self.preview_group and len(self.preview_group['pdfs']) > 1
+        movement = ('↑↓ PDF候補 ｜ ← 部品へ' if active else
+                    '↑↓ 部品 ｜ → PDF候補へ' if multiple else '↑↓ 部品')
+        self.preview_hint.value = movement + ' ｜ Enter PDFを開く'
+        self.highlight_candidate()
+
+    async def open_selected_candidate(self):
+        if self.opening_candidate or self.candidate_index is None:
+            return
+        if self.preview_group['key'] != self.active_key:
+            return
+        path = self.preview_group['pdfs'][self.candidate_index]
+        self.opening_candidate = True
+        self.navigation_sequence += 1
+        try:
+            await self.normal.open_pdf(path, False)
+        finally:
+            self.opening_candidate = False
+
+    def highlight_candidate(self):
+        color = ft.Colors.PRIMARY_CONTAINER if self.navigating_candidates else ft.Colors.SECONDARY_CONTAINER
+        for index, row in enumerate(self.candidates.controls):
+            row.bgcolor = color if index == self.candidate_index else None
+
+    async def select_candidate(self, index):
+        group = self.preview_group
+        if index == self.candidate_index:
+            self.page.update()
+            return
+        self.candidate_index = index
+        self.highlight_candidate()
+        if len(group['pdfs']) > VISIBLE_PDF_CANDIDATES:
+            self.page.run_task(self.scroll_to_candidate, group, index)
+        await self.preview(group['pdfs'][index])
+
+    async def scroll_to_candidate(self, group, index):
+        if self.preview_group is group and self.candidate_index == index and self.view.visible:
+            first = max(0, index - VISIBLE_PDF_CANDIDATES + 1)
+            await self.candidates.scroll_to(offset=first * PDF_CANDIDATE_HEIGHT)
 
     async def preview(self, path):
         self.preview_generation += 1
@@ -464,16 +518,6 @@ class CompositeMode(CompositeRows):
             if generation == self.preview_generation:
                 self.preview_label.value = f'プレビューできません：{exc}'
         self.page.update()
-
-    async def add_pdfs(self, event=None):
-        if self.normal.busy():
-            return
-        if not self.pdf_selection:
-            self.message('PDF候補のチェックを付けてください')
-            return
-        paths = [p for p in self.preview_group['pdfs'] if p in self.pdf_selection]
-        if await self.normal.commit(add_to_stack(self.normal.items, paths)):
-            self.message(f'{len(paths)}件をPDFストックへ追加しました。「PDFファイル名」モードで結合出力できます')
 
     async def open_occurrence(self, occurrence):
         if self.normal.busy():

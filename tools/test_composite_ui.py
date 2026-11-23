@@ -79,11 +79,42 @@ async def exercise(scope, destination):
     composite.toggle_preview()
     assert not composite.preview_panel.visible and composite.items == before and composite.selection == selection
     await composite.show_candidates(group)
-    composite.pdf_selection.add(group['pdfs'][1])
-    await composite.add_pdfs()
-    assert len(normal.items) == 1 and normal.items[0]['path'] == group['pdfs'][1]
+    original_stock = deepcopy(normal.items)
+    assert composite.candidate_index == 0 and not composite.navigating_candidates
+    await composite.navigate_key(SimpleNamespace(key='Arrow Right'))
+    assert composite.navigating_candidates
+    await composite.navigate_key(SimpleNamespace(key='ArrowDown'))
+    assert composite.active_key == group['key'] and composite.candidate_index == 1
+    assert composite.preview_label.value == Path(group['pdfs'][1]).name
+    await composite.navigate_key(SimpleNamespace(key='Arrow Down'))
+    assert composite.candidate_index == 1
+    await composite.navigate_key(SimpleNamespace(key='ArrowUp'))
+    assert composite.candidate_index == 0
+    await composite.navigate_key(SimpleNamespace(key='ArrowLeft'))
+    assert not composite.navigating_candidates and composite.active_key == group['key']
+    second_row = composite.candidates.controls[1]
+    await second_row.content.controls[0].on_click(None)
+    assert composite.candidate_index == 1 and composite.navigating_candidates
+    assert normal.items == original_stock and composite.selection == selection
+    import flet as ft
+    with patch.object(scope['external_url_launcher'], 'launch_url', new_callable=AsyncMock) as launch:
+        await composite.navigate_key(SimpleNamespace(key='Enter'))
+        launch.assert_awaited_once_with(Path(group['pdfs'][1]).as_uri(), mode=ft.LaunchMode.EXTERNAL_APPLICATION)
+    await composite.show_candidates(dict(group, pdfs=group['pdfs'][:1]))
+    await composite.navigate_key(SimpleNamespace(key='ArrowRight'))
+    assert composite.candidate_index == 0 and not composite.navigating_candidates
+    with patch.object(normal, 'open_pdf', new_callable=AsyncMock) as open_pdf:
+        await composite.navigate_key(SimpleNamespace(key='Enter'))
+        open_pdf.assert_awaited_once_with(group['pdfs'][0], False)
+    scope['mode_dropdown'].value = 'PDFファイル名'
+    scope['on_mode_change'](None)
+    scope['mode_dropdown'].value = '複合'
+    scope['on_mode_change'](None)
+    assert not composite.preview_panel.visible and composite.active_key is None
+    assert composite.heading_assy.visible
     composite.show_stock()
     assert composite.tabs.selected_index == 1 and not composite.preview_panel.visible
+    assert composite.candidate_index is None and not composite.navigating_candidates
     old_selection = [i["selected"] for i in composite.items]
     await composite.invert_selection()
     assert [i["selected"] for i in composite.items] == [not x for x in old_selection]
@@ -136,6 +167,11 @@ async def exercise(scope, destination):
     composite.navigation_focused = True
     await scope['page'].on_keyboard_event(SimpleNamespace(key='Arrow Down'))
     assert composite.active_key == '2'
+    with patch.object(composite, 'navigate_key', new_callable=AsyncMock) as repeated:
+        holding = iter([True, True, False])
+        await composite.repeat_navigation(SimpleNamespace(key='Arrow Down'),
+            composite.navigation_sequence, lambda: next(holding))
+        assert repeated.await_count == 2
     await composite.activate_row('1499',scroll=True)
     composite.list.scroll_to.assert_awaited()
     assert row_ids == [id(row) for row in composite.list.controls]
@@ -186,12 +222,14 @@ async def exercise(scope, destination):
     assert '取得' in composite.sync_status.value
     await serialized_row_lifecycle(destination)
     return ['composite grouping and filters', 'part stock persistence', 'multiple PDF links',
-            'preview toggle', 'PDF stock bridge', '1500 parts select all', 'source sheet dispatch',
+            'preview toggle', 'PDF candidate keyboard and mouse navigation', '1500 parts select all', 'source sheet dispatch',
             'row reuse on selection and preview toggle', 'keyboard navigation preserves selection',
             'late preview discarded after close', 'distinct workbook ASSY links',
             'serialized row rebuilds remain mutable', 'closed preview clears keyboard target',
             'nanosecond workbook date display', 'research resets preview',
-            'dialog restores status', 'visible top row selection', 'navigation focus routing']
+            'dialog restores status', 'visible top row selection', 'navigation focus routing',
+            'preview closes across modes', 'Enter opens selected PDF in external app',
+            'held arrow stops on release']
 
 
 async def serialized_row_lifecycle(destination):

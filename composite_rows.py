@@ -2,7 +2,9 @@
 from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
+import asyncio
 import inspect
+import sys
 import flet as ft
 
 
@@ -26,6 +28,7 @@ class CompositeRows:
         # Page observes hardware keys even when the focused field consumes them;
         # route only while this neutral target owns focus, never while editing.
         self.navigation_focused = False
+        self.navigation_sequence = 0
         self.key_target = ft.TextField(value='', read_only=True, ignore_up_down_keys=True,
             enable_interactive_selection=False, width=1, height=1, opacity=0,
             border=ft.InputBorder.NONE, content_padding=0,
@@ -34,6 +37,12 @@ class CompositeRows:
         previous_keyboard_handler = self.page.on_keyboard_event
         async def route_key(event):
             if self.view.visible and self.navigation_focused:
+                self.navigation_sequence += 1
+                sequence = self.navigation_sequence
+                if self.can_navigate() and event.key.replace(' ', '') in ('ArrowUp', 'ArrowDown'):
+                    held = self.held_vertical_key(event)
+                    if held:
+                        self.page.run_task(self.repeat_navigation, event, sequence, held)
                 await self.navigate_key(event)
             elif previous_keyboard_handler:
                 result = previous_keyboard_handler(event)
@@ -272,10 +281,30 @@ class CompositeRows:
                 await self.show_candidates(group)
 
     async def navigate_key(self, event):
-        if not self.view.visible or not self.preview_panel.visible or self.normal.busy():
+        if not self.can_navigate():
             return
-        direction = {'Arrow Down':1,'ArrowDown':1,'Arrow Up':-1,'ArrowUp':-1}.get(event.key)
+        arrow = event.key.replace(' ', '')
+        if arrow in ('Enter', 'NumpadEnter'):
+            await self.open_selected_candidate()
+            return
+        if arrow == 'ArrowRight':
+            group = self.preview_group
+            if group and group['key'] == self.active_key and len(group['pdfs']) > 1:
+                self.set_candidate_navigation(True)
+                self.page.update()
+            return
+        if arrow == 'ArrowLeft':
+            if self.navigating_candidates:
+                self.set_candidate_navigation(False)
+                self.page.update()
+            return
+        direction = {'ArrowDown': 1, 'ArrowUp': -1}.get(arrow)
         if direction is None:
+            return
+        if self.navigating_candidates:
+            last = len(self.preview_group['pdfs']) - 1
+            index = max(0, min(last, self.candidate_index + direction))
+            await self.select_candidate(index)
             return
         keys = [g['key'] for g in self.groups()]
         if not keys:
@@ -284,3 +313,33 @@ class CompositeRows:
         key = keys[max(0,min(len(keys)-1,index+direction))]
         if key != self.active_key:
             await self.activate_row(key,scroll=True)
+
+    def can_navigate(self):
+        return (self.view.visible and self.preview_panel.visible and not self.opening_candidate
+                and not self.normal.busy())
+
+    def held_vertical_key(self, event):
+        # Flet Page sends the initial keydown but omits OS key-repeat events.
+        # Check only the pressed arrow, while this Flet window is foreground.
+        if sys.platform != 'win32':
+            return None
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        foreground = user32.GetForegroundWindow
+        foreground.restype = wintypes.HWND
+        hwnd = foreground()
+        title = ctypes.create_unicode_buffer(256)
+        if not hwnd or not user32.GetWindowTextW(wintypes.HWND(hwnd), title, len(title)):
+            return None
+        if title.value != self.page.title:
+            return None
+        arrow = 0x26 if event.key.replace(' ', '') == 'ArrowUp' else 0x28
+        return lambda: foreground() == hwnd and bool(user32.GetAsyncKeyState(arrow) & 0x8000)
+
+    async def repeat_navigation(self, event, sequence, held):
+        await asyncio.sleep(0.4)
+        while (sequence == self.navigation_sequence and self.can_navigate()
+               and self.navigation_focused and held()):
+            await self.navigate_key(event)
+            await asyncio.sleep(0.075)
