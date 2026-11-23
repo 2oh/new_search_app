@@ -165,7 +165,8 @@ class Catalog:
                 groups[key] = dict(key=key, name=self.names.get(key, '品名未登録'), identifier=row['identifier'],
                                    material=row['material'], keyword=row['keyword'], occurrences=[], pdfs=[], pdf_status='PDF索引未取得')
             occurrence = dict(path=str(Path(self.info['root']) / row['path']), sheet=row['sheet'],
-                              product_id=row['product_id'], name=str(row['name'] or ''), row=row['row_number'])
+                              product_id=row['product_id'], name=str(row['name'] or ''), row=row['row_number'],
+                              mtime=row['mtime'])
             if occurrence not in groups[key]['occurrences']:
                 groups[key]['occurrences'].append(occurrence)
         return sorted(groups.values(), key=lambda item: (item['identifier'], item['material'], item['key']))

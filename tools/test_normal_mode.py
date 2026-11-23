@@ -95,9 +95,10 @@ async def run(root):
                 with patch.object(normal.publish_picker, 'get_directory_path', new_callable=AsyncMock, return_value=None) as picker:
                     await normal.pick_publish()
                     picker.assert_awaited_once_with(initial_directory=str(publication))
-                scope['theme_picker'].value = 'monokai'
+                scope['theme_picker'].value = 'light'
                 scope['change_theme'](None)
-                assert json.loads(Path('config.json').read_text(encoding='utf-8'))['theme_mode'] == 'monokai'
+                assert json.loads(Path('config.json').read_text(encoding='utf-8'))['theme_mode'] == 'light'
+                assert page.dark_theme is not None  # avoid inheriting the light color scheme
                 scope['theme_picker'].value = 'dark'
                 scope['change_theme'](None)
                 await normal.sync_index()
@@ -124,7 +125,10 @@ async def run(root):
                 assert normal.root_field.label == 'PDF検索先フォルダ'
                 assert scope['output_folder_field'].label == 'PDF出力先フォルダ'
                 assert normal.publish_button.content == 'フォルダを選択'
-                assert scope['reference_actions'].controls == [normal.sync_button, scope['data_settings_button'], scope['exit_button']]
+                assert scope['reference_actions'].controls[0] is scope['data_settings_button']
+                assert scope['reference_actions'].controls[1].controls == [normal.sync_button, scope['exit_button']]
+                assert normal.search_button.height is None and scope['composite_mode'].search_button.height is None
+                assert scope['mode_row'].controls[0].controls[1].height == 48
                 assert scope['settings_action_row'] not in scope['mode_row'].controls
                 assert scope['excel_control_row'] not in scope['mode_row'].controls
                 scope['search_folder_field'].value = str(pdfs)
@@ -209,6 +213,10 @@ async def run(root):
                 await normal.add_selected()
                 assert len(normal.items) == 2
                 assert normal.store.load() == normal.items
+                for row in normal.result_table.rows:
+                    addition = row.cells[-1].content.content
+                    assert addition.controls[0].disabled
+                    assert addition.controls[1].value == 'ストック済'
                 # Selection saves serialize, preserve controls, and never disable the whole view.
                 saved_rows = list(normal.stack_table.rows)
                 with patch.object(normal, 'render', side_effect=AssertionError('selection rebuilt list')), \

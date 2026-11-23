@@ -57,8 +57,15 @@ def add(items, groups):
             item = by_key[group['key']]
             item['name'], item['selected'] = group['name'], True
             for occurrence in group['occurrences']:
-                if occurrence not in item['occurrences']:
+                # Older stock entries lack mtime. Adding the same source again
+                # fills in its snapshot date without creating a duplicate.
+                identity = {k:v for k,v in occurrence.items() if k != 'mtime'}
+                existing = next((o for o in item['occurrences']
+                    if {k:v for k,v in o.items() if k != 'mtime'} == identity), None)
+                if existing is None:
                     item['occurrences'].append(deepcopy(occurrence))
+                elif 'mtime' in occurrence:
+                    existing['mtime'] = occurrence['mtime']
             paths = {path_key(p) for p in item['pdfs']}
             for path in group['pdfs']:
                 if path_key(path) not in paths:

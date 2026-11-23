@@ -14,9 +14,10 @@ from normal_search import add_to_stack
 import pdf_catalog
 from part_rules import DEFAULT_RULES
 from update_age import format_updated
+from composite_rows import CompositeRows
 
 
-class CompositeMode:
+class CompositeMode(CompositeRows):
     def __init__(self, page, normal, *, database=None, stock_path='part_stock.json', rules=DEFAULT_RULES):
         self.page, self.normal = page, normal
         self.rules = rules
@@ -35,6 +36,7 @@ class CompositeMode:
         self.stock_view = False
         self.preview_generation = 0
         self.preview_group = None
+        self.preview_lock = asyncio.Lock()
         self.pdf_selection = set()
         self.index_label = ft.Text(size=12, max_lines=3, overflow=ft.TextOverflow.ELLIPSIS)
         self.sync_status = ft.Text(size=12, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
@@ -43,34 +45,41 @@ class CompositeMode:
         self.exclude = ft.TextField(label='除く文字列', hint_text='いずれかを含む明細を除外', expand=True, on_submit=self.search)
         self.progress = ft.ProgressBar(value=None, visible=False, width=140)
         self.search_button = ft.Button('検索', on_click=self.search)
-        self.folder_button = ft.OutlinedButton('対象フォルダ：すべて', on_click=self.choose_folders)
-        self.sheet_button = ft.OutlinedButton('シート名：すべて', on_click=self.choose_sheets)
-        self.ids = ft.TextField(label='車番', hint_text='1001, 1002', width=170, on_submit=self.search)
+        self.folder_button = ft.OutlinedButton('対象種別：すべて', on_click=self.choose_folders)
+        self.sheet_button = ft.OutlinedButton('対象ASSY：すべて', on_click=self.choose_sheets)
+        self.folder_labels = ft.Row(wrap=True, spacing=4, run_spacing=4, expand=True)
+        self.sheet_labels = ft.Row(wrap=True, spacing=4, run_spacing=4, expand=True)
+        self.folder_button.width = self.sheet_button.width = 170
+        self.ids = ft.TextField(label='車番', hint_text='9999', width=170, on_submit=self.search)
         self.start = ft.TextField(label='Excel更新日・開始', hint_text='YYYY-MM-DD', width=175)
         self.end = ft.TextField(label='Excel更新日・終了', hint_text='YYYY-MM-DD', width=175)
-        self.filters = ft.Row([self.folder_button, self.sheet_button, self.ids, self.start, self.end], wrap=True)
+        self.filters = ft.Container(ft.Column([
+            ft.Row([self.folder_button, self.folder_labels], spacing=8),
+            ft.Row([self.sheet_button, self.sheet_labels], spacing=8),
+            ft.Row([self.ids, self.start, self.end], wrap=True),
+        ], spacing=6), padding=ft.Padding.only(left=210))
         # Filters stay below the entire search/reference row.
         self.search_controls = ft.Column([ft.Row([self.query]), ft.Row([self.exclude])], spacing=6, expand=True)
         self.count = ft.Text()
         self.preview_button = ft.OutlinedButton('プレビューを表示', on_click=self.toggle_preview)
-        self.result_button = ft.TextButton('検索結果', on_click=self.show_results)
-        self.stock_button = ft.TextButton('部品ストック', on_click=self.show_stock)
+        self.preview_hint = ft.Text('カーソルで上下移動', size=12, visible=False)
+        self.result_tab = ft.Tab(label='検索結果')
+        self.stock_tab = ft.Tab(label='部品ストック')
         self.add_button = ft.Button('部品ストックへ追加', on_click=self.add_selected)
         self.remove_button = ft.TextButton('選択部品を削除', on_click=self.remove_selected, visible=False)
         self.export_button = ft.Button('部品一覧Excel出力', on_click=self.export, visible=False)
-        self.toolbar = ft.Row([self.result_button, self.stock_button, self.count,
+        self.toolbar = ft.Row([self.count,
                               ft.TextButton('全選択', on_click=self.select_all), ft.TextButton('全解除', on_click=self.select_none), ft.TextButton('選択を反転', on_click=self.invert_selection),
-                              self.add_button, self.remove_button, self.export_button, self.preview_button], wrap=True)
+                              self.add_button, self.remove_button, self.export_button,
+                              ft.Row([self.preview_button, self.preview_hint], tight=True, spacing=8)], wrap=True)
         self.list = ft.ListView(expand=True, spacing=0, build_controls_on_demand=True)
         self.image = ft.Image(src='', fit=ft.BoxFit.CONTAIN, width=400, expand=True, visible=False)
-        self.preview_label = ft.Text('部品の「PDF候補」を押してください', selectable=True)
+        self.preview_label = ft.Text('↑↓でプレビューする部品を移動できます', selectable=True)
         self.candidates = ft.ListView(height=160, spacing=0)
         self.preview_panel = ft.Container(ft.Column([
             self.preview_label, self.candidates, ft.Button('選択PDFをPDFストックへ追加', on_click=self.add_pdfs), self.image,
         ], expand=True), width=420, padding=8, bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, visible=False)
-        self.list_panel = ft.Column([self.toolbar, self.list], expand=True, spacing=6)
-        self.body = ft.Row([self.list_panel, self.preview_panel], expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
-        self.view = ft.Container(self.body, expand=True, visible=False)
+        self.init_rows()
         self.render()
 
     def message(self, text):
@@ -124,24 +133,46 @@ class CompositeMode:
         return self.catalog
 
     async def choose_folders(self, event=None):
-        await self.choose('folders', '対象フォルダ', self.folder_button)
+        await self.choose('folders', '対象種別', self.folder_button)
 
     async def choose_sheets(self, event=None):
-        await self.choose('sheets', 'シート名', self.sheet_button)
+        await self.choose('sheets', '対象ASSY', self.sheet_button)
+
+    def refresh_filter_labels(self):
+        for attribute, title, button, labels in [
+                ('folders', '対象種別', self.folder_button, self.folder_labels),
+                ('sheets', '対象ASSY', self.sheet_button, self.sheet_labels)]:
+            values = getattr(self, attribute)
+            button.content = f'{title}：{len(values)}件' if values else f'{title}：すべて'
+            def remove(event, attribute=attribute, value=None):
+                if self.normal.busy():
+                    return
+                getattr(self, attribute).discard(value)
+                self.refresh_filter_labels()
+                self.page.update()
+            labels.controls = [ft.Chip(label=ft.Text(value or '（直下）', size=13),
+                on_delete=lambda e, value=value, remove=remove: remove(e, value=value))
+                for value in sorted(values)]
+            labels.visible = bool(values)
 
     async def choose(self, attribute, title, button):
         if self.normal.busy():
             return
+        previous_message = self.normal.message.value
+        failed = False
         self.normal.set_busy(True, '選択肢を読み込んでいます…')
         self.page.update()
         try:
             model = await self.ensure_catalog()
             options = sorted(set(getattr(model, attribute)) | getattr(self, attribute))
         except Exception as exc:
+            failed = True
             self.message(f'構成部品表DBを読み込めません：{exc}')
             return
         finally:
             self.normal.set_busy(False)
+            if not failed:
+                self.normal.message.value = previous_message
             self.page.update()
         checked = set(getattr(self, attribute))
         listing = ft.ListView(height=360, width=520, build_controls_on_demand=True)
@@ -157,7 +188,7 @@ class CompositeMode:
         find = ft.TextField(label='選択肢を絞り込み', on_change=redraw)
         def apply(event):
             setattr(self, attribute, checked)
-            button.content = f'{title}：{len(checked)}件' if checked else f'{title}：すべて'
+            self.refresh_filter_labels()
             self.page.pop_dialog()
             self.page.update()
         def reset(event):
@@ -172,6 +203,7 @@ class CompositeMode:
     async def search(self, event=None):
         if self.normal.busy():
             return
+        self.close_preview()
         self.progress.visible = True
         self.progress.value = None
         self.normal.set_busy(True, '構成部品表DBを読み込んでいます…')
@@ -194,7 +226,11 @@ class CompositeMode:
                 return groups, warning
             self.results, warning = await self.run_search_worker(run)
             self.selection = set()
+            self.active_key = None
+            self.expanded_keys.clear()
             self.stock_view = False
+            self.tabs.selected_index = 0
+            self.scroll_offset = 0
             self.clear_preview()
             self.render()
             self.message(f'検索結果：{len(self.results)}部品' + (f' / {warning}' if warning else ''))
@@ -204,6 +240,9 @@ class CompositeMode:
             self.progress.visible = False
             self.normal.set_busy(False)
             self.page.update()
+            if self.view.visible:
+                await self.list.scroll_to(offset=0)
+                await self.focus_navigation()
 
     async def run_search_worker(self, worker):
         import queue
@@ -231,15 +270,31 @@ class CompositeMode:
 
     def show_results(self, event=None):
         self.stock_view = False
-        self.clear_preview()
+        self.tabs.selected_index = 0
+        self.close_preview()
         self.render()
         self.page.update()
 
     def show_stock(self, event=None):
         self.stock_view = True
-        self.clear_preview()
+        self.tabs.selected_index = 1
+        self.close_preview()
         self.render()
         self.page.update()
+
+    def on_tab_change(self, event=None):
+        if self.normal.busy():
+            return
+        if self.tabs.selected_index == 1:
+            self.show_stock()
+        else:
+            self.show_results()
+        self.scroll_offset = 0
+        self.page.run_task(self.reset_list_focus)
+
+    async def reset_list_focus(self):
+        await self.list.scroll_to(offset=0)
+        await self.focus_navigation()
 
     async def commit(self, items):
         if self.load_error:
@@ -251,10 +306,11 @@ class CompositeMode:
             self.items = items
             self.render()
             self.page.update()
-            return True
         except Exception as exc:
             self.message(f'部品ストックを保存できません：{exc}')
             return False
+        await self.focus_navigation()
+        return True
 
     async def add_selected(self, event=None):
         if self.normal.busy():
@@ -286,6 +342,8 @@ class CompositeMode:
             self.render()
             self.page.update()
 
+        await self.focus_navigation()
+
     async def remove_selected(self, event=None):
         if self.normal.busy():
             return
@@ -307,83 +365,58 @@ class CompositeMode:
             items[index], items[other] = items[other], items[index]
             await self.commit(items)
 
-    def render(self):
-        groups = self.items if self.stock_view else self.results
-        selected = sum(i['selected'] for i in self.items) if self.stock_view else len(self.selection)
-        self.count.value = f'{len(groups)}部品 / 選択 {selected}部品'
-        self.stock_button.content = f'部品ストック（{len(self.items)}）'
-        self.add_button.visible = not self.stock_view
-        self.remove_button.visible = self.export_button.visible = self.stock_view
-        compact = self.preview_panel.visible
-        rows = []
-        for group in groups:
-            key = group['key']
-            async def check(event, key=key):
-                if self.normal.busy():
-                    return
-                if self.stock_view:
-                    await self.commit([dict(i, selected=bool(event.control.value)) if i['key'] == key else dict(i) for i in self.items])
-                else:
-                    if event.control.value:
-                        self.selection.add(key)
-                    else:
-                        self.selection.discard(key)
-                    self.count.value = f'{len(self.results)}部品 / 選択 {len(self.selection)}部品'
-                    self.page.update()
-            async def preview(event, group=group):
-                await self.show_candidates(group)
-            async def up(event, key=key):
-                await self.move(key, -1)
-            async def down(event, key=key):
-                await self.move(key, 1)
-            identity = ft.Column([ft.Text(group['identifier'] or '番号なし', weight=ft.FontWeight.BOLD, selectable=True),
-                                  ft.Text('材料：' + (group['material'] or '未記載'), selectable=True)], width=180)
-            columns = [ft.Checkbox(value=group['selected'] if self.stock_view else key in self.selection, on_change=check),
-                       identity, ft.Text(group['name'], expand=True, selectable=True),
-                       ft.TextButton('PDF候補：' + group['pdf_status'], on_click=preview)]
-            if self.stock_view:
-                columns += [ft.IconButton(ft.Icons.ARROW_UPWARD, tooltip='上へ', on_click=up),
-                            ft.IconButton(ft.Icons.ARROW_DOWNWARD, tooltip='下へ', on_click=down)]
-            controls = [ft.Row(columns, vertical_alignment=ft.CrossAxisAlignment.START)]
-            if not compact:
-                links, seen = [], set()
-                for occurrence in group['occurrences']:
-                    source = (occurrence['path'], occurrence['sheet'])
-                    if source in seen:
-                        continue
-                    seen.add(source)
-                    async def launch(event, occurrence=occurrence):
-                        await self.open_occurrence(occurrence)
-                    label = (occurrence['product_id'] or Path(occurrence['path']).name) + ' / ' + occurrence['sheet']
-                    links.append(ft.TextButton(label, on_click=launch))
-                controls.append(ft.Row([ft.Text('使用ASSY：')] + links, wrap=True, spacing=4))
-            controls.append(ft.Divider(height=1))
-            rows.append(ft.Container(ft.Column(controls, spacing=2), padding=6))
-        self.list.controls = rows
-
     def clear_preview(self):
         self.preview_generation += 1
         self.preview_group = None
         self.pdf_selection.clear()
         self.candidates.controls = []
         self.image.visible = False
-        self.preview_label.value = '部品の「PDF候補」を押してください'
+        self.preview_label.value = '↑↓でプレビューする部品を移動できます'
+
+    def close_preview(self):
+        self.preview_panel.visible = False
+        self.preview_button.content = 'プレビューを表示'
+        self.preview_hint.visible = False
+        self.clear_preview()
+        self.active_key = None
+        self.highlight_active()
 
     def toggle_preview(self, event=None):
+        if self.normal.busy():
+            return
         self.preview_panel.visible = not self.preview_panel.visible
         self.preview_button.content = 'プレビューを閉じる' if self.preview_panel.visible else 'プレビューを表示'
         if not self.preview_panel.visible:
-            self.preview_generation += 1
-        self.render()
+            self.close_preview()
+        self.preview_hint.visible = self.preview_panel.visible
+        self.resize_rows()
         self.page.update()
+        if self.preview_panel.visible:
+            self.page.run_task(self.open_preview, self.preview_generation)
+        else:
+            self.page.run_task(self.focus_navigation)
+
+    async def open_preview(self, generation):
+        if generation != self.preview_generation or not self.preview_panel.visible or not self.view.visible:
+            return
+        await self.focus_navigation()
+        if generation != self.preview_generation or not self.preview_panel.visible or not self.view.visible:
+            return
+        if self.preview_group is None and self.groups():
+            group = self.first_visible_group()
+            await self.show_candidates(group)
+        elif self.preview_group and not self.image.visible and self.preview_group['pdfs']:
+            await self.preview(self.preview_group['pdfs'][0])
 
     async def show_candidates(self, group):
         if self.normal.busy():
             return
         self.clear_preview()
         self.preview_group = group
+        self.active_key = group['key']
         self.preview_panel.visible = True
         self.preview_button.content = 'プレビューを閉じる'
+        self.preview_hint.visible = True
         self.preview_label.value = group['identifier'] + ' / ' + group['material'] + ' / ' + group['pdf_status']
         self.candidates.height = min(132, max(44, 44 * len(group['pdfs'])))
         for path in group['pdfs']:
@@ -392,14 +425,18 @@ class CompositeMode:
                     self.pdf_selection.add(path)
                 else:
                     self.pdf_selection.discard(path)
+                self.page.run_task(self.focus_navigation)
             async def show(event, path=path):
                 await self.preview(path)
+                await self.focus_navigation()
             async def launch(event, path=path):
                 await self.normal.open_pdf(path, False)
+                await self.focus_navigation()
             self.candidates.controls.append(ft.Row([ft.Checkbox(on_change=check),
                 ft.TextButton(Path(path).name, tooltip=path, on_click=show, expand=True),
                 ft.IconButton(ft.Icons.OPEN_IN_NEW, tooltip='PDFを開く', on_click=launch)]))
-        self.render()
+        self.resize_rows()
+        self.highlight_active()
         self.page.update()
         if group['pdfs']:
             await self.preview(group['pdfs'][0])
@@ -411,7 +448,10 @@ class CompositeMode:
         self.preview_label.value = f'読込中：{Path(path).name}'
         self.page.update()
         try:
-            source = await asyncio.to_thread(self.normal.make_preview, path)
+            async with self.preview_lock:
+                if generation != self.preview_generation:
+                    return
+                source = await asyncio.to_thread(self.normal.make_preview, path)
             if generation == self.preview_generation and self.preview_panel.visible and self.view.visible:
                 self.image.src = source
                 self.image.visible = True

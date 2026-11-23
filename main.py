@@ -27,7 +27,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.4.3"
+APP_VERSION = "v1.4.4"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -996,7 +996,8 @@ def main(page: ft.Page):
         indicator = composite_mode.progress if composite_active else normal_mode.search_indicator
         mode_row.controls = [
             ft.Column([mode_dropdown] + ([] if bom_active else [ft.Row(
-                [indicator, search_button], alignment=ft.MainAxisAlignment.END, spacing=8)]), spacing=6, width=200),
+                [indicator, search_button], height=48, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                alignment=ft.MainAxisAlignment.END, spacing=8)]), spacing=6, width=200),
             excel_control_row if bom_active else manual_field,
             reference_separator, reference_panel, reference_actions]
         mode_row.vertical_alignment = ft.CrossAxisAlignment.START
@@ -2114,9 +2115,9 @@ def main(page: ft.Page):
 
         def get_header_badge_color(column_name: str):
             color_map = {
-                "出力可否": ft.Colors.BLUE_100,
+                "出力可否": ft.Colors.PRIMARY,
                 "候補確認": ft.Colors.ORANGE_100,
-                "出力対象": ft.Colors.GREEN_100,
+                "出力対象": ft.Colors.SECONDARY,
             }
             return color_map.get(column_name, ft.Colors.GREY_300)
 
@@ -2178,7 +2179,8 @@ def main(page: ft.Page):
                 content=ft.Text(
                     str(count),
                     size=12,
-                    color=ft.Colors.BLACK,
+                    color=(ft.Colors.ON_PRIMARY if column_name == '出力可否' else
+                           ft.Colors.ON_SECONDARY if column_name == '出力対象' else ft.Colors.BLACK),
                     weight=ft.FontWeight.BOLD,
                 ),
                 padding=ft.Padding.symmetric(horizontal=7, vertical=3),
@@ -3986,7 +3988,7 @@ def main(page: ft.Page):
         page.update()
 
     theme_picker = ft.Dropdown(label='テーマ', value=config.get('theme_mode', 'dark'), width=220,
-        options=[ft.DropdownOption('dark', 'ダーク'), ft.DropdownOption('monokai', 'Monokai')], on_select=change_theme)
+        options=[ft.DropdownOption('dark', 'ダーク'), ft.DropdownOption('light', 'ライト')], on_select=change_theme)
     def open_data_settings(e=None):
         if pdf_action_state['processing']:
             return
@@ -4012,7 +4014,9 @@ def main(page: ft.Page):
                 ft.Text('PDF索引と構成部品表DBの共通配信元です。変更後は最新データ取得を実行してください。', size=12),
                 ft.Divider(), theme_picker], tight=True, spacing=12, scroll=ft.ScrollMode.AUTO)),
             actions=[ft.TextButton('閉じる', on_click=close_settings)]))
-    data_settings_button = ft.OutlinedButton('設定', on_click=open_data_settings)
+    data_settings_button = ft.OutlinedButton('設定', icon=ft.Icons.SETTINGS_OUTLINED, on_click=open_data_settings, width=112, height=36)
+    exit_button.width = 112
+    exit_button.height = 36
     reference_data = ReferenceData(page, normal_mode, composite_mode, BUTTON_STYLE_WARNING)
     normal_mode.on_sync_finished = reference_data.refresh
     normal_mode.on_sync_started = reference_data.invalidate
@@ -4022,7 +4026,9 @@ def main(page: ft.Page):
     normal_mode.save_publish = save_reference_folder
     reference_panel = ft.Container(reference_data.view, width=460)
     reference_separator = ft.Container(ft.VerticalDivider(width=12, thickness=1), height=112, width=12)
-    reference_actions = ft.Column([normal_mode.sync_button, data_settings_button, exit_button], width=144, spacing=4,
+    normal_mode.sync_button.height = 36
+    reference_actions = ft.Column([data_settings_button,
+        ft.Row([normal_mode.sync_button, exit_button], spacing=8, alignment=ft.MainAxisAlignment.END)], width=260, spacing=4,
         horizontal_alignment=ft.CrossAxisAlignment.END)
     folder_settings_row.controls[0] = normal_mode.root_display
 
@@ -4110,7 +4116,11 @@ def main(page: ft.Page):
             normal_mode.resize()
             page.update()
             return
-        if mode_dropdown.value == "複合" or pdf_action_state["processing"]:
+        if mode_dropdown.value == "複合":
+            composite_mode.resize_rows()
+            page.update()
+            return
+        if pdf_action_state["processing"]:
             page.update()
             return
         changed = update_hover_preview_visibility()

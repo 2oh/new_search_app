@@ -99,6 +99,20 @@ class CompositeTests(unittest.TestCase):
         pdf_catalog.save_json(folder/'latest.json',manifest)
         with self.assertRaises(ValueError): catalog.sync(folder,local)
 
+    def test_stock_snapshot_date_backward_compatibility(self):
+        groups = self.catalog.search(ids='0001', contains='SS400')
+        legacy = deepcopy(groups)
+        for group in legacy:
+            for occurrence in group['occurrences']:
+                occurrence.pop('mtime')
+        items = stock.add([], legacy)
+        count = len(items[0]['occurrences'])
+        updated = stock.add(items, groups)
+        self.assertEqual(len(updated[0]['occurrences']), count)
+        self.assertTrue(all(o['mtime'] for o in updated[0]['occurrences']))
+        stock.save(self.root/'stock.json', updated)
+        self.assertEqual(stock.load(self.root/'stock.json'), updated)
+
 
 if __name__ == '__main__':
     unittest.main()

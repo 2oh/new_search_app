@@ -312,12 +312,12 @@ class NormalMode:
             self.page.run_task(self.focus)
 
     @staticmethod
-    def header(label, count=None, color=ft.Colors.GREEN_100):
+    def header(label, count=None, color=ft.Colors.SECONDARY):
         title = ft.Text(label, size=12, weight=ft.FontWeight.BOLD)
         if count is None:
             return title
         return ft.Row([title, ft.Container(ft.Text(str(count), size=12,
-            color=ft.Colors.BLACK, weight=ft.FontWeight.BOLD),
+            color=ft.Colors.ON_SECONDARY if color == ft.Colors.SECONDARY else ft.Colors.ON_PRIMARY, weight=ft.FontWeight.BOLD),
             padding=ft.Padding.symmetric(horizontal=7, vertical=3), border_radius=12,
             bgcolor=color)], spacing=4, alignment=ft.MainAxisAlignment.CENTER)
 
@@ -334,8 +334,8 @@ class NormalMode:
         output_count = sum(i['selected'] for i in self.items)
         self.result_count.value = f'検索結果：{len(self.results)}件'
         self.stack_count.value = f'ストック：{len(self.items)}件'
-        self.result_tab.label = self.header('検索結果', len(self.results), ft.Colors.BLUE_100)
-        self.stack_tab.label = self.header('ストック', len(self.items), ft.Colors.BLUE_100)
+        self.result_tab.label = self.header('検索結果', len(self.results), ft.Colors.PRIMARY)
+        self.stack_tab.label = self.header('ストック', len(self.items), ft.Colors.PRIMARY)
         self.export_button.disabled = self.busy() or self.pending_selection > 0 or not output_count or bool(self.load_error)
         self.open_button.disabled = self.export_button.disabled
         available_width = (max(1200, (self.page.width or 1200) - 400) if self.wide
@@ -354,7 +354,7 @@ class NormalMode:
             table.min_width = sum(width or (180 if self.wide else 360) for _, width in columns) + 16
             table.columns = [dt2.DataColumn2(self.header(label,
                 (output_count if is_stack else len(self.selection)) if index == len(columns)-1 else None,
-                ft.Colors.GREEN_100 if is_stack else ft.Colors.BLUE_100), fixed_width=width)
+                ft.Colors.SECONDARY if is_stack else ft.Colors.PRIMARY), fixed_width=width)
                 for index, (label, width) in enumerate(columns)]
             rows = []
             for number, item in enumerate(items, 1):
@@ -392,7 +392,7 @@ class NormalMode:
                         self.clear_preview()
                         self.page.update()
                 label = Path(path).name
-                status = '（追加済み）' if not is_stack and key in stacked else ''
+                status = '（ストック済）' if not is_stack and key in stacked else ''
                 if meta.get('available') is False:
                     status += '（参照不可）'
                 def link(value, click, color, tooltip, lines=1):
@@ -416,7 +416,12 @@ class NormalMode:
                     cells.append(centered(ft.IconButton(icon=ft.Icons.DELETE_OUTLINE,
                         icon_color=ft.Colors.ORANGE_300, tooltip='ストックから削除',
                         on_click=remove, disabled=bool(self.load_error))))
-                cells.append(centered(checkbox))
+                if not is_stack and key in stacked:
+                    checkbox.tooltip = '既にPDFストックに登録済みです。ストック側で選択・出力できます。'
+                    cells.append(centered(ft.Column([checkbox, ft.Text('ストック済', size=12, color=ft.Colors.PRIMARY)],
+                        spacing=0, tight=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)))
+                else:
+                    cells.append(centered(checkbox))
                 rows.append(ft.DataRow(cells=cells))
             table.rows = rows
 
@@ -467,7 +472,7 @@ class NormalMode:
             if table.columns:
                 table.columns[-1].label = self.header('選択' if is_stack else '追加',
                     count if is_stack else len(self.selection),
-                    ft.Colors.GREEN_100 if is_stack else ft.Colors.BLUE_100)
+                    ft.Colors.SECONDARY if is_stack else ft.Colors.PRIMARY)
 
     async def save_selection(self, value, key=None):
         if self.busy() or self.load_error:
