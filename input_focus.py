@@ -11,6 +11,7 @@ class InputFocus:
         self.saved = None
         self.away = False
         self.generation = 0
+        self.restore_preferred_focus = None
         page.window.on_event = self.window_event
 
     def bind(self, field):
@@ -39,6 +40,8 @@ class InputFocus:
                 return
             self.away = False
             self.saved = None
+            if self.restore_preferred_focus and await self.restore_preferred_focus():
+                return
             if saved:
                 field, value, selected = saved
                 if field is self.active and field.value == value and selected is not None:

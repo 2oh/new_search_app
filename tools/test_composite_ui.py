@@ -45,6 +45,33 @@ async def exercise(scope, destination):
     assert composite.tabs.selected_index == 0
     group = composite.results[0]
     assert len(group['pdfs']) == 2 and group['name'] == 'ブラケット'
+    normal.query.value = '123'
+    await normal.search()
+    previous_pdfs = normal.results
+    assert len(previous_pdfs) == 2
+    previous_rows = normal.result_table.rows
+    for index in range(499):
+        (pdfs / f'extra123-{index}.pdf').touch()
+    pdf_catalog.ingest(pdfs, normal.index_database)
+    await normal.search()
+    assert '500件を超えました' in normal.message.value
+    assert normal.results is previous_pdfs and normal.result_table.rows is previous_rows
+    for path in pdfs.glob('extra*.pdf'):
+        path.unlink()
+    pdf_catalog.ingest(pdfs, normal.index_database)
+    model = composite.catalog
+    baseline_rows = model.rows
+    matching = next(row for row in baseline_rows if row['key'] == group['key'] and row['eligible'])
+    model.rows = [dict(matching, key=str(index)) for index in range(301)]
+    with patch.object(composite_catalog, 'attach_pdfs') as attach:
+        await composite.search()
+        attach.assert_not_called()
+    assert '300部品を超えました' in normal.message.value
+    assert composite.results == [group]
+    model.rows = [*model.rows[:300], matching | {'key': '0', 'row_number': matching['row_number'] + 1}]
+    groups = model.search(contains='SS400', ids='0001', max_results=300)
+    assert len(groups) == 300 and len(next(g for g in groups if g['key'] == '0')['occurrences']) == 2
+    model.rows = baseline_rows
     await composite.select_all()
     await composite.add_selected()
     assert len(composite.items) == 1 and not normal.items
@@ -70,8 +97,27 @@ async def exercise(scope, destination):
     await composite.show_candidates(group)
     assert composite.preview_panel.visible and composite.image.visible
     assert composite.preview_button.content == 'PDFプレビューを閉じる'
+    assert scope['mode_row'].disabled and scope['folder_settings_row'].disabled
+    assert composite.filters.disabled and composite.tab_bar.disabled and composite.list_panel.disabled
+    assert all(action.disabled for action in composite.list_actions)
+    assert not composite.preview_button.disabled and not composite.candidates.disabled
+    assert await scope['input_focus'].restore_preferred_focus()
+    overlay = scope['preview_focus_overlay']
+    assert overlay.visible
+    composite.key_target.focus.reset_mock()
+    await overlay.on_tap(None)
+    composite.key_target.focus.assert_awaited_once()
+    assert composite.preview_panel.width > min(660, max(370, (scope['page'].width or 1400) * .35))
+    composite.tabs.selected_index = 1
+    composite.on_tab_change()
+    assert composite.preview_panel.visible and composite.tabs.selected_index == 0
     await composite.search()
     assert not composite.preview_panel.visible and composite.active_key is None
+    assert not scope['mode_row'].disabled and not composite.filters.disabled and not composite.list_panel.disabled
+    assert not overlay.visible
+    composite.key_target.focus.reset_mock()
+    await overlay.on_tap(None)
+    composite.key_target.focus.assert_not_awaited()
     assert composite.preview_button.content == 'PDFプレビューを表示'
     await composite.show_candidates(group)
     before = deepcopy(composite.items)
@@ -143,14 +189,14 @@ async def exercise(scope, destination):
     await composite.invert_selection()
     assert len(composite.selection) == 1500
     # Row movement changes the preview target, never the output selection.
-    composite.preview_panel.visible = False
+    composite.set_preview_visibility(False)
     composite.active_key = None
     await composite.navigate_key(SimpleNamespace(key='Arrow Down'))
     assert composite.active_key is None
     composite.scroll_offset = composite.list.controls[0].height + 1
     assert composite.first_visible_group()['key'] == '1'
     composite.scroll_offset = 0
-    composite.preview_panel.visible = True
+    composite.set_preview_visibility(True)
     await composite.navigate_key(SimpleNamespace(key='Arrow Down'))
     assert composite.active_key == '0' and len(composite.selection)==1500
     await composite.navigate_key(SimpleNamespace(key='Arrow Down'))
@@ -162,11 +208,13 @@ async def exercise(scope, destination):
     assert composite.active_key == '1'
     composite.view.visible = True
     composite.navigation_focused = False
+    composite.key_target.focus.reset_mock()
     await scope['page'].on_keyboard_event(SimpleNamespace(key='Arrow Down'))
-    assert composite.active_key == '1'  # text fields/dialogs never navigate parts
+    composite.key_target.focus.assert_awaited_once()
+    assert composite.active_key == '2'  # Arrows work after a preview button takes focus.
     composite.navigation_focused = True
     await scope['page'].on_keyboard_event(SimpleNamespace(key='Arrow Down'))
-    assert composite.active_key == '2'
+    assert composite.active_key == '3'
     with patch.object(composite, 'navigate_key', new_callable=AsyncMock) as repeated:
         holding = iter([True, True, False])
         await composite.repeat_navigation(SimpleNamespace(key='Arrow Down'),

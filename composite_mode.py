@@ -14,6 +14,7 @@ import pdf_catalog
 from part_rules import DEFAULT_RULES
 from update_age import format_updated
 from composite_rows import CompositeRows
+from normal_search import SearchLimitExceeded
 
 SHOW_PDF_PREVIEW = 'PDFプレビューを表示'
 HIDE_PDF_PREVIEW = 'PDFプレビューを閉じる'
@@ -44,6 +45,7 @@ class CompositeMode(CompositeRows):
         self.candidate_index = None
         self.navigating_candidates = False
         self.opening_candidate = False
+        self.on_preview_visibility = None
         self.index_label = ft.Text(size=12, max_lines=3, overflow=ft.TextOverflow.ELLIPSIS)
         self.sync_status = ft.Text(size=12, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
         self.refresh_index_label()
@@ -78,6 +80,7 @@ class CompositeMode(CompositeRows):
                               ft.TextButton('全選択', on_click=self.select_all), ft.TextButton('全解除', on_click=self.select_none), ft.TextButton('選択を反転', on_click=self.invert_selection),
                               self.add_button, self.remove_button, self.export_button,
                               ft.Row([self.preview_button, self.preview_hint], tight=True, spacing=8)], wrap=True)
+        self.list_actions = self.toolbar.controls[1:-1]
         self.list = ft.ListView(expand=True, spacing=0, build_controls_on_demand=True)
         self.image = ft.Image(src='', fit=ft.BoxFit.CONTAIN, width=400, expand=True, visible=False)
         self.preview_label = ft.Text('↑↓でプレビューする部品を移動できます', selectable=True)
@@ -217,13 +220,14 @@ class CompositeMode(CompositeRows):
         self.progress.value = None
         self.normal.set_busy(True, '構成部品表DBを読み込んでいます…')
         self.page.update()
+        succeeded = False
         try:
             model = await self.ensure_catalog()
             conditions = dict(contains=self.query.value or '', excludes=self.exclude.value or '',
                               folders=set(self.folders), sheets=set(self.sheets), ids=self.ids.value or '',
                               start=self.start.value or '', end=self.end.value or '')
             def run(report):
-                groups = model.search(**conditions, progress=report)
+                groups = model.search(**conditions, progress=report, max_results=300)
                 report(('PDF索引を読み込んでいます…', None))
                 warning = ''
                 try:
@@ -234,6 +238,7 @@ class CompositeMode(CompositeRows):
                     catalog.attach_pdfs(groups, paths, progress=report)
                 return groups, warning
             self.results, warning = await self.run_search_worker(run)
+            self.message('検索結果を表示しています…')
             self.selection = set()
             self.active_key = None
             self.expanded_keys.clear()
@@ -242,14 +247,17 @@ class CompositeMode(CompositeRows):
             self.scroll_offset = 0
             self.clear_preview()
             self.render()
+            succeeded = True
             self.message(f'検索結果：{len(self.results)}部品' + (f' / {warning}' if warning else ''))
+        except SearchLimitExceeded as exc:
+            self.message(str(exc) + ('（前回の検索結果を保持）' if self.results else ''))
         except Exception as exc:
             self.message(f'検索できません：{exc}')
         finally:
             self.progress.visible = False
             self.normal.set_busy(False)
             self.page.update()
-            if self.view.visible:
+            if self.view.visible and succeeded:
                 await self.list.scroll_to(offset=0)
                 await self.focus_navigation()
 
@@ -292,6 +300,10 @@ class CompositeMode(CompositeRows):
         self.page.update()
 
     def on_tab_change(self, event=None):
+        if self.preview_panel.visible:
+            self.tabs.selected_index = int(self.stock_view)
+            self.page.update()
+            return
         if self.normal.busy():
             return
         if self.tabs.selected_index == 1:
@@ -385,9 +397,21 @@ class CompositeMode(CompositeRows):
         self.image.visible = False
         self.preview_label.value = '↑↓でプレビューする部品を移動できます'
 
+    def set_preview_visibility(self, visible):
+        if self.preview_panel.visible == visible:
+            return
+        self.preview_panel.visible = visible
+        self.filters.disabled = visible
+        self.tab_bar.disabled = visible
+        self.list_panel.disabled = visible
+        for action in self.list_actions:
+            action.disabled = visible
+        if self.on_preview_visibility is not None:
+            self.on_preview_visibility(visible)
+
     def close_preview(self):
         self.navigation_sequence += 1
-        self.preview_panel.visible = False
+        self.set_preview_visibility(False)
         self.preview_button.content = SHOW_PDF_PREVIEW
         self.preview_hint.visible = False
         self.clear_preview()
@@ -397,8 +421,8 @@ class CompositeMode(CompositeRows):
     def toggle_preview(self, event=None):
         if self.normal.busy():
             return
-        self.preview_panel.visible = not self.preview_panel.visible
-        if self.preview_panel.visible:
+        if not self.preview_panel.visible:
+            self.set_preview_visibility(True)
             self.preview_button.content = HIDE_PDF_PREVIEW
         else:
             self.close_preview()
@@ -425,10 +449,11 @@ class CompositeMode(CompositeRows):
     async def show_candidates(self, group):
         if self.normal.busy():
             return
+        was_open = self.preview_panel.visible
         self.clear_preview()
         self.preview_group = group
         self.active_key = group['key']
-        self.preview_panel.visible = True
+        self.set_preview_visibility(True)
         self.preview_button.content = HIDE_PDF_PREVIEW
         self.preview_hint.visible = True
         self.preview_label.value = group['identifier'] + ' / ' + group['material'] + ' / ' + group['pdf_status']
@@ -449,7 +474,8 @@ class CompositeMode(CompositeRows):
                 ft.TextButton(name, tooltip=path, on_click=show, expand=True),
                 ft.IconButton(ft.Icons.OPEN_IN_NEW, tooltip='PDFを開く', on_click=launch),
             ]), height=PDF_CANDIDATE_HEIGHT, border_radius=4))
-        self.resize_rows()
+        if not was_open:
+            self.resize_rows()
         self.highlight_active()
         if paths:
             self.set_candidate_navigation(False)

@@ -27,7 +27,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.4.6"
+APP_VERSION = "v1.4.7"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -3971,6 +3971,18 @@ def main(page: ft.Page):
         save_publish=save_pdf_index_publish,
     )
     composite_mode = CompositeMode(page, normal_mode, rules=config.get("search_exclusion_rules", []))
+    def lock_composite_preview_controls(visible):
+        mode_row.disabled = folder_settings_row.disabled = visible
+        preview_focus_overlay.visible = visible
+
+    async def restore_composite_preview_focus():
+        if composite_mode.can_navigate():
+            await composite_mode.focus_navigation()
+            return True
+        return False
+
+    composite_mode.on_preview_visibility = lock_composite_preview_controls
+    input_focus.restore_preferred_focus = restore_composite_preview_focus
     composite_mode.search_button.style = BUTTON_STYLE_PRIMARY
     normal_mode.search_indicator.width = composite_mode.progress.width = 80
     normal_mode.search_indicator.height = composite_mode.progress.height = 6
@@ -4049,6 +4061,17 @@ def main(page: ft.Page):
         padding=ft.Padding.only(left=4, right=4, top=4, bottom=6),
     )
 
+    async def refocus_preview_after_header_click(event):
+        await restore_composite_preview_focus()
+
+    # Include space between the disabled fields so clicks there also restore
+    # the keyboard target after Flutter handles the pointer event.
+    preview_focus_overlay = ft.GestureDetector(
+        content=ft.Container(bgcolor=ft.Colors.TRANSPARENT),
+        left=0, right=0, top=0, bottom=0, visible=False,
+        on_tap=refocus_preview_after_header_click,
+    )
+
     # DataTable2 owns both scroll axes and pins its header internally.
     # Give it bounded space: an outer scrolling Column would unbound its height.
     table_area = ft.Container(content=table, expand=True)
@@ -4064,7 +4087,7 @@ def main(page: ft.Page):
 
     layout = ft.Column(
         [
-            fixed_controls,
+            ft.Stack([fixed_controls, preview_focus_overlay], fit=ft.StackFit.PASS_THROUGH),
             result_area,
             normal_mode.view,
             composite_mode.view,

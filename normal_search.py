@@ -36,6 +36,11 @@ def path_key(path):
     return os.path.normcase(os.path.abspath(os.path.normpath(path)))
 
 
+class SearchLimitExceeded(ValueError):
+    def __init__(self, limit, unit):
+        super().__init__(f'検索結果が{limit}{unit}を超えました。条件をもう少し絞ってください')
+
+
 def search_files(words, files, progress_callback=None):
     """Only the stem matches; neither directory names nor .pdf is searchable."""
     if not words:

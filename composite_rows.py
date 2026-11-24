@@ -25,8 +25,8 @@ class CompositeRows:
         self.list_panel = ft.Column([self.heading_box, self.list], expand=True, spacing=0,
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
         # Consume Flutter's default directional focus/scroll action locally.
-        # Page observes hardware keys even when the focused field consumes them;
-        # route only while this neutral target owns focus, never while editing.
+        # Preview locks the search and result controls. Arrows remain usable
+        # even if a PDF candidate button or the close button owns focus.
         self.navigation_focused = False
         self.navigation_sequence = 0
         self.key_target = ft.TextField(value='', read_only=True, ignore_up_down_keys=True,
@@ -36,10 +36,15 @@ class CompositeRows:
             on_blur=lambda e:setattr(self, 'navigation_focused', False))
         previous_keyboard_handler = self.page.on_keyboard_event
         async def route_key(event):
-            if self.view.visible and self.navigation_focused:
+            if self.can_navigate():
+                key = event.key.replace(' ', '')
+                if not self.navigation_focused:
+                    if key not in ('ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'):
+                        return
+                    await self.focus_navigation()
                 self.navigation_sequence += 1
                 sequence = self.navigation_sequence
-                if self.can_navigate() and event.key.replace(' ', '') in ('ArrowUp', 'ArrowDown'):
+                if key in ('ArrowUp', 'ArrowDown'):
                     held = self.held_vertical_key(event)
                     if held:
                         self.page.run_task(self.repeat_navigation, event, sequence, held)
@@ -53,8 +58,9 @@ class CompositeRows:
         self.list_host = ft.Container(self.list_panel, expand=True)
         self.body = ft.Row([self.list_host, self.preview_panel], expand=True, spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.STRETCH)
+        self.tab_bar = ft.TabBar(tabs=[self.result_tab, self.stock_tab])
         self.tabs = ft.Tabs(length=2, selected_index=0, on_change=self.on_tab_change, expand=True,
-            content=ft.Column([ft.TabBar(tabs=[self.result_tab, self.stock_tab]), self.toolbar, self.body],
+            content=ft.Column([self.tab_bar, self.toolbar, self.body],
                 expand=True, spacing=6, horizontal_alignment=ft.CrossAxisAlignment.STRETCH))
         self.view = ft.Container(self.tabs, expand=True, visible=False,
             alignment=ft.Alignment.TOP_LEFT)
@@ -62,8 +68,7 @@ class CompositeRows:
     @staticmethod
     def core_columns(controls):
         widths = [106, None, 104, None, 96]
-        expands = [None, 3, None, 4, None]
-        return ft.Row([ft.Container(c, width=w, expand=e) for c,w,e in zip(controls,widths,expands)],
+        return ft.Row([ft.Container(c, width=w) for c,w in zip(controls,widths)],
             expand=True, spacing=8, vertical_alignment=ft.CrossAxisAlignment.START)
 
     def on_list_scroll(self, event):
@@ -168,7 +173,7 @@ class CompositeRows:
             # Rows use object identity; scrolling already uses pixel offsets.
             padding=6,
             border=ft.Border(bottom=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)))
-        return dict(row=row, check=checkbox, assy=assy, base_height=max(72,pdf_height+12), assy_height=assy_height+12)
+        return dict(row=row, core=core, check=checkbox, assy=assy, base_height=max(72,pdf_height+12), assy_height=assy_height+12)
 
     def assy_cell(self, group, expanded):
         sheets = OrderedDict()
@@ -237,16 +242,26 @@ class CompositeRows:
         return self.groups()[-1] if self.groups() else None
 
     def resize_rows(self):
-        right_width = min(660, max(370, (self.page.width or 1400)*0.35))
+        width = self.page.width or 1400
+        previous_right = min(660, max(370, width * 0.35))
+        # 378px covers the fixed columns, gaps and page/row padding.
+        flexible = max(0, width - previous_right - 378)
+        name_width = max(90, flexible * 3 / 7 * 0.6)
+        pdf_width = max(135, flexible * 4 / 7 * 0.75)
+        right_width = max(0, width - 378 - name_width - pdf_width)
+        self.heading.controls[0].controls[1].width = name_width
+        self.heading.controls[0].controls[3].width = pdf_width
         self.preview_panel.width = right_width
-        self.image.width = max(300,right_width-16)
+        self.image.width = max(0, right_width - 16)
         compact = self.preview_panel.visible
         self.heading_assy.visible = not compact
         # Row padding consumes 12px; the external preview does not.
-        self.heading_assy.width = right_width-12
+        self.heading_assy.width = max(0, right_width - 12)
         for cached in self.row_cache.values():
+            cached['core'].controls[1].width = name_width
+            cached['core'].controls[3].width = pdf_width
             cached['assy'].visible = not compact
-            cached['assy'].width = right_width-12
+            cached['assy'].width = self.heading_assy.width
             # Keep the same heights on toggle so scroll position remains stable.
             cached['row'].height = max(cached['base_height'],cached['assy_height'])
 
@@ -340,6 +355,6 @@ class CompositeRows:
     async def repeat_navigation(self, event, sequence, held):
         await asyncio.sleep(0.4)
         while (sequence == self.navigation_sequence and self.can_navigate()
-               and self.navigation_focused and held()):
+               and held()):
             await self.navigate_key(event)
             await asyncio.sleep(0.075)

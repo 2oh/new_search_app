@@ -13,7 +13,7 @@ import unicodedata
 import uuid
 from urllib.parse import quote
 
-from normal_search import path_key
+from normal_search import SearchLimitExceeded, path_key
 
 VERSION = '1'
 MANIFEST = 'pdf-latest.json'
@@ -229,7 +229,7 @@ def snapshot_paths(database):
     return info, paths
 
 
-def search(database, words, progress_callback=None, excludes=()):
+def search(database, words, progress_callback=None, excludes=(), *, max_results=None):
     """Search exclusively local data; return the same result shape/order as A."""
     if not Path(database).is_file():
         raise FileNotFoundError('PDF索引DBが未取得です。公開先を設定し、最新データ取得を実行してください。')
@@ -245,6 +245,8 @@ def search(database, words, progress_callback=None, excludes=()):
             progress_callback(0, total)
         for number, row in enumerate(db.execute('SELECT * FROM files'), 1):
             if words and all(word in row['stem'] for word in words) and not any(word in row['stem'] for word in excludes):
+                if max_results is not None and len(results) >= max_results:
+                    raise SearchLimitExceeded(max_results, '件')
                 results.append({'path': str(root / row['path']),
                                 'modified': row['mtime_ns'] / 1_000_000_000,
                                 'available': True})  # Availability is checked when actually used.

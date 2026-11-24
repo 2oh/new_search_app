@@ -9,7 +9,7 @@ import flet as ft
 import flet_datatable2 as dt2
 import pdf_catalog
 from update_age import format_updated
-from normal_search import StackStore, add_to_stack, file_info, parse_search_query, path_key, search_files
+from normal_search import SearchLimitExceeded, StackStore, add_to_stack, file_info, parse_search_query, path_key, search_files
 
 
 class NormalMode:
@@ -292,8 +292,11 @@ class NormalMode:
         try:
             def work(report):
                 return pdf_catalog.search(self.index_database, words, lambda current, total: report((
-                    f'ファイル名を検索中：{current}/{total}件', current / total if total else 1.0)), excludes=excludes)
+                    f'ファイル名を検索中：{current}/{total}件', current / total if total else 1.0)),
+                    excludes=excludes, max_results=500)
             info, results = await self.worker(work)
+            self.message.value = '検索結果を表示しています…'
+            self.page.update()
             self.index_root = info['root']
             self.files, self.index_folder = None, path_key(self.index_root)
             self.results, self.selection = results, set()
@@ -301,13 +304,15 @@ class NormalMode:
             self.image.visible = False
             self.preview_label.value = ''
             self.tabs.selected_index = 0
+            self.render(results_only=True)
             self.message.value = f'検索結果：{len(results)}件'
+        except SearchLimitExceeded as exc:
+            self.message.value = str(exc) + ('（前回の検索結果を表示中）' if self.results else '')
         except Exception as exc:
             self.message.value = f'検索できませんでした：{exc}'
         finally:
             self.search_indicator.visible = False
             self.set_busy(False)
-            self.render(results_only=True)
             self.page.update()
             self.page.run_task(self.focus)
 

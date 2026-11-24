@@ -8,7 +8,7 @@ from unittest.mock import patch
 from urllib.parse import urlsplit, unquote
 
 import pdf_catalog as catalog
-from normal_search import parse_search_query, search_files
+from normal_search import SearchLimitExceeded, parse_search_query, search_files
 from pdf_index_batch import main as batch_main
 
 
@@ -41,6 +41,14 @@ class PdfCatalogTests(unittest.TestCase):
             expected = search_files(words, files)
             actual = catalog.search(self.database, words)[1]
             self.assertEqual(expected, actual, query)
+
+    def test_result_limit_detects_extra_match_after_exclusions(self):
+        self.build()
+        words = parse_search_query('f123')
+        self.assertEqual(3, len(catalog.search(self.database, words, max_results=3)[1]))
+        with self.assertRaisesRegex(SearchLimitExceeded, '2件を超えました'):
+            catalog.search(self.database, words, max_results=2)
+        self.assertEqual(2, len(catalog.search(self.database, words, excludes=('newer',), max_results=2)[1]))
 
     def test_unc_readonly_uri_has_no_authority(self):
         unc = r'\\landisk-01\share\日本語 # 100% ?\index.sqlite'

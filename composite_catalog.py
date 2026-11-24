@@ -9,7 +9,7 @@ import shutil
 import unicodedata
 import uuid
 
-from normal_search import parse_search_query
+from normal_search import SearchLimitExceeded, parse_search_query
 from part_rules import eligible, DEFAULT_RULES
 from pdf_catalog import connect, digest, operation_lock
 
@@ -136,7 +136,8 @@ class Catalog:
         self.folders = sorted({r['folder'] for r in self.rows})
         self.sheets = sorted({r['sheet'] for r in self.rows})
 
-    def search(self, *, contains='', excludes='', folders=(), sheets=(), ids='', start='', end='', progress=None):
+    def search(self, *, contains='', excludes='', folders=(), sheets=(), ids='', start='', end='',
+               progress=None, max_results=None):
         includes, excludes = parse_search_query(contains), parse_search_query(excludes)
         ids = set(filter(None, re.split(r'[\s,、]+', ids.strip())))
         if any(not re.fullmatch('[0-9]{4}', value) for value in ids):
@@ -145,6 +146,7 @@ class Catalog:
         if begin is not None and finish is not None and begin >= finish:
             raise ValueError('元Excel更新日の開始日が終了日より後です')
         groups = {}
+        seen_occurrences = set()
         total = len(self.rows)
         for index, row in enumerate(self.rows, 1):
             if progress and (index == 1 or index % 500 == 0 or index == total):
@@ -162,12 +164,16 @@ class Catalog:
                 continue
             key = row['key']
             if key not in groups:
+                if max_results is not None and len(groups) >= max_results:
+                    raise SearchLimitExceeded(max_results, '部品')
                 groups[key] = dict(key=key, name=self.names.get(key, '品名未登録'), identifier=row['identifier'],
                                    material=row['material'], keyword=row['keyword'], occurrences=[], pdfs=[], pdf_status='PDF索引未取得')
             occurrence = dict(path=str(Path(self.info['root']) / row['path']), sheet=row['sheet'],
                               product_id=row['product_id'], name=str(row['name'] or ''), row=row['row_number'],
                               mtime=row['mtime'])
-            if occurrence not in groups[key]['occurrences']:
+            identity = (key, *occurrence.values())
+            if identity not in seen_occurrences:
+                seen_occurrences.add(identity)
                 groups[key]['occurrences'].append(occurrence)
         return sorted(groups.values(), key=lambda item: (item['identifier'], item['material'], item['key']))
 
