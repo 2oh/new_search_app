@@ -122,7 +122,9 @@ async def exercise(scope, destination):
     await composite.show_candidates(group)
     before = deepcopy(composite.items)
     selection = set(composite.selection)
-    composite.toggle_preview()
+    assert composite.toolbar_actions.controls[:3] == [composite.preview_hint, composite.preview_button, composite.list_actions[0]]
+    composite.navigation_focused = False
+    await scope['page'].on_keyboard_event(SimpleNamespace(key='Escape'))
     assert not composite.preview_panel.visible and composite.items == before and composite.selection == selection
     await composite.show_candidates(group)
     original_stock = deepcopy(normal.items)

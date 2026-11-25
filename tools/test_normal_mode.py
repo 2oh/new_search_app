@@ -187,7 +187,7 @@ async def run(root):
                 assert not normal.search_indicator.visible and not normal.busy()
                 await normal.search()
                 assert len(normal.results) == 2
-                assert scope['message'].value == '検索結果：2件'
+                assert scope['message'].value == '検索結果：2件', scope['message'].value
                 # New PDFs stay invisible until the daily snapshot is rebuilt and acquired.
                 extra = pdfs / 'F123 SS400 EXTRA.pdf'
                 extra.write_bytes((pdfs / 'F123 AL.pdf').read_bytes())
@@ -215,8 +215,9 @@ async def run(root):
                 assert normal.store.load() == normal.items
                 for row in normal.result_table.rows:
                     addition = row.cells[-1].content.content
-                    assert addition.controls[0].disabled
+                    assert addition.controls[0].content.disabled
                     assert addition.controls[1].value == 'ストック済'
+                    assert 'ストック済' not in row.cells[2].content.content.value
                 # Selection saves serialize, preserve controls, and never disable the whole view.
                 saved_rows = list(normal.stack_table.rows)
                 with patch.object(normal, 'render', side_effect=AssertionError('selection rebuilt list')), \
@@ -328,20 +329,17 @@ async def run(root):
                     assert normal.publish_field.width == max(280, min(620, width - 240))
                     assert normal.root_display.width == max(400, min(1000, width - 720))
                     assert scope['excel_control_row'] not in scope['mode_row'].controls
-                    assert normal.preview_panel.visible == (width >= 1700)
-                    assert len(normal.result_table.columns) == (6 if width < 1700 else 5)
+                    assert not normal.preview_panel.visible
+                    assert len(normal.result_table.columns) == 5
                     assert len(normal.stack_table.columns) == len(normal.result_table.columns) + 1
-                    previous_width = max(1200, width - 400) if width >= 1700 else max(600, width - 60)
-                    expected_path = min(600, max(450, previous_width - 900))
+                    expected_path = min(600, max(450, width - 960))
                     assert normal.result_table.columns[1].fixed_width == expected_path
                     assert normal.stack_table.columns[1].fixed_width == expected_path
-                    if width >= 1700:
-                        assert normal.lists.width < previous_width - 150
-                        assert width - normal.lists.width > 550
                     name_text = normal.stack_table.rows[0].cells[2].content.content
                     path_text = normal.stack_table.rows[0].cells[1].content.content
                     assert name_text.max_lines == 2 and not name_text.no_wrap
                     assert path_text.max_lines == 1 and path_text.no_wrap
+                    assert normal.stack_table.rows[0].cells[2].content.on_hover is None
                     assert normal.result_table.columns[-1].label.controls[0].value == '追加'
                     assert normal.stack_table.columns[-1].label.controls[0].value == '選択'
                     assert len(normal.stack_table.rows) == 3
@@ -349,10 +347,65 @@ async def run(root):
                 normal.tabs.selected_index = 1
                 normal.on_tab_change()
                 assert normal.items == selected and not normal.image.visible
-                # Preview uses a real PDF; latest request must win.
-                normal.preview_pending = (normal.preview_generation, str(pdfs / 'F123 AL.pdf'))
+                normal.preview_target.focus = AsyncMock()
+                normal.preview_list.scroll_to = AsyncMock()
+                await normal.toggle_preview()
+                assert normal.preview_panel.visible and normal.preview_listing.visible and not normal.tab_content.visible
+                assert normal.stock_actions.visible and not normal.result_actions.visible
+                assert normal.toolbar_actions.controls[:3] == [normal.preview_hint, normal.preview_button, normal.result_actions]
+                assert scope['preview_focus_overlay'].visible and scope['mode_row'].disabled
+                assert normal.preview_index == 0 and normal.preview_panel.width >= 350
+                assert normal.preview_heading.controls[1].width == min(normal.table_path_width() * .75, page.width * .25)
                 await normal.preview_loop()
                 assert normal.image.visible and Path(normal.image.src).is_file()
+                normal.preview_viewport = 52
+                normal.preview_focused = False
+                normal.preview_target.focus.reset_mock()
+                await page.on_keyboard_event(SimpleNamespace(key='Arrow Down'))
+                normal.preview_target.focus.assert_awaited_once()
+                assert normal.preview_index == 1 and normal.preview_rows[0].bgcolor is None
+                normal.preview_list.scroll_to.assert_awaited_once_with(offset=52)
+                normal.preview_focused = True
+                await page.on_keyboard_event(SimpleNamespace(key='Enter'))
+                assert normal.items[1]['selected'] and normal.store.load() == normal.items
+                await page.on_keyboard_event(SimpleNamespace(key='Enter'))
+                assert normal.items == selected
+                await page.on_keyboard_event(SimpleNamespace(key='Escape'))
+                assert not normal.preview_panel.visible and not normal.preview_listing.visible and normal.tab_content.visible
+                assert not normal.preview_target.visible and not normal.preview_focused
+                assert not scope['preview_focus_overlay'].visible and not scope['mode_row'].disabled
+                normal.tabs.selected_index = 0
+                normal.query.value = 'F123'
+                await normal.search()
+                # An already stocked PDF remains ineligible for a second addition.
+                await normal.toggle_preview()
+                assert normal.preview_panel.visible
+                key = logic.path_key(normal.preview_paths[0])
+                assert normal.preview_checks[key].disabled
+                preview_columns = normal.preview_rows[0].content.controls
+                assert 'ストック済' not in preview_columns[2].content.value
+                assert preview_columns[-1].content.controls[1].value == 'ストック済'
+                normal.preview_focused = True
+                await page.on_keyboard_event(SimpleNamespace(key='Enter'))
+                assert key not in normal.selection
+                # Changing tabs and opening and closing repeatedly must keep
+                # the normal and preview controls under their original parent.
+                for index in range(20):
+                    normal.tabs.selected_index = index % 2
+                    normal.on_tab_change()
+                    session.get_page_patch()
+                    await normal.toggle_preview()
+                    session.get_page_patch()
+                    assert normal.preview_listing.visible and not normal.tab_content.visible
+                    assert normal.lists.controls == [normal.tab_content, normal.preview_listing]
+                    assert len(normal.preview_list.controls) == len(normal.items if index % 2 else normal.results)
+                    assert normal.preview_index == 0
+                    await normal.toggle_preview()
+                    session.get_page_patch()
+                    assert normal.tab_content.visible and not normal.preview_listing.visible
+                await normal.toggle_preview()
+                await normal.search()
+                assert not normal.preview_panel.visible
                 scope['set_pdf_action_processing'](True)
                 before = list(normal.items)
                 await normal.commit([])

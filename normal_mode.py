@@ -10,9 +10,10 @@ import flet_datatable2 as dt2
 import pdf_catalog
 from update_age import format_updated
 from normal_search import SearchLimitExceeded, StackStore, add_to_stack, file_info, parse_search_query, path_key, search_files
+from normal_preview import NormalPreview
 
 
-class NormalMode:
+class NormalMode(NormalPreview):
     def __init__(self, page, *, folder, output_folder, collect, preview, open_pdf,
                  merge, busy, set_busy, worker, message, completed, version, button_style,
                  index_database=None, index_publish='', save_publish=None):
@@ -81,39 +82,42 @@ class NormalMode:
         self.open_button = ft.Button('PDFを開く', on_click=self.open_selected, style=button_style)
         self.result_table = self.new_table()
         self.stack_table = self.new_table()
-        self.result_section = ft.Column([
-            ft.Row([self.result_count, ft.Container(expand=True), ft.TextButton('全選択', on_click=self.select_all),
-                    ft.TextButton('全解除', on_click=self.deselect_all), ft.TextButton('選択を反転', on_click=self.invert_results),
-                    ft.Button('ストックへ追加', on_click=self.add_selected, style=button_style)]),
-            ft.Container(content=self.result_table, expand=True),
-        ], expand=True, spacing=4)
-        self.stack_section = ft.Container(content=ft.Column([
-            ft.Row([self.stack_count, ft.Container(expand=True), ft.TextButton('全選択', on_click=self.check_all),
-                    ft.TextButton('全解除', on_click=self.uncheck_all), ft.TextButton('選択を反転', on_click=self.invert_stock),
-                    ft.TextButton('全削除', on_click=self.confirm_clear), self.open_button, self.export_button]),
-            ft.Container(content=self.stack_table, expand=True),
-        ], expand=True, spacing=4), bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, padding=6, expand=True)
-        self.wide = False
+        self.init_preview()
+        self.result_listing = ft.Container(self.result_table, expand=True)
+        self.stock_listing = ft.Container(self.stack_table, expand=True)
+        self.result_actions = ft.Row([
+            ft.TextButton('全選択', on_click=self.select_all), ft.TextButton('全解除', on_click=self.deselect_all),
+            ft.TextButton('選択を反転', on_click=self.invert_results),
+            ft.Button('ストックへ追加', on_click=self.add_selected, style=button_style)], tight=True)
+        self.stock_actions = ft.Row([
+            ft.TextButton('全選択', on_click=self.check_all), ft.TextButton('全解除', on_click=self.uncheck_all),
+            ft.TextButton('選択を反転', on_click=self.invert_stock), ft.TextButton('全削除', on_click=self.confirm_clear),
+            self.open_button, self.export_button], tight=True, visible=False)
+        self.stack_count.visible = False
+        self.toolbar_actions = ft.Row([self.preview_hint, self.preview_button, self.result_actions,
+            self.stock_actions, self.preview_target], alignment=ft.MainAxisAlignment.END, expand=True, wrap=True)
+        self.toolbar = ft.Row([self.result_count, self.stack_count, self.toolbar_actions], spacing=8)
         self.result_tab = ft.Tab(label='検索結果')
         self.stack_tab = ft.Tab(label='ストック')
-        self.tabs = ft.Tabs(length=2, selected_index=0, expand=True,
-            on_change=self.on_tab_change,
-            content=ft.Column([
-                ft.TabBar(tabs=[self.result_tab, self.stack_tab]),
-                ft.TabBarView(controls=[
-                    ft.Container(content=self.result_section, padding=6), self.stack_section,
-                ], expand=True),
-            ], expand=True, spacing=4))
-        self.lists = ft.Container(content=self.tabs, expand=True)
+        self.tab_bar = ft.TabBar(tabs=[self.result_tab, self.stack_tab])
+        self.tab_content = ft.TabBarView(controls=[
+            ft.Container(self.result_listing, padding=6),
+            ft.Container(self.stock_listing, bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, padding=6),
+        ])
+        # The preview has a permanent parent outside TabBarView. Swapping the
+        # child of a tab page while Flutter is building it can leave it blank.
+        self.lists = ft.Stack([self.tab_content, self.preview_listing], expand=True, fit=ft.StackFit.EXPAND)
         self.image = ft.Image(src='', fit=ft.BoxFit.CONTAIN, expand=True, visible=False)
         self.preview_label = ft.Text('', size=14, color=ft.Colors.PRIMARY,
                                      weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
         self.preview_panel = ft.Container(content=ft.Column([self.preview_label, self.image],
             expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=2, expand=True, visible=False)
+            padding=8, bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, visible=False)
         self.body = ft.Row([self.lists, self.preview_panel], expand=True,
                            vertical_alignment=ft.CrossAxisAlignment.STRETCH)
-        self.view = ft.Container(content=self.body, expand=True, visible=False)
+        self.tabs = ft.Tabs(length=2, selected_index=0, expand=True, on_change=self.on_tab_change,
+            content=ft.Column([self.tab_bar, self.toolbar, self.body], expand=True, spacing=4))
+        self.view = ft.Container(content=self.tabs, expand=True, visible=False)
         self.render()
 
     def on_publish_change(self, event=None):
@@ -212,7 +216,7 @@ class NormalMode:
         self.page.update()
 
     async def focus(self):
-        if self.view.visible and not self.busy():
+        if self.view.visible and not self.busy() and not self.preview_panel.visible:
             await self.query.focus()
             self.caret_end()
 
@@ -223,10 +227,18 @@ class NormalMode:
         self.preview_label.value = ''
 
     def on_tab_change(self, event=None):
-        self.clear_preview()
+        self.close_preview()
+        self.update_tab_actions()
         self.page.update()
 
+    def update_tab_actions(self):
+        stock = self.tabs.selected_index == 1
+        self.stack_count.visible = self.stock_actions.visible = stock
+        self.result_count.visible = self.result_actions.visible = not stock
+
     def activate(self, active):
+        if not active:
+            self.close_preview()
         self.activation_generation += 1
         self.view.visible = active
         self.preview_generation += 1
@@ -250,20 +262,13 @@ class NormalMode:
             self.page.update()
 
     def resize(self):
-        wide = (self.page.width or 1200) >= 1700
-        changed = wide != self.wide
-        self.wide = wide
-        self.preview_panel.visible = wide
-        self.lists.expand = not wide
-        # Preserve the old path width independently of the narrower table.
-        previous_width = max(1200, (self.page.width or 1200) - 400)
-        path_width = min(600, max(450, previous_width - 900))
-        previous_filename = max(360, previous_width - path_width - 46 - 96 - 100 - 16)
-        self.lists.width = previous_width - previous_filename / 2 if wide else None
-        self.image.height = max(100, (self.page.height or 800) - 300)
-        if changed:
-            self.clear_preview()
+        if self.preview_panel.visible:
+            self.preview_viewport = None
+            self.set_preview_layout()
         self.render()
+
+    def table_path_width(self):
+        return min(600, max(450, (self.page.width or 1200) - 960))
 
     def report_error(self, exc):
         self.message.value = str(exc)
@@ -272,6 +277,7 @@ class NormalMode:
     async def search(self, event=None):
         if self.busy():
             return
+        self.close_preview()
         try:
             words = parse_search_query(self.query.value)
             excludes = parse_search_query(self.exclude.value)
@@ -304,6 +310,7 @@ class NormalMode:
             self.image.visible = False
             self.preview_label.value = ''
             self.tabs.selected_index = 0
+            self.update_tab_actions()
             self.render(results_only=True)
             self.message.value = f'検索結果：{len(results)}件'
         except SearchLimitExceeded as exc:
@@ -343,20 +350,16 @@ class NormalMode:
         self.stack_tab.label = self.header('ストック', len(self.items), ft.Colors.PRIMARY)
         self.export_button.disabled = self.busy() or self.pending_selection > 0 or not output_count or bool(self.load_error)
         self.open_button.disabled = self.export_button.disabled
-        available_width = (max(1200, (self.page.width or 1200) - 400) if self.wide
-                           else max(600, (self.page.width or 1200) - 60))
-        path_width = min(600, max(450, available_width - 900))
+        path_width = self.table_path_width()
         for table, items, is_stack in ((self.result_table, self.results, False), (self.stack_table, self.items, True)):
             if results_only and is_stack:
                 continue
             self.selection_boxes[is_stack] = {}
             columns = [('項番', 46), ('パス', path_width), ('ファイル名', None), ('更新日時', 96)]
-            if not self.wide:
-                columns.append(('プレビュー', 80))
             if is_stack:
                 columns.append(('削除', 64))
             columns.append(('選択' if is_stack else '追加', 100))
-            table.min_width = sum(width or (180 if self.wide else 360) for _, width in columns) + 16
+            table.min_width = sum(width or 360 for _, width in columns) + 16
             table.columns = [dt2.DataColumn2(self.header(label,
                 (output_count if is_stack else len(self.selection)) if index == len(columns)-1 else None,
                 ft.Colors.SECONDARY if is_stack else ft.Colors.PRIMARY), fixed_width=width)
@@ -367,14 +370,7 @@ class NormalMode:
                 key = path_key(path)
                 meta = self.metadata.get(key, item)
                 async def change(e, key=key, is_stack=is_stack):
-                    if self.busy():
-                        return
-                    if is_stack:
-                        await self.save_selection(bool(e.control.value), key)
-                    else:
-                        self.selection.add(key) if e.control.value else self.selection.discard(key)
-                        self.refresh_selection()
-                        self.page.update()
+                    await self.set_row_check(is_stack, key, bool(e.control.value))
                 checkbox = ft.Checkbox(value=item['selected'] if is_stack else key in self.selection,
                     disabled=bool(self.load_error) or (not is_stack and key in stacked), on_change=change)
                 self.selection_boxes[is_stack][key] = checkbox
@@ -384,26 +380,14 @@ class NormalMode:
                 async def open_folder(e, path=path):
                     self.caret_end()
                     await self.open_pdf(path, True)
-                def preview(e, path=path):
-                    self.show_preview_dialog(path)
                 async def remove(e, key=key):
                     await self.commit([dict(i) for i in self.items if path_key(i['path']) != key])
-                def hover(e, path=path):
-                    if not self.wide:
-                        return
-                    if e.data is True or e.data == 'true':
-                        self.request_preview(path)
-                    else:
-                        self.clear_preview()
-                        self.page.update()
                 label = Path(path).name
-                status = '（ストック済）' if not is_stack and key in stacked else ''
-                if meta.get('available') is False:
-                    status += '（参照不可）'
+                status = '（参照不可）' if meta.get('available') is False else ''
                 def link(value, click, color, tooltip, lines=1):
                     return ft.Container(ft.Text(value, size=14, color=color,
                         no_wrap=lines == 1, max_lines=lines, overflow=ft.TextOverflow.ELLIPSIS),
-                        on_click=click, on_hover=hover, ink=True, tooltip=tooltip,
+                        on_click=click, ink=True, tooltip=tooltip,
                         alignment=ft.Alignment.CENTER_LEFT)
                 folder = self.folder_label(path)
                 modified = meta.get('modified')
@@ -414,56 +398,33 @@ class NormalMode:
                     ft.DataCell(link(folder, open_folder, ft.Colors.ON_SURFACE, str(Path(path).parent))),
                     ft.DataCell(link(label + status, open_file, ft.Colors.PRIMARY, path + status, lines=2)),
                     ft.DataCell(ft.Text(date, size=14, no_wrap=True, max_lines=2))]
-                if not self.wide:
-                    cells.append(centered(ft.IconButton(icon=ft.Icons.VISIBILITY_OUTLINED,
-                        tooltip='PDFをプレビュー', on_click=preview)))
                 if is_stack:
                     cells.append(centered(ft.IconButton(icon=ft.Icons.DELETE_OUTLINE,
                         icon_color=ft.Colors.ORANGE_300, tooltip='ストックから削除',
                         on_click=remove, disabled=bool(self.load_error))))
                 if not is_stack and key in stacked:
                     checkbox.tooltip = '既にPDFストックに登録済みです。ストック側で選択・出力できます。'
-                    cells.append(centered(ft.Column([checkbox, ft.Text('ストック済', size=12, color=ft.Colors.PRIMARY)],
-                        spacing=0, tight=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)))
+                    cells.append(centered(self.stocked_checkbox(checkbox)))
                 else:
                     cells.append(centered(checkbox))
                 rows.append(ft.DataRow(cells=cells))
             table.rows = rows
 
-    def show_preview_dialog(self, path):
-        if self.busy():
+    @staticmethod
+    def stocked_checkbox(checkbox):
+        return ft.Column([ft.Container(checkbox, height=30),
+                          ft.Text('ストック済', size=12, color=ft.Colors.PRIMARY)],
+            spacing=0, tight=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+
+    async def set_row_check(self, is_stack, key, value):
+        if self.busy() or self.load_error:
             return
-        self.caret_end()
-        picture = ft.Image(src='', width=760, height=520, fit=ft.BoxFit.CONTAIN, visible=False)
-        label = ft.Text('プレビューを読み込んでいます…', size=14)
-        state = {'open': True, 'generation': 0}
-        async def load(event=None):
-            state['generation'] += 1
-            generation = state['generation']
-            picture.visible = False
+        if is_stack:
+            await self.save_selection(value, key)
+        elif not self.selection_boxes[False][key].disabled:
+            self.selection.add(key) if value else self.selection.discard(key)
+            self.refresh_selection()
             self.page.update()
-            try:
-                source = await asyncio.to_thread(self.make_preview, path)
-                if not state['open'] or generation != state['generation']:
-                    return
-                picture.src, picture.visible = source, True
-                label.value = self.folder_label(path) + ' / ' + Path(path).name
-            except Exception as exc:
-                if state['open'] and generation == state['generation']:
-                    label.value = f'プレビューできません：{exc}'
-            self.page.update()
-        def close(event=None):
-            state['open'] = False
-            self.page.pop_dialog()
-            self.caret_end()
-        dialog = ft.AlertDialog(modal=True, title=ft.Text('PDFプレビュー'),
-            content=ft.Container(width=860, height=min(640, max(260, (self.page.height or 800)-180)),
-                content=ft.Column([label, ft.Container(picture, expand=True,
-                    alignment=ft.Alignment.CENTER, border=ft.Border.all(1, ft.Colors.GREY_500),
-                    border_radius=8, padding=10, bgcolor=ft.Colors.GREY_200)], expand=True)),
-            actions=[ft.TextButton('再読み込み', on_click=load), ft.TextButton('閉じる', on_click=close)])
-        self.page.show_dialog(dialog)
-        self.page.run_task(load)
 
     def refresh_selection(self):
         count = sum(item['selected'] for item in self.items)
@@ -474,6 +435,9 @@ class NormalMode:
                 key: key in self.selection for key in self.selection_boxes[False]}
             for key, checkbox in self.selection_boxes[is_stack].items():
                 checkbox.value = values.get(key, False)
+            if self.preview_panel.visible and self.preview_stock == is_stack:
+                for key, checkbox in self.preview_checks.items():
+                    checkbox.value = values.get(key, False)
             if table.columns:
                 table.columns[-1].label = self.header('選択' if is_stack else '追加',
                     count if is_stack else len(self.selection),
@@ -581,7 +545,7 @@ class NormalMode:
         self.page.show_dialog(dialog)
 
     def request_preview(self, path):
-        if self.busy() or not self.view.visible:
+        if not self.can_navigate():
             return
         self.preview_generation += 1
         self.preview_pending = (self.preview_generation, path)

@@ -76,11 +76,12 @@ class CompositeMode(CompositeRows):
         self.add_button = ft.Button('部品ストックへ追加', on_click=self.add_selected)
         self.remove_button = ft.TextButton('選択部品を削除', on_click=self.remove_selected, visible=False)
         self.export_button = ft.Button('部品一覧Excel出力', on_click=self.export, visible=False)
-        self.toolbar = ft.Row([self.count,
-                              ft.TextButton('全選択', on_click=self.select_all), ft.TextButton('全解除', on_click=self.select_none), ft.TextButton('選択を反転', on_click=self.invert_selection),
-                              self.add_button, self.remove_button, self.export_button,
-                              ft.Row([self.preview_button, self.preview_hint], tight=True, spacing=8)], wrap=True)
-        self.list_actions = self.toolbar.controls[1:-1]
+        self.list_actions = [ft.TextButton('全選択', on_click=self.select_all),
+            ft.TextButton('全解除', on_click=self.select_none), ft.TextButton('選択を反転', on_click=self.invert_selection),
+            self.add_button, self.remove_button, self.export_button]
+        self.toolbar_actions = ft.Row([self.preview_hint, self.preview_button, *self.list_actions],
+            alignment=ft.MainAxisAlignment.END, expand=True, wrap=True)
+        self.toolbar = ft.Row([self.count, self.toolbar_actions], spacing=8)
         self.list = ft.ListView(expand=True, spacing=0, build_controls_on_demand=True)
         self.image = ft.Image(src='', fit=ft.BoxFit.CONTAIN, width=400, expand=True, visible=False)
         self.preview_label = ft.Text('↑↓でプレビューする部品を移動できます', selectable=True)

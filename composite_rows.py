@@ -38,6 +38,9 @@ class CompositeRows:
         async def route_key(event):
             if self.can_navigate():
                 key = event.key.replace(' ', '')
+                if key == 'Escape':
+                    self.toggle_preview()
+                    return
                 if not self.navigation_focused:
                     if key not in ('ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'):
                         return

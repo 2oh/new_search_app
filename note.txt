@@ -6692,6 +6692,100 @@ Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
 
 
 
+2026/11/25
+
+【v1.4.8 PDFファイル名モードのプレビュー】
+
+・検索結果／ストックの一覧を全幅で表示し、ボタンで右側のPDFプレビューを開く。
+・上下キーまたは行クリックで表示PDFを選ぶ。Enterでその行のチェックを切り替える。
+・プレビューを閉じると全幅の一覧に戻る。今回のチェックは残る。ホバーでは切り替えない。
+
+【1．ブランチ切替】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git switch -c codex/ui-v1.4.8
+git status -sb
+
+切替後に連絡する。原本への反映後、次の起動確認に進む。
+
+【2．起動確認】
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/composite_demo.py
+
+・PDFファイル名モードで「123」を検索し、プレビューを開く。上下で2件を移動し、右側のPDFも切り替わることを確認する。
+・プレビュー中に画面上部の余白をクリックして上下移動とEnterを試す。Enterで表示中の行だけをチェックでき、もう一度押すと解除できることを確認する。
+・ボタンまたはEscで閉じ、全幅の一覧に戻ってもチェックが残ることを確認する。ホバーでプレビューが開かないことを確認する。
+・選んだPDFをストックへ追加し、ストック側でもプレビューと上下・Enterが使えることを確認する。検索結果側のストック済みPDFはチェックできない。
+・登録したPDFを再検索し、通常表示とプレビュー表示のどちらでも「ストック済」がチェック欄だけにあることを確認する。
+・PDFファイル名モードで開閉を繰り返して行が表示されることを確認する。
+・PDFファイル名と複合で、右寄せの操作列が案内、プレビュー開閉、全選択、全解除、選択を反転、ストック追加の順になっていることを確認する。
+・複合ではEnterでPDFを外部アプリに開き、Escでプレビューを閉じられることを確認する。
+
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/test_normal_mode.py .
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/test_composite_ui.py
+& 'C:\dev\new_search_app\Scripts\python.exe' -B -m unittest discover -s tests -q
+
+【3．コミット・push】
+git status -sb
+git diff --check
+git diff --stat
+git ls-files --others --exclude-standard
+
+設定・ストック・DB・ログ・キャッシュ等がコミット対象に入らないことを確認。note.txt に変更がある場合は、今回のコミットに含める内容かを確認する。
+
+git add -A
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+
+対象外のファイルがステージされていたら、git restore --staged -- <ファイル> でそのファイルをステージから外し、対象を再確認する。
+
+git commit -m "feat: add keyboard-driven PDF filename preview"
+git push -u origin codex/ui-v1.4.8
+
+【4．main統合・タグ】
+git status -sb
+
+作業ツリーがクリーンであることを確認して実行。
+
+git switch main
+git fetch origin
+git merge --ff-only origin/main
+git merge --ff-only codex/ui-v1.4.8
+git push origin main
+git tag --list v1.4.8
+git ls-remote --tags origin refs/tags/v1.4.8
+
+リモートの確認コマンドが成功し、ローカル・リモートの両方にタグがない場合に実行。
+
+git tag -a v1.4.8 -m "Release v1.4.8"
+git push origin v1.4.8
+
+【5．EXE作成とセルフテスト】
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
+$LASTEXITCODE
+
+終了コード0を確認して実行。
+
+$selftestDir = Join-Path $PWD ('work\v148-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$exePath = Join-Path $PWD 'dist\図面PDF検索結合ツール (v1.4.8).exe'
+$testProcess = Start-Process -FilePath $exePath -ArgumentList @('--self-test', ('"' + $selftestDir + '"')) -WindowStyle Hidden -Wait -PassThru
+$testProcess.ExitCode
+Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
+
+終了コード0、frozen=true、version=v1.4.8を確認。
+
+【6．現地へ持っていくもの】
+・原本フォルダの dist\図面PDF検索結合ツール (v1.4.8).exe
+・原本フォルダの COMPOSITE_SETUP.md と RELEASE_NOTES.txt
+
+旧EXEを保管してから配置する。現地の config.json、normal_stack.json、part_stock.json は現地のものを使う。
+今回の範囲ではDBの再作成やバッチEXEの交換は不要。
+
+
+
+
+
+
 
 
 
