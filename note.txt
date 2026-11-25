@@ -6783,6 +6783,90 @@ Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
 
 
 
+【v1.4.9 PDFファイル名検索のフォルダ階層絞り込み】
+
+・今回の検索にヒットしたフォルダを展開し、複数選択できる。
+・親フォルダを選ぶと配下も含む。「検索先直下」は直下のPDFだけ。
+・501件以上ではフォルダ選択が先に開き、500件以下で一覧を表示する。
+・全選択・全解除・反転・ストック追加は表示中のPDFを対象とする。絞り込みで隠れたチェックは保持される。
+
+【1．ブランチ切替】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git switch -c codex/ui-v1.4.9
+git status -sb
+
+切替後に連絡する。原本への反映後、次の起動確認に進む。
+
+【2．起動確認】
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/composite_demo.py
+
+・PDFファイル名モードで「7」などを検索し、「フォルダで絞り込み」を開く。今回ヒットしたフォルダだけが表示されることを確認する。
+・矢印で親フォルダを展開し、子を選んで適用する。複数フォルダの同時選択と、親選択で配下のPDFが出ることも確認する。
+・一つのフォルダで全選択してから別のフォルダへ切り替え、非表示のチェック件数が表示されることを確認する。ストック追加は表示中のチェックだけが対象。
+・現地で「1」など501件以上になる条件を試す。先にフォルダ選択が開き、500件以下に絞ってから一覧が表示されることを確認する。分離サンプル相当の501件は下記の自動テストでも検証できる。
+
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/test_normal_mode.py .
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/test_composite_ui.py
+& 'C:\dev\new_search_app\Scripts\python.exe' -B -m unittest discover -s tests -q
+
+【3．コミット・push】
+git status -sb
+git diff --check
+git diff --stat
+git ls-files --others --exclude-standard
+
+設定・ストック・DB・ログ・キャッシュ等がコミット対象に入らないことを確認。note.txt に変更がある場合は、今回のコミットに含める内容かを確認する。
+
+git add -A
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+
+対象外のファイルがステージされていたら、git restore --staged -- <ファイル> でそのファイルをステージから外し、対象を再確認する。
+
+git commit -m "feat: filter PDF filename matches by folder hierarchy"
+git push -u origin codex/ui-v1.4.9
+
+【4．main統合・タグ】
+git status -sb
+
+作業ツリーがクリーンであることを確認して実行。
+
+git switch main
+git fetch origin
+git merge --ff-only origin/main
+git merge --ff-only codex/ui-v1.4.9
+git push origin main
+git tag --list v1.4.9
+git ls-remote --tags origin refs/tags/v1.4.9
+
+リモートの確認コマンドが成功し、ローカル・リモートの両方にタグがない場合に実行。
+
+git tag -a v1.4.9 -m "Release v1.4.9"
+git push origin v1.4.9
+
+【5．EXE作成とセルフテスト】
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
+$LASTEXITCODE
+
+終了コード0を確認して実行。
+
+$selftestDir = Join-Path $PWD ('work\v149-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$exePath = Join-Path $PWD 'dist\図面PDF検索結合ツール (v1.4.9).exe'
+$testProcess = Start-Process -FilePath $exePath -ArgumentList @('--self-test', ('"' + $selftestDir + '"')) -WindowStyle Hidden -Wait -PassThru
+$testProcess.ExitCode
+Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
+
+終了コード0、frozen=true、version=v1.4.9を確認。
+
+【6．現地へ持っていくもの】
+・原本フォルダの dist\図面PDF検索結合ツール (v1.4.9).exe
+・原本フォルダの COMPOSITE_SETUP.md と RELEASE_NOTES.txt
+
+旧EXEを保管してから配置する。現地の config.json、normal_stack.json、part_stock.json は現地のものを使う。
+今回の範囲ではDBの再作成やバッチEXEの交換は不要。
+
 
 
 

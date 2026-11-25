@@ -50,6 +50,23 @@ class PdfCatalogTests(unittest.TestCase):
             catalog.search(self.database, words, max_results=2)
         self.assertEqual(2, len(catalog.search(self.database, words, excludes=('newer',), max_results=2)[1]))
 
+    def test_folder_matches_count_root_subtrees_and_overlapping_choices(self):
+        for relative in ('F123.pdf', 'a/deep/F123.pdf', 'ab/F123.pdf'):
+            extra = self.root / relative
+            extra.parent.mkdir(exist_ok=True)
+            extra.touch()
+        self.build()
+        words = parse_search_query('f123')
+        _, matches = catalog.search_folders(self.database, words)
+        self.assertEqual(6, matches.count(set()))
+        self.assertEqual(1, matches.count({()}))
+        self.assertEqual(3, matches.count({('a',), ('a', 'deep')}))
+        self.assertEqual((4, []), matches.results({(), ('a',)}, limit=3))
+        self.assertEqual(4, len(matches.results({(), ('a',)}, limit=4)[1]))
+        self.assertEqual(catalog.search(self.database, words)[1], matches.results(set(), limit=6)[1])
+        _, excludes = catalog.search_folders(self.database, words, excludes=('newer',))
+        self.assertEqual(2, excludes.count({('a',)}))
+
     def test_unc_readonly_uri_has_no_authority(self):
         unc = r'\\landisk-01\share\日本語 # 100% ?\index.sqlite'
         with patch.object(catalog.sqlite3, 'connect') as connect:

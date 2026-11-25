@@ -47,16 +47,42 @@ async def exercise(scope, destination):
     assert len(group['pdfs']) == 2 and group['name'] == 'ブラケット'
     normal.query.value = '123'
     await normal.search()
-    previous_pdfs = normal.results
-    assert len(previous_pdfs) == 2
-    previous_rows = normal.result_table.rows
-    for index in range(499):
-        (pdfs / f'extra123-{index}.pdf').touch()
+    assert len(normal.results) == 2
+    sample = pdfs / 'タイプA' / '試作'
+    sample.mkdir(parents=True)
+    (sample / '123 extra.pdf').touch()
+    bulk = pdfs / 'タイプB'
+    bulk.mkdir()
+    for index in range(498):
+        (bulk / f'extra123-{index}.pdf').touch()
     pdf_catalog.ingest(pdfs, normal.index_database)
     await normal.search()
     assert '500件を超えました' in normal.message.value
-    assert normal.results is previous_pdfs and normal.result_table.rows is previous_rows
-    for path in pdfs.glob('extra*.pdf'):
+    assert not normal.results and not normal.result_table.rows and normal.match_count == 501
+    dialog = scope['page']._dialogs.controls[-1]
+    count, listing = dialog.content.content.controls[1:]
+    assert dialog.open and dialog.actions[-1].disabled and '501件' in count.value
+    assert [row.controls[3].value for row in listing.controls] == ['（検索先直下）', 'タイプA', 'タイプB']
+    listing.controls[1].controls[1].on_click(None)
+    child = listing.controls[2].controls[2]
+    child.value = True
+    child.on_change(SimpleNamespace(control=child))
+    assert not dialog.actions[-1].disabled and count.value == '対象 1件'
+    dialog.actions[-1].on_click(None)
+    assert not dialog.open and len(normal.results) == 1 and len(normal.result_table.rows) == 1
+    normal.select_all()
+    hidden = set(normal.selection)
+    normal.apply_folder_filter({()})
+    normal.select_all()
+    assert len(normal.selection - hidden) == 2 and '非表示のチェック 1件' in normal.result_count.value
+    with patch.object(normal, 'commit', new_callable=AsyncMock) as commit:
+        await normal.add_selected()
+        assert {i['path'] for i in commit.call_args.args[0]} == {i['path'] for i in normal.results}
+    normal.invert_results()
+    assert normal.selection == hidden
+    normal.apply_folder_filter({(), ('タイプB',)})
+    assert len(normal.results) == 500
+    for path in (*bulk.glob('*.pdf'), *sample.glob('*.pdf')):
         path.unlink()
     pdf_catalog.ingest(pdfs, normal.index_database)
     model = composite.catalog

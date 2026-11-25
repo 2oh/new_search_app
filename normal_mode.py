@@ -9,8 +9,12 @@ import flet as ft
 import flet_datatable2 as dt2
 import pdf_catalog
 from update_age import format_updated
-from normal_search import SearchLimitExceeded, StackStore, add_to_stack, file_info, parse_search_query, path_key, search_files
+from normal_search import StackStore, add_to_stack, file_info, parse_search_query, path_key, search_files
 from normal_preview import NormalPreview
+from pdf_folder_filter import show_folder_filter
+
+
+PDF_RESULT_LIMIT = 500
 
 
 class NormalMode(NormalPreview):
@@ -64,6 +68,8 @@ class NormalMode(NormalPreview):
             self.items = []
             self.load_error = f'ストックを読み込めません。保存データを保護するため変更を停止しています：{exc}'
         self.results, self.selection, self.metadata = [], set(), {}
+        self.folder_matches, self.folder_selection = None, set()
+        self.match_count = 0
         self.files, self.index_folder = None, None
         self.preview_generation = 0
         self.activation_generation = 0
@@ -77,6 +83,7 @@ class NormalMode(NormalPreview):
         self.search_indicator = ft.ProgressBar(width=160, height=6, value=None, visible=False)
         self.search_controls = ft.Column([ft.Row([self.query]), ft.Row([self.exclude])], expand=True, spacing=6)
         self.result_count = ft.Text('検索結果：0件', weight=ft.FontWeight.BOLD)
+        self.folder_button = ft.OutlinedButton('フォルダで絞り込み', on_click=self.choose_folders, disabled=True)
         self.stack_count = ft.Text('', weight=ft.FontWeight.BOLD)
         self.export_button = ft.Button('PDF出力', on_click=self.export, style=button_style)
         self.open_button = ft.Button('PDFを開く', on_click=self.open_selected, style=button_style)
@@ -96,7 +103,7 @@ class NormalMode(NormalPreview):
         self.stack_count.visible = False
         self.toolbar_actions = ft.Row([self.preview_hint, self.preview_button, self.result_actions,
             self.stock_actions, self.preview_target], alignment=ft.MainAxisAlignment.END, expand=True, wrap=True)
-        self.toolbar = ft.Row([self.result_count, self.stack_count, self.toolbar_actions], spacing=8)
+        self.toolbar = ft.Row([self.result_count, self.folder_button, self.stack_count, self.toolbar_actions], spacing=8)
         self.result_tab = ft.Tab(label='検索結果')
         self.stack_tab = ft.Tab(label='ストック')
         self.tab_bar = ft.TabBar(tabs=[self.result_tab, self.stack_tab])
@@ -172,6 +179,7 @@ class NormalMode(NormalPreview):
             if changed:
                 self.activation_generation += 1
                 self.results, self.selection = [], set()
+                self.folder_matches, self.folder_selection, self.match_count = None, set(), 0
                 self.files = None
                 self.clear_preview()
             if changed and self.on_pdf_updated:
@@ -234,7 +242,7 @@ class NormalMode(NormalPreview):
     def update_tab_actions(self):
         stock = self.tabs.selected_index == 1
         self.stack_count.visible = self.stock_actions.visible = stock
-        self.result_count.visible = self.result_actions.visible = not stock
+        self.result_count.visible = self.folder_button.visible = self.result_actions.visible = not stock
 
     def activate(self, active):
         if not active:
@@ -246,7 +254,7 @@ class NormalMode(NormalPreview):
         if active:
             self.refresh_index_label()
             self.resize()
-            self.message.value = self.load_error or f'検索結果：{len(self.results)}件'
+            self.message.value = self.load_error or self.folder_result_message()
             self.page.run_task(self.activate_async)
 
     async def activate_async(self):
@@ -295,33 +303,52 @@ class NormalMode(NormalPreview):
         self.activation_generation += 1
         self.preview_generation += 1
         self.preview_pending = None
+        choose_folders = False
         try:
             def work(report):
-                return pdf_catalog.search(self.index_database, words, lambda current, total: report((
+                return pdf_catalog.search_folders(self.index_database, words, lambda current, total: report((
                     f'ファイル名を検索中：{current}/{total}件', current / total if total else 1.0)),
-                    excludes=excludes, max_results=500)
-            info, results = await self.worker(work)
+                    excludes=excludes)
+            info, matches = await self.worker(work)
             self.message.value = '検索結果を表示しています…'
             self.page.update()
             self.index_root = info['root']
             self.files, self.index_folder = None, path_key(self.index_root)
-            self.results, self.selection = results, set()
-            self.metadata.update({path_key(item['path']): item for item in results})
-            self.image.visible = False
-            self.preview_label.value = ''
+            self.folder_matches, self.selection = matches, set()
+            self.match_count = matches.count(set())
             self.tabs.selected_index = 0
             self.update_tab_actions()
-            self.render(results_only=True)
-            self.message.value = f'検索結果：{len(results)}件'
-        except SearchLimitExceeded as exc:
-            self.message.value = str(exc) + ('（前回の検索結果を表示中）' if self.results else '')
+            self.apply_folder_filter(set())
+            choose_folders = self.match_count > PDF_RESULT_LIMIT
         except Exception as exc:
             self.message.value = f'検索できませんでした：{exc}'
         finally:
             self.search_indicator.visible = False
             self.set_busy(False)
             self.page.update()
-            self.page.run_task(self.focus)
+            if choose_folders:
+                self.choose_folders()
+            else:
+                self.page.run_task(self.focus)
+
+    def folder_result_message(self):
+        if not self.folder_selection and self.match_count > PDF_RESULT_LIMIT:
+            return f'検索結果が{PDF_RESULT_LIMIT}件を超えました（全{self.match_count:,}件）。フォルダで絞ってください'
+        return f'検索結果：{len(self.results):,}件' + (
+            f'（全{self.match_count:,}件から絞り込み）' if self.folder_selection else '')
+
+    def choose_folders(self, event=None):
+        if not self.busy() and not self.preview_panel.visible and self.match_count:
+            show_folder_filter(self.page, self.folder_matches, self.folder_selection, PDF_RESULT_LIMIT,
+                               self.apply_folder_filter)
+
+    def apply_folder_filter(self, selected):
+        self.folder_selection = set(selected)
+        _, self.results = self.folder_matches.results(selected, PDF_RESULT_LIMIT)
+        self.metadata.update({path_key(item['path']): item for item in self.results})
+        self.render(results_only=True)
+        self.message.value = self.folder_result_message()
+        self.page.update()
 
     @staticmethod
     def header(label, count=None, color=ft.Colors.SECONDARY):
@@ -344,7 +371,10 @@ class NormalMode(NormalPreview):
         stacked = {path_key(item['path']) for item in self.items}
         self.selection.difference_update(stacked)
         output_count = sum(i['selected'] for i in self.items)
-        self.result_count.value = f'検索結果：{len(self.results)}件'
+        self.update_result_count()
+        self.folder_button.disabled = self.match_count == 0 or self.preview_panel.visible
+        self.folder_button.content = (f'フォルダで絞り込み（{len(self.folder_selection)}）'
+                                      if self.folder_selection else 'フォルダで絞り込み')
         self.stack_count.value = f'ストック：{len(self.items)}件'
         self.result_tab.label = self.header('検索結果', len(self.results), ft.Colors.PRIMARY)
         self.stack_tab.label = self.header('ストック', len(self.items), ft.Colors.PRIMARY)
@@ -361,7 +391,7 @@ class NormalMode(NormalPreview):
             columns.append(('選択' if is_stack else '追加', 100))
             table.min_width = sum(width or 360 for _, width in columns) + 16
             table.columns = [dt2.DataColumn2(self.header(label,
-                (output_count if is_stack else len(self.selection)) if index == len(columns)-1 else None,
+                (output_count if is_stack else len(self.selection & self.result_keys())) if index == len(columns)-1 else None,
                 ft.Colors.SECONDARY if is_stack else ft.Colors.PRIMARY), fixed_width=width)
                 for index, (label, width) in enumerate(columns)]
             rows = []
@@ -428,6 +458,7 @@ class NormalMode(NormalPreview):
 
     def refresh_selection(self):
         count = sum(item['selected'] for item in self.items)
+        self.update_result_count()
         self.export_button.disabled = self.open_button.disabled = bool(
             self.busy() or self.pending_selection or not count or self.load_error)
         for is_stack, table in ((False, self.result_table), (True, self.stack_table)):
@@ -440,7 +471,7 @@ class NormalMode(NormalPreview):
                     checkbox.value = values.get(key, False)
             if table.columns:
                 table.columns[-1].label = self.header('選択' if is_stack else '追加',
-                    count if is_stack else len(self.selection),
+                    count if is_stack else len(self.selection & self.result_keys()),
                     ft.Colors.SECONDARY if is_stack else ft.Colors.PRIMARY)
 
     async def save_selection(self, value, key=None):
@@ -493,22 +524,27 @@ class NormalMode(NormalPreview):
         if not paths:
             self.report_error('ストックに追加するPDFをチェックしてください。')
             return
-        if await self.commit(add_to_stack(self.items, paths)):
-            self.selection.clear()
-        self.render()
-        self.page.update()
+        await self.commit(add_to_stack(self.items, paths))
+
+    def result_keys(self):
+        return {path_key(item['path']) for item in self.results}
+
+    def update_result_count(self):
+        hidden = len(self.selection - self.result_keys())
+        self.result_count.value = f'検索結果：{len(self.results):,}件' + (
+            f'（非表示のチェック {hidden:,}件）' if hidden else '')
 
     def select_all(self, e=None):
         if self.busy():
             return
         stacked = {path_key(i['path']) for i in self.items}
-        self.selection = {path_key(i['path']) for i in self.results} - stacked
+        self.selection.update(self.result_keys() - stacked)
         self.refresh_selection()
         self.page.update()
 
     def deselect_all(self, e=None):
         if not self.busy():
-            self.selection.clear()
+            self.selection.difference_update(self.result_keys())
             self.refresh_selection()
             self.page.update()
 
@@ -516,8 +552,8 @@ class NormalMode(NormalPreview):
         if self.busy():
             return
         stacked = {path_key(i['path']) for i in self.items}
-        eligible = {path_key(i['path']) for i in self.results} - stacked
-        self.selection = eligible - self.selection
+        eligible = self.result_keys() - stacked
+        self.selection.symmetric_difference_update(eligible)
         self.refresh_selection()
         self.page.update()
 

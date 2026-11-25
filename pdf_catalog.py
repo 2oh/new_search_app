@@ -1,5 +1,6 @@
 """PDF filename snapshots. No PDF contents or network I/O during search."""
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -229,8 +230,8 @@ def snapshot_paths(database):
     return info, paths
 
 
-def search(database, words, progress_callback=None, excludes=(), *, max_results=None):
-    """Search exclusively local data; return the same result shape/order as A."""
+@contextmanager
+def matching_rows(database, words, excludes, progress_callback):
     if not Path(database).is_file():
         raise FileNotFoundError('PDF索引DBが未取得です。公開先を設定し、最新データ取得を実行してください。')
     # Keep metadata and rows on one connection so a generation cannot change between reads.
@@ -239,19 +240,68 @@ def search(database, words, progress_callback=None, excludes=(), *, max_results=
         if info.get('schema') != VERSION or info.get('kind') != 'pdf-index':
             raise ValueError('未対応のPDF索引DBです')
         total = int(info['count'])
-        root = Path(info['root'])
-        results = []
-        if progress_callback:
-            progress_callback(0, total)
-        for number, row in enumerate(db.execute('SELECT * FROM files'), 1):
-            if words and all(word in row['stem'] for word in words) and not any(word in row['stem'] for word in excludes):
-                if max_results is not None and len(results) >= max_results:
-                    raise SearchLimitExceeded(max_results, '件')
-                results.append({'path': str(root / row['path']),
-                                'modified': row['mtime_ns'] / 1_000_000_000,
-                                'available': True})  # Availability is checked when actually used.
-            if progress_callback and (number % 100 == 0 or number == total):
-                progress_callback(number, total)
+        def rows():
+            if progress_callback:
+                progress_callback(0, total)
+            for number, row in enumerate(db.execute('SELECT path, stem, mtime_ns FROM files'), 1):
+                if words and all(word in row['stem'] for word in words) and not any(word in row['stem'] for word in excludes):
+                    yield row['path'], row['mtime_ns']
+                if progress_callback and (number % 100 == 0 or number == total):
+                    progress_callback(number, total)
+        yield info, rows()
+
+
+def pdf_result(root, path, mtime_ns):
+    return {'path': str(root / path), 'modified': mtime_ns / 1_000_000_000, 'available': True}
+
+
+def sort_results(results):
     results.sort(key=lambda item: (path_key(str(Path(item['path']).parent)),
                  -item['modified'], Path(item['path']).name.casefold(), path_key(item['path'])))
+    return results
+
+
+def search(database, words, progress_callback=None, excludes=(), *, max_results=None):
+    """Search exclusively local data; return the same result shape/order as A."""
+    with matching_rows(database, words, excludes, progress_callback) as (info, rows):
+        root = Path(info['root'])
+        results = []
+        for path, mtime in rows:
+            if max_results is not None and len(results) >= max_results:
+                raise SearchLimitExceeded(max_results, '件')
+            results.append(pdf_result(root, path, mtime))
+    sort_results(results)
     return info, results
+
+
+@dataclass
+class FolderMatches:
+    root: Path
+    by_folder: dict[tuple[str, ...], list[tuple[str, int]]]
+
+    def groups(self, selected):
+        for folder, records in self.by_folder.items():
+            if not selected or any(folder[:depth] in selected for depth in range(1, len(folder) + 1)) or (
+                    not folder and () in selected):
+                yield records
+
+    def count(self, selected):
+        return sum(len(records) for records in self.groups(selected))
+
+    def results(self, selected, limit):
+        groups = list(self.groups(selected))
+        count = sum(len(records) for records in groups)
+        if count > limit:
+            return count, []
+        return count, sort_results([pdf_result(self.root, path, mtime)
+                                    for records in groups for path, mtime in records])
+
+
+def search_folders(database, words, progress_callback=None, excludes=()):
+    """Keep compact local-index matches grouped by their immediate folder."""
+    with matching_rows(database, words, excludes, progress_callback) as (info, rows):
+        by_folder = {}
+        for path, mtime in rows:
+            folder = tuple(path.replace('\\', '/').split('/')[:-1])
+            by_folder.setdefault(folder, []).append((path, mtime))
+        return info, FolderMatches(Path(info['root']), by_folder)

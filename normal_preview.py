@@ -143,6 +143,7 @@ class NormalPreview:
         self.preview_target.visible = True
         self.preview_button.content = HIDE_PREVIEW
         self.tab_bar.disabled = self.result_actions.disabled = self.stock_actions.disabled = True
+        self.folder_button.disabled = True
         self.tab_content.visible = False
         self.preview_listing.visible = True
         if self.on_preview_visibility:
@@ -157,6 +158,7 @@ class NormalPreview:
         self.preview_target.visible = self.preview_focused = False
         self.preview_button.content = SHOW_PREVIEW
         self.tab_bar.disabled = self.result_actions.disabled = self.stock_actions.disabled = False
+        self.folder_button.disabled = self.match_count == 0
         self.tab_content.visible = True
         self.preview_listing.visible = False
         self.preview_index = None
