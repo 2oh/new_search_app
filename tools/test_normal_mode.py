@@ -414,7 +414,7 @@ async def run(root):
                     await normal.toggle_preview()
                     session.get_page_patch()
                     assert normal.tab_content.visible and not normal.preview_listing.visible
-                    assert normal.folder_button.visible == (index % 2 == 0)
+                    assert normal.folder_button.visible
                     assert normal.result_actions.visible == (index % 2 == 0)
                     assert normal.stock_actions.visible == (index % 2 == 1)
                 await normal.toggle_preview()

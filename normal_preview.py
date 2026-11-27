@@ -43,6 +43,9 @@ class NormalPreview:
 
         async def route(event):
             if not self.can_navigate():
+                if event.key == 'Escape' and self.view.visible and self.folder_filter.panel.visible:
+                    self.dismiss_folder_filter()
+                    return
                 if previous:
                     result = previous(event)
                     if inspect.isawaitable(result):
@@ -150,6 +153,7 @@ class NormalPreview:
         if not items:
             self.report_error('プレビューするPDFがありません')
             return
+        self.close_folder_filter()
         self.build_preview_rows(items)
         self.preview_panel.visible = self.preview_hint.visible = True
         self.preview_target.visible = True
@@ -172,7 +176,7 @@ class NormalPreview:
         self.preview_target.visible = self.preview_focused = False
         self.preview_button.content = SHOW_PREVIEW
         self.tab_bar.disabled = self.result_actions.disabled = self.stock_actions.disabled = False
-        self.folder_button.disabled = self.match_count == 0
+        self.folder_button.disabled = False
         self.update_tab_actions()
         self.tab_content.visible = True
         self.preview_listing.visible = False

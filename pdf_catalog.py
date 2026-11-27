@@ -231,7 +231,7 @@ def snapshot_paths(database):
 
 
 @contextmanager
-def matching_rows(database, words, excludes, progress_callback):
+def matching_rows(database, words, excludes, progress_callback, *, allow_empty=False):
     if not Path(database).is_file():
         raise FileNotFoundError('PDF索引DBが未取得です。公開先を設定し、最新データ取得を実行してください。')
     # Keep metadata and rows on one connection so a generation cannot change between reads.
@@ -244,7 +244,7 @@ def matching_rows(database, words, excludes, progress_callback):
             if progress_callback:
                 progress_callback(0, total)
             for number, row in enumerate(db.execute('SELECT path, stem, mtime_ns FROM files'), 1):
-                if words and all(word in row['stem'] for word in words) and not any(word in row['stem'] for word in excludes):
+                if (words or allow_empty) and all(word in row['stem'] for word in words) and not any(word in row['stem'] for word in excludes):
                     yield row['path'], row['mtime_ns']
                 if progress_callback and (number % 100 == 0 or number == total):
                     progress_callback(number, total)
@@ -297,9 +297,9 @@ class FolderMatches:
                                     for records in groups for path, mtime in records])
 
 
-def search_folders(database, words, progress_callback=None, excludes=()):
+def search_folders(database, words, progress_callback=None, excludes=(), *, allow_empty=False):
     """Keep compact local-index matches grouped by their immediate folder."""
-    with matching_rows(database, words, excludes, progress_callback) as (info, rows):
+    with matching_rows(database, words, excludes, progress_callback, allow_empty=allow_empty) as (info, rows):
         by_folder = {}
         for path, mtime in rows:
             folder = tuple(path.replace('\\', '/').split('/')[:-1])

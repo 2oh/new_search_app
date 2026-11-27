@@ -7049,6 +7049,90 @@ Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
 
 
 
+【v1.4.12 PDFファイル名検索のフォルダ操作】
+
+・フォルダの階層を検索欄のすぐ下で開閉し、複数選択できる。
+・検索文字列が空欄でも、フォルダを選んで「適用」すればPDF一覧を表示できる。
+・表示上限は500件。超えるときは下位フォルダや文字列で絞る。
+
+【1．ブランチ切替】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git switch -c codex/ui-v1.4.12
+git status -sb
+
+切替後に連絡する。原本への反映後、次の起動確認に進む。
+
+【2．起動確認】
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/composite_demo.py
+
+・PDFファイル名モードに切り替え、検索文字列を空欄のまま「フォルダで絞り込み」を開く。
+・タイプAの矢印を押して下位階層を展開し、グループを選んで「適用」。検索ボタンを押さずに一覧が出ることを確認する。
+・複数フォルダの選択、親を選んだときに配下も含むこと、「検索先直下」は直下だけを表示することを確認する。
+・文字列を入力して選択フォルダ内を検索し、選択フォルダと文字列の両方が適用されることを確認する。
+・現地で対象が501件以上になる場合に、一覧を表示する前にさらに絞るよう案内されることを確認する。
+
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/test_composite_ui.py
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/test_normal_mode.py .
+& 'C:\dev\new_search_app\Scripts\python.exe' -B -m unittest discover -s tests -q
+
+【3．コミット・push】
+git status -sb
+git diff --check
+git diff --stat
+git ls-files --others --exclude-standard
+
+設定・ストック・DB・ログ・キャッシュ等がコミット対象に入らないことを確認。note.txt に変更がある場合は、今回のコミットに含める内容かを確認する。
+
+git add -A
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+
+対象外のファイルがステージされていたら、git restore --staged -- <ファイル> でそのファイルをステージから外し、対象を再確認する。
+
+git commit -m "feat: browse PDF folders directly from filename search"
+git push -u origin codex/ui-v1.4.12
+
+【4．main統合・タグ】
+git status -sb
+
+作業ツリーがクリーンであることを確認して実行。
+
+git switch main
+git fetch origin
+git merge --ff-only origin/main
+git merge --ff-only codex/ui-v1.4.12
+git push origin main
+git tag --list v1.4.12
+git ls-remote --tags origin refs/tags/v1.4.12
+
+リモートの確認コマンドが成功し、ローカル・リモートの両方にタグがない場合に実行。
+
+git tag -a v1.4.12 -m "Release v1.4.12"
+git push origin v1.4.12
+
+【5．EXE作成とセルフテスト】
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
+$LASTEXITCODE
+
+終了コード0を確認して実行。
+
+$selftestDir = Join-Path $PWD ('work\v1412-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$exePath = Join-Path $PWD 'dist\図面PDF検索結合ツール (v1.4.12).exe'
+$testProcess = Start-Process -FilePath $exePath -ArgumentList @('--self-test', ('"' + $selftestDir + '"')) -WindowStyle Hidden -Wait -PassThru
+$testProcess.ExitCode
+Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
+
+終了コード0、frozen=true、version=v1.4.12を確認。
+
+【6．現地へ持っていくもの】
+・原本フォルダの dist\図面PDF検索結合ツール (v1.4.12).exe
+・原本フォルダの COMPOSITE_SETUP.md と RELEASE_NOTES.txt
+
+旧EXEを保管してから配置する。現地の config.json、normal_stack.json、part_stock.json は現地のものを使う。
+今回の範囲ではDBの再作成やバッチEXEの交換は不要。
+
 
 
 

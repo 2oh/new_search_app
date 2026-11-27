@@ -59,17 +59,17 @@ async def exercise(scope, destination):
     await normal.search()
     assert '500件を超えました' in normal.message.value
     assert not normal.results and not normal.result_table.rows and normal.match_count == 501
-    dialog = scope['page']._dialogs.controls[-1]
-    count, listing = dialog.content.content.controls[1:]
-    assert dialog.open and dialog.actions[-1].disabled and '501件' in count.value
+    filter_panel = normal.folder_filter
+    count, listing = filter_panel.count_label, filter_panel.listing
+    assert filter_panel.panel.visible and filter_panel.apply_button.disabled and '501件' in count.value
     assert [row.controls[3].value for row in listing.controls] == ['（検索先直下）', 'タイプA', 'タイプB']
     listing.controls[1].controls[1].on_click(None)
     child = listing.controls[2].controls[2]
     child.value = True
     child.on_change(SimpleNamespace(control=child))
-    assert not dialog.actions[-1].disabled and count.value == '対象 1件'
-    dialog.actions[-1].on_click(None)
-    assert not dialog.open and len(normal.results) == 1 and len(normal.result_table.rows) == 1
+    assert not filter_panel.apply_button.disabled and count.value == '対象 1件'
+    filter_panel.apply()
+    assert not filter_panel.panel.visible and len(normal.results) == 1 and len(normal.result_table.rows) == 1
     normal.select_all()
     hidden = set(normal.selection)
     normal.apply_folder_filter({()})
@@ -82,6 +82,21 @@ async def exercise(scope, destination):
     assert normal.selection == hidden
     normal.apply_folder_filter({(), ('タイプB',)})
     assert len(normal.results) == 500
+    normal.query.value = ''
+    normal.exclude.value = 'second'
+    await normal.choose_folders()
+    assert filter_panel.panel.visible and len(normal.results) == 500
+    filter_panel.reset()
+    assert filter_panel.apply_button.disabled
+    filter_panel.select((), True)
+    assert not filter_panel.apply_button.disabled and count.value == '対象 1件'
+    filter_panel.apply()
+    assert [Path(result['path']).name for result in normal.results] == ['123 first.pdf']
+    assert not normal.selection and not filter_panel.panel.visible
+    await normal.choose_folders()
+    normal.query.value = 'second'
+    normal.query.on_change(None)
+    assert not filter_panel.panel.visible and len(normal.results) == 1
     for path in (*bulk.glob('*.pdf'), *sample.glob('*.pdf')):
         path.unlink()
     pdf_catalog.ingest(pdfs, normal.index_database)

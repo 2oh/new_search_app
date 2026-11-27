@@ -11,7 +11,7 @@ import pdf_catalog
 from update_age import format_updated
 from normal_search import StackStore, add_to_stack, file_info, parse_search_query, path_key, search_files
 from normal_preview import NormalPreview
-from pdf_folder_filter import show_folder_filter
+from pdf_folder_filter import FolderFilter
 
 
 PDF_RESULT_LIMIT = 500
@@ -69,7 +69,8 @@ class NormalMode(NormalPreview):
             self.load_error = f'ストックを読み込めません。保存データを保護するため変更を停止しています：{exc}'
         self.results, self.selection, self.metadata = [], set(), {}
         self.folder_matches, self.folder_selection = None, set()
-        self.match_count = 0
+        self.match_count = self.filtered_count = 0
+        self.loaded_terms = None
         self.files, self.index_folder = None, None
         self.preview_generation = 0
         self.activation_generation = 0
@@ -81,9 +82,13 @@ class NormalMode(NormalPreview):
         self.search_button = ft.Button('検索', on_click=self.search, style=button_style)
         self.query.tooltip = self.query.hint_text
         self.search_indicator = ft.ProgressBar(width=160, height=6, value=None, visible=False)
-        self.search_controls = ft.Column([ft.Row([self.query]), ft.Row([self.exclude])], expand=True, spacing=6)
+        self.folder_filter = FolderFilter(page, PDF_RESULT_LIMIT)
+        self.folder_button = ft.OutlinedButton('フォルダで絞り込み', icon=ft.Icons.ARROW_DROP_DOWN,
+                                               on_click=self.choose_folders)
+        self.query.on_change = self.exclude.on_change = self.on_search_text_change
+        self.search_controls = ft.Column([ft.Row([self.query]), ft.Row([self.exclude]),
+                                          ft.Row([self.folder_button])], expand=True, spacing=6)
         self.result_count = ft.Text('検索結果：0件', weight=ft.FontWeight.BOLD)
-        self.folder_button = ft.OutlinedButton('フォルダで絞り込み', on_click=self.choose_folders, disabled=True)
         self.stack_count = ft.Text('', weight=ft.FontWeight.BOLD)
         self.export_button = ft.Button('PDF出力', on_click=self.export, style=button_style)
         self.open_button = ft.Button('PDFを開く', on_click=self.open_selected, style=button_style)
@@ -106,7 +111,7 @@ class NormalMode(NormalPreview):
         self.stack_count.visible = False
         self.toolbar_actions = ft.Row([self.result_actions, self.stock_actions, self.preview_target,
             self.preview_hint, self.preview_button], alignment=ft.MainAxisAlignment.END, expand=True, wrap=True)
-        self.toolbar = ft.Row([self.result_count, self.folder_button, self.stack_count, self.toolbar_actions], spacing=8)
+        self.toolbar = ft.Row([self.result_count, self.stack_count, self.toolbar_actions], spacing=8)
         self.result_tab = ft.Tab(label='検索結果')
         self.stack_tab = ft.Tab(label='ストック')
         self.tab_bar = ft.TabBar(tabs=[self.result_tab, self.stack_tab])
@@ -166,6 +171,7 @@ class NormalMode(NormalPreview):
     async def sync_index(self, event=None):
         if self.busy():
             return
+        self.close_folder_filter()
         folder = (self.publish_field.value or '').strip()
         if not folder:
             self.report_error('PDF索引データ配信元フォルダを指定してください。')
@@ -182,7 +188,9 @@ class NormalMode(NormalPreview):
             if changed:
                 self.activation_generation += 1
                 self.results, self.selection = [], set()
-                self.folder_matches, self.folder_selection, self.match_count = None, set(), 0
+                self.folder_matches, self.folder_selection = None, set()
+                self.match_count = self.filtered_count = 0
+                self.loaded_terms = None
                 self.files = None
                 self.clear_preview()
             if changed and self.on_pdf_updated:
@@ -248,11 +256,13 @@ class NormalMode(NormalPreview):
         self.stack_count.visible = stock
         self.result_count.visible = not stock
         self.stock_actions.visible = stock and show_actions
-        self.folder_button.visible = self.result_actions.visible = not stock and show_actions
+        self.folder_button.visible = show_actions
+        self.result_actions.visible = not stock and show_actions
 
     def activate(self, active):
         if not active:
             self.close_preview()
+            self.close_folder_filter()
         self.activation_generation += 1
         self.view.visible = active
         self.preview_generation += 1
@@ -292,65 +302,108 @@ class NormalMode(NormalPreview):
         if self.busy():
             return
         self.close_preview()
+        self.close_folder_filter()
         try:
-            words = parse_search_query(self.query.value)
-            excludes = parse_search_query(self.exclude.value)
+            terms = self.search_terms()
         except ValueError as exc:
             self.report_error(exc)
             await self.focus()
             return
-        if not words:
-            self.report_error('検索文字列を入力してください。')
+        if not terms[0] and not self.folder_selection:
+            self.report_error('検索文字列を入力するか、フォルダを選択してください。')
             await self.focus()
             return
+        try:
+            matches = await self.scan_folders(terms)
+        except Exception as exc:
+            self.report_error(f'検索できませんでした：{exc}')
+            return
+        self.selection.clear()
+        self.install_matches(matches, terms)
+        self.apply_folder_filter(self.folder_selection)
+        if self.filtered_count > PDF_RESULT_LIMIT:
+            self.open_folder_filter(matches, terms)
+        else:
+            self.page.run_task(self.focus)
+
+    def search_terms(self):
+        return (tuple(parse_search_query(self.query.value)), tuple(parse_search_query(self.exclude.value)))
+
+    async def scan_folders(self, terms):
         self.search_indicator.value = None
         self.search_indicator.visible = True
         self.set_busy(True, 'PDF索引を検索中…')
         self.activation_generation += 1
-        self.preview_generation += 1
-        self.preview_pending = None
-        choose_folders = False
         try:
             def work(report):
-                return pdf_catalog.search_folders(self.index_database, words, lambda current, total: report((
+                return pdf_catalog.search_folders(self.index_database, terms[0], lambda current, total: report((
                     f'ファイル名を検索中：{current}/{total}件', current / total if total else 1.0)),
-                    excludes=excludes)
-            info, matches = await self.worker(work)
-            self.message.value = '検索結果を表示しています…'
-            self.page.update()
-            self.index_root = info['root']
-            self.files, self.index_folder = None, path_key(self.index_root)
-            self.folder_matches, self.selection = matches, set()
-            self.match_count = matches.count(set())
-            self.tabs.selected_index = 0
-            self.update_tab_actions()
-            self.apply_folder_filter(set())
-            choose_folders = self.match_count > PDF_RESULT_LIMIT
-        except Exception as exc:
-            self.message.value = f'検索できませんでした：{exc}'
+                    excludes=terms[1], allow_empty=True)
+            _, matches = await self.worker(work)
+            return matches
         finally:
             self.search_indicator.visible = False
             self.set_busy(False)
             self.page.update()
-            if choose_folders:
-                self.choose_folders()
-            else:
-                self.page.run_task(self.focus)
+
+    def install_matches(self, matches, terms):
+        self.index_root = str(matches.root)
+        self.files, self.index_folder = None, path_key(self.index_root)
+        self.folder_matches, self.loaded_terms = matches, terms
+        self.match_count = matches.count(set())
 
     def folder_result_message(self):
-        if not self.folder_selection and self.match_count > PDF_RESULT_LIMIT:
-            return f'検索結果が{PDF_RESULT_LIMIT}件を超えました（全{self.match_count:,}件）。フォルダで絞ってください'
+        if self.filtered_count > PDF_RESULT_LIMIT:
+            return f'検索結果が{PDF_RESULT_LIMIT}件を超えました（対象{self.filtered_count:,}件）。条件を絞ってください'
         return f'検索結果：{len(self.results):,}件' + (
             f'（全{self.match_count:,}件から絞り込み）' if self.folder_selection else '')
 
-    def choose_folders(self, event=None):
-        if not self.busy() and not self.preview_panel.visible and self.match_count:
-            show_folder_filter(self.page, self.folder_matches, self.folder_selection, PDF_RESULT_LIMIT,
-                               self.apply_folder_filter)
+    async def choose_folders(self, event=None):
+        if self.busy() or self.preview_panel.visible:
+            return
+        if self.folder_filter.panel.visible:
+            self.dismiss_folder_filter()
+            return
+        try:
+            terms = self.search_terms()
+            matches = self.folder_matches if self.loaded_terms == terms else await self.scan_folders(terms)
+        except Exception as exc:
+            self.report_error(f'フォルダを読み込めません：{exc}')
+            return
+        self.message.value = self.folder_result_message()
+        self.open_folder_filter(matches, terms)
+
+    def open_folder_filter(self, matches, terms):
+        def apply(selection):
+            if self.busy() or self.preview_panel.visible:
+                return
+            if self.folder_matches is not matches:
+                self.selection.clear()
+                self.install_matches(matches, terms)
+            self.close_folder_filter()
+            self.apply_folder_filter(selection)
+
+        self.folder_button.icon = ft.Icons.ARROW_DROP_UP
+        self.folder_filter.open(matches, self.folder_selection, require_folder=not terms[0],
+                                on_apply=apply, on_close=self.dismiss_folder_filter)
+
+    def close_folder_filter(self):
+        self.folder_filter.close()
+        self.folder_button.icon = ft.Icons.ARROW_DROP_DOWN
+
+    def dismiss_folder_filter(self):
+        self.close_folder_filter()
+        self.page.update()
+
+    def on_search_text_change(self, event):
+        if self.folder_filter.panel.visible:
+            self.dismiss_folder_filter()
 
     def apply_folder_filter(self, selected):
         self.folder_selection = set(selected)
-        _, self.results = self.folder_matches.results(selected, PDF_RESULT_LIMIT)
+        self.filtered_count, self.results = self.folder_matches.results(selected, PDF_RESULT_LIMIT)
+        self.tabs.selected_index = 0
+        self.update_tab_actions()
         self.metadata.update({path_key(item['path']): item for item in self.results})
         self.render(results_only=True)
         self.message.value = self.folder_result_message()
@@ -378,9 +431,11 @@ class NormalMode(NormalPreview):
         self.selection.difference_update(stacked)
         output_count = sum(i['selected'] for i in self.items)
         self.update_result_count()
-        self.folder_button.disabled = self.match_count == 0 or self.preview_panel.visible
+        self.folder_button.disabled = self.preview_panel.visible
         self.folder_button.content = (f'フォルダで絞り込み（{len(self.folder_selection)}）'
                                       if self.folder_selection else 'フォルダで絞り込み')
+        self.folder_button.tooltip = '\n'.join(' / '.join(folder) or '（検索先直下）'
+                                               for folder in sorted(self.folder_selection)) or None
         self.stack_count.value = f'ストック：{len(self.items)}件'
         self.result_tab.label = self.header('検索結果', len(self.results), ft.Colors.PRIMARY)
         self.stack_tab.label = self.header('ストック', len(self.items), ft.Colors.PRIMARY)

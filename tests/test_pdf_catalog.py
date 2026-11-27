@@ -66,6 +66,9 @@ class PdfCatalogTests(unittest.TestCase):
         self.assertEqual(catalog.search(self.database, words)[1], matches.results(set(), limit=6)[1])
         _, excludes = catalog.search_folders(self.database, words, excludes=('newer',))
         self.assertEqual(2, excludes.count({('a',)}))
+        _, folder_only = catalog.search_folders(self.database, [], excludes=('f123',), allow_empty=True)
+        self.assertEqual(1, folder_only.count({('b',)}))
+        self.assertEqual([], catalog.search(self.database, [])[1])
 
     def test_unc_readonly_uri_has_no_authority(self):
         unc = r'\\landisk-01\share\日本語 # 100% ?\index.sqlite'

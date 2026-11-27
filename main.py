@@ -28,7 +28,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.4.11"
+APP_VERSION = "v1.4.12"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -3120,7 +3120,8 @@ def main(page: ft.Page):
             controls = [folder_settings_row, reference_actions, reference_panel, mode_dropdown, excel_control_row,
                         table_header, table_area, exit_button,
                         normal_mode.view, normal_mode.search_controls, composite_mode.view, composite_mode.search_controls,
-                        normal_mode.search_button, composite_mode.search_button, composite_mode.filters]
+                        normal_mode.search_button, normal_mode.folder_filter.panel,
+                        composite_mode.search_button, composite_mode.filters]
             pdf_action_state["disabled_before"] = [(c, c.disabled) for c in controls]
             for control in controls:
                 control.disabled = True
@@ -3712,6 +3713,7 @@ def main(page: ft.Page):
             [
                 folder_settings_row,
                 mode_row,
+                normal_mode.folder_filter.panel,
                 composite_mode.filters,
 
                 ft.Divider(height=1),
