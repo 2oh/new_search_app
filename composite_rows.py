@@ -2,10 +2,9 @@
 from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
-import asyncio
 import inspect
-import sys
 import flet as ft
+from preview_keys import VERTICAL_KEYS, VerticalKeyRepeat
 
 
 class CompositeRows:
@@ -18,7 +17,7 @@ class CompositeRows:
         self.list.on_scroll = self.on_list_scroll
         self.heading_assy = ft.Container(ft.Text('使用ASSY', weight=ft.FontWeight.BOLD), width=440)
         self.heading = ft.Row([self.core_columns([
-            ft.Text('品番／PG'), ft.Text('代表品名'), ft.Text('材料'), ft.Text('PDF'), ft.Text('選択')]),
+            ft.Text('項番'), ft.Text('品番／PG'), ft.Text('代表品名'), ft.Text('材料'), ft.Text('PDF'), ft.Text('選択')]),
             self.heading_assy], spacing=8)
         self.heading_box = ft.Container(self.heading, padding=6, height=36,
             bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST)
@@ -28,7 +27,7 @@ class CompositeRows:
         # Preview locks the search and result controls. Arrows remain usable
         # even if a PDF candidate button or the close button owns focus.
         self.navigation_focused = False
-        self.navigation_sequence = 0
+        self.key_repeat = VerticalKeyRepeat(self.page, self.can_navigate, self.navigate_key)
         self.key_target = ft.TextField(value='', read_only=True, ignore_up_down_keys=True,
             enable_interactive_selection=False, width=1, height=1, opacity=0,
             border=ft.InputBorder.NONE, content_padding=0,
@@ -45,12 +44,10 @@ class CompositeRows:
                     if key not in ('ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'):
                         return
                     await self.focus_navigation()
-                self.navigation_sequence += 1
-                sequence = self.navigation_sequence
-                if key in ('ArrowUp', 'ArrowDown'):
-                    held = self.held_vertical_key(event)
-                    if held:
-                        self.page.run_task(self.repeat_navigation, event, sequence, held)
+                if key in VERTICAL_KEYS:
+                    self.key_repeat.start(event)
+                else:
+                    self.key_repeat.stop()
                 await self.navigate_key(event)
             elif previous_keyboard_handler:
                 result = previous_keyboard_handler(event)
@@ -70,7 +67,7 @@ class CompositeRows:
 
     @staticmethod
     def core_columns(controls):
-        widths = [106, None, 104, None, 96]
+        widths = [44, 106, None, 104, None, 96]
         return ft.Row([ft.Container(c, width=w) for c,w in zip(controls,widths)],
             expand=True, spacing=8, vertical_alignment=ft.CrossAxisAlignment.START)
 
@@ -95,15 +92,17 @@ class CompositeRows:
         self.update_list_actions()
         stacked = {g['key'] for g in self.items}
         updated = {}
-        for group in groups:
+        for number, group in enumerate(groups, 1):
             key = group['key']
             # Selection-only changes retain the actual row controls and scroll state.
             snapshot = {k:v for k,v in group.items() if k != 'selected'}
             signature = (snapshot, self.stock_view, key in stacked, key in self.expanded_keys)
             cached = self.row_cache.get(key)
             if cached is None or cached['signature'] != signature:
-                cached = self.make_row(group, key in stacked)
+                cached = self.make_row(group, key in stacked, number)
                 cached['signature'] = signature
+            elif cached['number'].value != str(number):
+                cached['number'].value = str(number)
             updated[key] = cached
         self.row_cache = updated
         if self.active_key not in updated:
@@ -115,7 +114,7 @@ class CompositeRows:
         self.resize_rows()
         self.highlight_active()
 
-    def make_row(self, group, stacked):
+    def make_row(self, group, stacked, number):
         key = group['key']
         async def check(event):
             if self.normal.busy():
@@ -167,7 +166,9 @@ class CompositeRows:
                 on_click=lambda e:self.expand_row(key), height=28))
         assy, assy_height = self.assy_cell(group, expanded)
         pdf_height = max(40, min(2,len(pdfs))*40 if not expanded else len(pdfs)*40) + (28 if len(pdfs)>2 else 0)
-        core = self.core_columns([identity, ft.Container(text(group['name']), padding=ft.Padding.symmetric(vertical=6)),
+        number_label = text(str(number), lines=1)
+        core = self.core_columns([ft.Container(number_label, padding=ft.Padding.symmetric(vertical=6)),
+            identity, ft.Container(text(group['name']), padding=ft.Padding.symmetric(vertical=6)),
             ft.Container(text(group['material'] or '未記載'), padding=ft.Padding.symmetric(vertical=6)),
             ft.Column(pdf_controls, spacing=0), ft.Column(actions, spacing=0)])
         row = ft.Container(ft.Row([core, assy], spacing=8, vertical_alignment=ft.CrossAxisAlignment.START),
@@ -175,7 +176,8 @@ class CompositeRows:
             # Rows use object identity; scrolling already uses pixel offsets.
             padding=6,
             border=ft.Border(bottom=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)))
-        return dict(row=row, core=core, check=checkbox, assy=assy, base_height=max(72,pdf_height+12), assy_height=assy_height+12)
+        return dict(row=row, core=core, number=number_label, check=checkbox, assy=assy,
+            base_height=max(72,pdf_height+12), assy_height=assy_height+12)
 
     def assy_cell(self, group, expanded):
         sheets = OrderedDict()
@@ -246,22 +248,24 @@ class CompositeRows:
     def resize_rows(self):
         width = self.page.width or 1400
         previous_right = min(660, max(370, width * 0.35))
-        # 378px covers the fixed columns, gaps and page/row padding.
-        flexible = max(0, width - previous_right - 378)
+        # Fixed columns, including the row number, plus gaps and page/row padding.
+        fixed_width = 430
+        flexible = max(0, width - previous_right - fixed_width)
         name_width = max(90, flexible * 3 / 7 * 0.6)
         pdf_width = max(135, flexible * 4 / 7 * 0.75)
-        right_width = max(0, width - 378 - name_width - pdf_width)
-        self.heading.controls[0].controls[1].width = name_width
-        self.heading.controls[0].controls[3].width = pdf_width
+        right_width = max(0, width - fixed_width - name_width - pdf_width)
+        self.heading.controls[0].controls[2].width = name_width
+        self.heading.controls[0].controls[4].width = pdf_width
         self.preview_panel.width = right_width
         self.image.width = max(0, right_width - 16)
+        self.layout_candidates()
         compact = self.preview_panel.visible
         self.heading_assy.visible = not compact
         # Row padding consumes 12px; the external preview does not.
         self.heading_assy.width = max(0, right_width - 12)
         for cached in self.row_cache.values():
-            cached['core'].controls[1].width = name_width
-            cached['core'].controls[3].width = pdf_width
+            cached['core'].controls[2].width = name_width
+            cached['core'].controls[4].width = pdf_width
             cached['assy'].visible = not compact
             cached['assy'].width = self.heading_assy.width
             # Keep the same heights on toggle so scroll position remains stable.
@@ -334,29 +338,3 @@ class CompositeRows:
     def can_navigate(self):
         return (self.view.visible and self.preview_panel.visible and not self.opening_candidate
                 and not self.normal.busy())
-
-    def held_vertical_key(self, event):
-        # Flet Page sends the initial keydown but omits OS key-repeat events.
-        # Check only the pressed arrow, while this Flet window is foreground.
-        if sys.platform != 'win32':
-            return None
-        import ctypes
-        from ctypes import wintypes
-        user32 = ctypes.windll.user32
-        foreground = user32.GetForegroundWindow
-        foreground.restype = wintypes.HWND
-        hwnd = foreground()
-        title = ctypes.create_unicode_buffer(256)
-        if not hwnd or not user32.GetWindowTextW(wintypes.HWND(hwnd), title, len(title)):
-            return None
-        if title.value != self.page.title:
-            return None
-        arrow = 0x26 if event.key.replace(' ', '') == 'ArrowUp' else 0x28
-        return lambda: foreground() == hwnd and bool(user32.GetAsyncKeyState(arrow) & 0x8000)
-
-    async def repeat_navigation(self, event, sequence, held):
-        await asyncio.sleep(0.4)
-        while (sequence == self.navigation_sequence and self.can_navigate()
-               and held()):
-            await self.navigate_key(event)
-            await asyncio.sleep(0.075)

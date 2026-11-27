@@ -5,6 +5,7 @@ from pathlib import Path
 
 import flet as ft
 import pandas as pd
+from preview_keys import VERTICAL_KEYS, VerticalKeyRepeat
 
 
 ROW_HEIGHT = 58
@@ -27,6 +28,7 @@ class BomPreview:
         self.loading = False
         self.opening_pdf = False
         self.navigation_focused = False
+        self.key_repeat = VerticalKeyRepeat(page, self.can_navigate, self.move_preview)
         self.offset = 0
         self.viewport = None
         self.button = ft.OutlinedButton('PDFプレビューを表示')
@@ -68,14 +70,18 @@ class BomPreview:
             if key == 'Escape':
                 self.close()
                 self.page.update()
-            elif key in ('ArrowUp', 'ArrowDown'):
-                delta = -1 if key == 'ArrowUp' else 1
-                await self.select((self.index if self.index is not None else 0) + delta, scroll=True)
+            elif key in VERTICAL_KEYS:
                 if not self.navigation_focused:
                     await self.focus()
+                self.key_repeat.start(event)
+                await self.move_preview(event)
             elif key in ('Enter', 'NumpadEnter') and self.navigation_focused:
                 await self.launch(event)
         self.page.on_keyboard_event = route
+
+    async def move_preview(self, event):
+        delta = -1 if event.key.replace(' ', '') == 'ArrowUp' else 1
+        await self.select((self.index if self.index is not None else 0) + delta, scroll=True)
 
     def can_navigate(self):
         return self.panel.visible and not self.busy()
@@ -142,6 +148,7 @@ class BomPreview:
     def close(self):
         if not self.panel.visible:
             return
+        self.key_repeat.stop()
         self.generation += 1
         self.pending = None
         self.index = None
@@ -205,6 +212,7 @@ class BomPreview:
         if self.can_navigate() and self.index is not None and not self.opening_pdf:
             path = self.paths[self.index]
             if path:
+                self.key_repeat.stop()
                 self.opening_pdf = True
                 try:
                     await self.open_pdf(path, False)

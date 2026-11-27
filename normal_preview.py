@@ -5,6 +5,7 @@ from pathlib import Path
 
 import flet as ft
 from normal_search import path_key
+from preview_keys import VERTICAL_KEYS, VerticalKeyRepeat
 
 
 ROW_HEIGHT = 52
@@ -24,6 +25,7 @@ class NormalPreview:
         self.preview_offset = 0
         self.preview_viewport = None
         self.preview_focused = False
+        self.key_repeat = VerticalKeyRepeat(self.page, self.can_navigate, self.move_preview)
         self.preview_target = ft.TextField(width=1, height=1, read_only=True,
             ignore_up_down_keys=True, opacity=0, visible=False, border=ft.InputBorder.NONE,
             enable_interactive_selection=False, content_padding=0,
@@ -47,17 +49,23 @@ class NormalPreview:
                         await result
                 return
             key = event.key.replace(' ', '')
-            if key in ('ArrowUp', 'ArrowDown'):
+            if key in VERTICAL_KEYS:
                 if not self.preview_focused:
                     await self.focus_preview()
-                delta = -1 if key == 'ArrowUp' else 1
-                await self.preview_at(0 if self.preview_index is None else self.preview_index + delta, scroll=True)
+                self.key_repeat.start(event)
+                await self.move_preview(event)
             elif key in ('Enter', 'NumpadEnter') and self.preview_focused and self.preview_index is not None:
+                self.key_repeat.stop()
                 await self.toggle_preview_check(self.preview_index)
             elif key == 'Escape':
                 await self.toggle_preview()
 
         self.page.on_keyboard_event = route
+
+    async def move_preview(self, event):
+        delta = -1 if event.key.replace(' ', '') == 'ArrowUp' else 1
+        index = 0 if self.preview_index is None else self.preview_index + delta
+        await self.preview_at(index, scroll=True)
 
     def can_navigate(self):
         return self.view.visible and self.preview_panel.visible and not self.busy()
@@ -71,8 +79,12 @@ class NormalPreview:
 
     def set_preview_layout(self):
         width = self.page.width or 1200
-        self.preview_panel.width = max(350, width * .40)
-        path_width = min(self.table_path_width() * .75, width * .25)
+        old_panel = max(350, width * .40)
+        old_path = min(self.table_path_width() * .75, width * .25)
+        # Other columns, margins and gaps keep their original widths.
+        old_name = max(0, width - old_panel - old_path - 263)
+        self.preview_panel.width = old_panel + (old_path + old_name) * .10
+        path_width = old_path * .90
         for cell in self.preview_path_cells:
             cell.width = path_width
 
@@ -155,6 +167,7 @@ class NormalPreview:
     def close_preview(self):
         if not self.preview_panel.visible:
             return
+        self.key_repeat.stop()
         self.preview_panel.visible = self.preview_hint.visible = False
         self.preview_target.visible = self.preview_focused = False
         self.preview_button.content = SHOW_PREVIEW

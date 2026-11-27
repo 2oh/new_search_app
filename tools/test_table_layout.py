@@ -88,6 +88,11 @@ async def run(root):
             assert preview.image.visible and Path(preview.image.src).is_file()
             await page.on_keyboard_event(SimpleNamespace(key='ArrowDown'))
             assert preview.index == eligible[0] + 1
+            with patch.object(preview.key_repeat, 'move', new_callable=AsyncMock) as repeated:
+                holding = iter([True, False])
+                await preview.key_repeat.run(SimpleNamespace(key='ArrowDown'),
+                                             preview.key_repeat.sequence, lambda: next(holding))
+                repeated.assert_awaited_once()
             await preview.list.controls[eligible[1]].on_click(None)
             assert preview.index == eligible[1]
             with patch.object(preview, 'open_pdf', new_callable=AsyncMock) as launch:

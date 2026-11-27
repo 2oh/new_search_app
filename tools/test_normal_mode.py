@@ -358,7 +358,8 @@ async def run(root):
                 assert all(c.style == scope['BUTTON_STYLE_SECONDARY'] for c in normal.stock_actions.controls[:3])
                 assert scope['preview_focus_overlay'].visible and scope['mode_row'].disabled
                 assert normal.preview_index == 0 and normal.preview_panel.width >= 350
-                assert normal.preview_heading.controls[1].width == min(normal.table_path_width() * .75, page.width * .25)
+                assert normal.preview_heading.controls[1].width == min(normal.table_path_width() * .75, page.width * .25) * .9
+                assert normal.preview_panel.width > page.width * .40
                 await normal.preview_loop()
                 assert normal.image.visible and Path(normal.image.src).is_file()
                 normal.preview_viewport = 52
@@ -369,6 +370,11 @@ async def run(root):
                 assert normal.preview_index == 1 and normal.preview_rows[0].bgcolor is None
                 normal.preview_list.scroll_to.assert_awaited_once_with(offset=52)
                 normal.preview_focused = True
+                with patch.object(normal.key_repeat, 'move', new_callable=AsyncMock) as repeated:
+                    holding = iter([True, True, False])
+                    await normal.key_repeat.run(SimpleNamespace(key='Arrow Down'),
+                                                normal.key_repeat.sequence, lambda: next(holding))
+                    assert repeated.await_count == 2
                 await page.on_keyboard_event(SimpleNamespace(key='Enter'))
                 assert normal.items[1]['selected'] and normal.store.load() == normal.items
                 await page.on_keyboard_event(SimpleNamespace(key='Enter'))

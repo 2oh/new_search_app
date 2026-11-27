@@ -19,7 +19,6 @@ from normal_search import SearchLimitExceeded
 SHOW_PDF_PREVIEW = 'PDFプレビューを表示'
 HIDE_PDF_PREVIEW = 'PDFプレビューを閉じる'
 PDF_CANDIDATE_HEIGHT = 44
-VISIBLE_PDF_CANDIDATES = 3
 
 
 class CompositeMode(CompositeRows):
@@ -87,7 +86,7 @@ class CompositeMode(CompositeRows):
         self.list = ft.ListView(expand=True, spacing=0, build_controls_on_demand=True)
         self.image = ft.Image(src='', fit=ft.BoxFit.CONTAIN, width=400, expand=True, visible=False)
         self.preview_label = ft.Text('↑↓でプレビューする部品を移動できます', selectable=True)
-        self.candidates = ft.ListView(height=0, spacing=0, padding=0, visible=False)
+        self.candidates = ft.Stack(height=PDF_CANDIDATE_HEIGHT, clip_behavior=ft.ClipBehavior.HARD_EDGE, visible=False)
         self.preview_panel = ft.Container(ft.Column([
             self.preview_label, self.candidates, self.image,
         ], expand=True), width=420, padding=8, bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, visible=False)
@@ -223,7 +222,7 @@ class CompositeMode(CompositeRows):
         self.progress.value = None
         self.normal.set_busy(True, '構成部品表DBを読み込んでいます…')
         self.page.update()
-        succeeded = False
+        list_replaced = False
         try:
             model = await self.ensure_catalog()
             conditions = dict(contains=self.query.value or '', excludes=self.exclude.value or '',
@@ -240,29 +239,34 @@ class CompositeMode(CompositeRows):
                 else:
                     catalog.attach_pdfs(groups, paths, progress=report)
                 return groups, warning
-            self.results, warning = await self.run_search_worker(run)
+            groups, warning = await self.run_search_worker(run)
             self.message('検索結果を表示しています…')
-            self.selection = set()
-            self.active_key = None
-            self.expanded_keys.clear()
-            self.stock_view = False
-            self.tabs.selected_index = 0
-            self.scroll_offset = 0
-            self.clear_preview()
-            self.render()
-            succeeded = True
+            self.replace_results(groups)
+            list_replaced = True
             self.message(f'検索結果：{len(self.results)}部品' + (f' / {warning}' if warning else ''))
         except SearchLimitExceeded as exc:
-            self.message(str(exc) + ('（前回の検索結果を保持）' if self.results else ''))
+            self.replace_results([])
+            list_replaced = True
+            self.message(str(exc))
         except Exception as exc:
             self.message(f'検索できません：{exc}')
         finally:
             self.progress.visible = False
             self.normal.set_busy(False)
             self.page.update()
-            if self.view.visible and succeeded:
+            if self.view.visible and list_replaced:
                 await self.list.scroll_to(offset=0)
                 await self.focus_navigation()
+
+    def replace_results(self, groups):
+        self.results, self.selection = groups, set()
+        self.active_key = None
+        self.expanded_keys.clear()
+        self.stock_view = False
+        self.tabs.selected_index = 0
+        self.scroll_offset = 0
+        self.clear_preview()
+        self.render()
 
     async def run_search_worker(self, worker):
         import queue
@@ -399,6 +403,7 @@ class CompositeMode(CompositeRows):
         self.preview_hint.value = '↑↓ 部品 ｜ Esc 閉じる'
         self.image.visible = False
         self.preview_label.value = '↑↓でプレビューする部品を移動できます'
+        self.preview_label.visible = True
 
     def set_preview_visibility(self, visible):
         if self.preview_panel.visible == visible:
@@ -421,7 +426,7 @@ class CompositeMode(CompositeRows):
         self.remove_button.visible = self.export_button.visible = show_actions and self.stock_view
 
     def close_preview(self):
-        self.navigation_sequence += 1
+        self.key_repeat.stop()
         self.set_preview_visibility(False)
         self.preview_button.content = SHOW_PDF_PREVIEW
         self.preview_hint.visible = False
@@ -470,21 +475,7 @@ class CompositeMode(CompositeRows):
         self.preview_label.value = group['identifier'] + ' / ' + group['material'] + ' / ' + group['pdf_status']
         paths = group['pdfs']
         self.candidates.visible = bool(paths)
-        self.candidates.height = PDF_CANDIDATE_HEIGHT * min(VISIBLE_PDF_CANDIDATES, len(paths))
-        for index, path in enumerate(paths):
-            async def show(event, index=index):
-                if self.preview_group is group and not self.normal.busy():
-                    self.set_candidate_navigation(len(paths) > 1)
-                    self.page.run_task(self.focus_navigation)
-                    await self.select_candidate(index)
-            async def launch(event, path=path):
-                await self.normal.open_pdf(path, False)
-                await self.focus_navigation()
-            name = ft.Text(Path(path).name, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
-            self.candidates.controls.append(ft.Container(ft.Row([
-                ft.TextButton(name, tooltip=path, on_click=show, expand=True),
-                ft.IconButton(ft.Icons.OPEN_IN_NEW, tooltip='PDFを開く', on_click=launch),
-            ]), height=PDF_CANDIDATE_HEIGHT, border_radius=4))
+        self.preview_label.visible = not paths
         if not was_open:
             self.resize_rows()
         self.highlight_active()
@@ -503,22 +494,62 @@ class CompositeMode(CompositeRows):
         self.highlight_candidate()
 
     async def open_selected_candidate(self):
-        if self.opening_candidate or self.candidate_index is None:
+        if self.candidate_index is not None:
+            await self.open_candidate(self.candidate_index)
+
+    async def open_candidate(self, index):
+        if not self.can_navigate() or self.preview_group is None:
             return
         if self.preview_group['key'] != self.active_key:
             return
-        path = self.preview_group['pdfs'][self.candidate_index]
+        path = self.preview_group['pdfs'][index]
         self.opening_candidate = True
-        self.navigation_sequence += 1
+        self.key_repeat.stop()
         try:
             await self.normal.open_pdf(path, False)
         finally:
             self.opening_candidate = False
 
+    def candidate_card(self, group, index):
+        path = group['pdfs'][index]
+
+        async def show(event):
+            if self.preview_group is group and self.can_navigate():
+                self.set_candidate_navigation(len(group['pdfs']) > 1)
+                await self.select_candidate(index)
+                await self.focus_navigation()
+
+        async def launch(event):
+            if self.preview_group is group:
+                await self.open_candidate(index)
+                await self.focus_navigation()
+
+        number = chr(0x2460 + index) if index < 20 else f'{index + 1}.'
+        name = ft.Text(f'{number} {Path(path).name}', max_lines=1, no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS)
+        controls = [ft.TextButton(name, tooltip=path, on_click=show, expand=True)]
+        if index == self.candidate_index:
+            controls.append(ft.IconButton(ft.Icons.OPEN_IN_NEW, tooltip='PDFを開く', on_click=launch, width=36))
+        alignment = ft.Alignment.CENTER_RIGHT if index < self.candidate_index else ft.Alignment.CENTER_LEFT
+        return ft.Container(ft.Row(controls, spacing=0), alignment=alignment,
+            data=index, top=0, height=PDF_CANDIDATE_HEIGHT, border_radius=4,
+            border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT))
+
+    def layout_candidates(self):
+        if self.candidate_index is None:
+            return
+        width = max(0, (self.preview_panel.width or 420) - 16)
+        multiple = len(self.preview_group['pdfs']) > 1
+        card_width = width * .62 if multiple else width
+        center = (width - card_width) / 2
+        for card in self.candidates.controls:
+            card.width = card_width
+            card.left = center + (card.data - self.candidate_index) * (card_width + 8)
+            card.content.width = card_width if card.data == self.candidate_index else max(0, center - 8)
+
     def highlight_candidate(self):
         color = ft.Colors.PRIMARY_CONTAINER if self.navigating_candidates else ft.Colors.SECONDARY_CONTAINER
-        for index, row in enumerate(self.candidates.controls):
-            row.bgcolor = color if index == self.candidate_index else None
+        for card in self.candidates.controls:
+            card.bgcolor = color if card.data == self.candidate_index else None
 
     async def select_candidate(self, index):
         group = self.preview_group
@@ -526,21 +557,18 @@ class CompositeMode(CompositeRows):
             self.page.update()
             return
         self.candidate_index = index
+        # Only immediate neighbours are needed to show which ways the user can move.
+        visible_indices = range(max(0, index - 1), min(len(group['pdfs']), index + 2))
+        self.candidates.controls = [self.candidate_card(group, candidate) for candidate in visible_indices]
+        self.layout_candidates()
         self.highlight_candidate()
-        if len(group['pdfs']) > VISIBLE_PDF_CANDIDATES:
-            self.page.run_task(self.scroll_to_candidate, group, index)
         await self.preview(group['pdfs'][index])
-
-    async def scroll_to_candidate(self, group, index):
-        if self.preview_group is group and self.candidate_index == index and self.view.visible:
-            first = max(0, index - VISIBLE_PDF_CANDIDATES + 1)
-            await self.candidates.scroll_to(offset=first * PDF_CANDIDATE_HEIGHT)
 
     async def preview(self, path):
         self.preview_generation += 1
         generation = self.preview_generation
         self.image.visible = False
-        self.preview_label.value = f'読込中：{Path(path).name}'
+        self.preview_label.visible = False
         self.page.update()
         try:
             async with self.preview_lock:
@@ -550,10 +578,10 @@ class CompositeMode(CompositeRows):
             if generation == self.preview_generation and self.preview_panel.visible and self.view.visible:
                 self.image.src = source
                 self.image.visible = True
-                self.preview_label.value = Path(path).name
         except Exception as exc:
             if generation == self.preview_generation:
                 self.preview_label.value = f'プレビューできません：{exc}'
+                self.preview_label.visible = True
         self.page.update()
 
     async def open_occurrence(self, occurrence):

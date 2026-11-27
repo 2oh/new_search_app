@@ -87,17 +87,19 @@ async def exercise(scope, destination):
     pdf_catalog.ingest(pdfs, normal.index_database)
     model = composite.catalog
     baseline_rows = model.rows
+    await composite.select_all()
     matching = next(row for row in baseline_rows if row['key'] == group['key'] and row['eligible'])
     model.rows = [dict(matching, key=str(index)) for index in range(301)]
     with patch.object(composite_catalog, 'attach_pdfs') as attach:
         await composite.search()
         attach.assert_not_called()
     assert '300部品を超えました' in normal.message.value
-    assert composite.results == [group]
+    assert not composite.results and not composite.selection and not composite.list.controls
     model.rows = [*model.rows[:300], matching | {'key': '0', 'row_number': matching['row_number'] + 1}]
     groups = model.search(contains='SS400', ids='0001', max_results=300)
     assert len(groups) == 300 and len(next(g for g in groups if g['key'] == '0')['occurrences']) == 2
     model.rows = baseline_rows
+    await composite.search()
     await composite.select_all()
     await composite.add_selected()
     assert len(composite.items) == 1 and not normal.items
@@ -165,14 +167,18 @@ async def exercise(scope, destination):
     assert composite.navigating_candidates
     await composite.navigate_key(SimpleNamespace(key='ArrowDown'))
     assert composite.active_key == group['key'] and composite.candidate_index == 1
-    assert composite.preview_label.value == Path(group['pdfs'][1]).name
+    assert not composite.preview_label.visible
+    selected_card = next(c for c in composite.candidates.controls if c.data == 1)
+    assert selected_card.content.controls[0].content.value == '② ' + Path(group['pdfs'][1]).name
+    assert abs(selected_card.left + selected_card.width / 2 - (composite.preview_panel.width - 16) / 2) < 0.01
+    assert composite.candidates.controls[0].left < 0
     await composite.navigate_key(SimpleNamespace(key='Arrow Down'))
     assert composite.candidate_index == 1
     await composite.navigate_key(SimpleNamespace(key='ArrowUp'))
     assert composite.candidate_index == 0
     await composite.navigate_key(SimpleNamespace(key='ArrowLeft'))
     assert not composite.navigating_candidates and composite.active_key == group['key']
-    second_row = composite.candidates.controls[1]
+    second_row = next(c for c in composite.candidates.controls if c.data == 1)
     await second_row.content.controls[0].on_click(None)
     assert composite.candidate_index == 1 and composite.navigating_candidates
     assert normal.items == original_stock and composite.selection == selection
@@ -186,6 +192,18 @@ async def exercise(scope, destination):
     with patch.object(normal, 'open_pdf', new_callable=AsyncMock) as open_pdf:
         await composite.navigate_key(SimpleNamespace(key='Enter'))
         open_pdf.assert_awaited_once_with(group['pdfs'][0], False)
+    many = dict(group, pdfs=[str(destination / (f'{i}-' + '長いファイル名' * 12 + '.pdf')) for i in range(5)])
+    with patch.object(composite, 'preview', new_callable=AsyncMock):
+        await composite.show_candidates(many)
+        assert [card.data for card in composite.candidates.controls] == [0, 1]
+        await composite.select_candidate(2)
+        previous, active, following = composite.candidates.controls
+        assert [card.data for card in (previous, active, following)] == [1, 2, 3]
+        assert active.content.controls[0].tooltip == many['pdfs'][2]
+        assert previous.left < 0 and following.left + following.width > composite.preview_panel.width
+        assert 0 < previous.content.width < active.content.width
+        await composite.select_candidate(4)
+        assert [card.data for card in composite.candidates.controls] == [3, 4]
     scope['mode_dropdown'].value = 'PDFファイル名'
     scope['on_mode_change'](None)
     scope['mode_dropdown'].value = '複合'
@@ -249,11 +267,13 @@ async def exercise(scope, destination):
     composite.navigation_focused = True
     await scope['page'].on_keyboard_event(SimpleNamespace(key='Arrow Down'))
     assert composite.active_key == '3'
-    with patch.object(composite, 'navigate_key', new_callable=AsyncMock) as repeated:
+    with patch.object(composite.key_repeat, 'move', new_callable=AsyncMock) as repeated:
         holding = iter([True, True, False])
-        await composite.repeat_navigation(SimpleNamespace(key='Arrow Down'),
-            composite.navigation_sequence, lambda: next(holding))
+        await composite.key_repeat.run(SimpleNamespace(key='Arrow Down'),
+            composite.key_repeat.sequence, lambda: next(holding))
         assert repeated.await_count == 2
+    assert composite.row_cache['0']['number'].value == '1'
+    assert composite.row_cache['1499']['number'].value == '1500'
     await composite.activate_row('1499',scroll=True)
     composite.list.scroll_to.assert_awaited()
     assert row_ids == [id(row) for row in composite.list.controls]
