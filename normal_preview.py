@@ -30,7 +30,7 @@ class NormalPreview:
             on_focus=lambda e: setattr(self, 'preview_focused', True),
             on_blur=lambda e: setattr(self, 'preview_focused', False))
         self.preview_button = ft.OutlinedButton(SHOW_PREVIEW, on_click=self.toggle_preview)
-        self.preview_hint = ft.Text('↑↓ PDFを移動 ｜ Enter チェックを切り替え', size=12, visible=False)
+        self.preview_hint = ft.Text('↑↓ PDFを移動 ｜ Enter チェックを切り替え ｜ Esc 閉じる', size=12, visible=False)
         self.preview_list = ft.ListView(expand=True, spacing=0, padding=0, item_extent=ROW_HEIGHT,
             build_controls_on_demand=True, on_scroll=self.track_preview_scroll)
         self.preview_heading = ft.Row(spacing=8)
@@ -144,6 +144,7 @@ class NormalPreview:
         self.preview_button.content = HIDE_PREVIEW
         self.tab_bar.disabled = self.result_actions.disabled = self.stock_actions.disabled = True
         self.folder_button.disabled = True
+        self.update_tab_actions()
         self.tab_content.visible = False
         self.preview_listing.visible = True
         if self.on_preview_visibility:
@@ -159,6 +160,7 @@ class NormalPreview:
         self.preview_button.content = SHOW_PREVIEW
         self.tab_bar.disabled = self.result_actions.disabled = self.stock_actions.disabled = False
         self.folder_button.disabled = self.match_count == 0
+        self.update_tab_actions()
         self.tab_content.visible = True
         self.preview_listing.visible = False
         self.preview_index = None

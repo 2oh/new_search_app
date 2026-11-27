@@ -74,18 +74,15 @@ async def run(root):
             await scope['pick_excel_result']([SimpleNamespace(path=str(root / 'tools/fixtures/app_a_excel_test.xlsx'))])
             scope['sheet_dropdown'].value = '基本確認'
             await scope['on_extract_click'](None)
-            scope['search_folder_field'].value = str(root / 'tools/fixtures/pdfs')
-            await scope['on_pdf_candidate_search'](None)
             current = inspect.getclosurevars(scope['render_table_from_df']).nonlocals['current_df'].copy()
             target = Path(temp) / '日本語 & 空白, フォルダ' / '図面 & 1, #50%.pdf'
             target.parent.mkdir()
             target.write_bytes(b'%PDF-test')
             current.at[0, '採用PDFパス'] = str(target)
-            scope['search_folder_field'].value = str(target.parent)
-            for wide in (False, True):
-                fn = scope['render_table_from_df']
-                dict(zip(fn.__code__.co_freevars, fn.__closure__))['use_hover_preview'].cell_contents = wide
-                fn(current)
+            scope['normal_mode'].index_root = str(target.parent)
+            for width in (1200, 1920):
+                page.width = width
+                scope['render_table_from_df'](current)
                 links = [c for c in walk(scope['table'].rows[0]) if callable(getattr(c, 'on_click', None)) and c.on_click.__name__ == 'on_click']
                 assert len(links) == 2 and links[0].content.value == f'({target.parent})'
                 with patch.object(app.ft.UrlLauncher, 'launch_url', new_callable=AsyncMock) as launch:
@@ -126,7 +123,7 @@ async def run(root):
                 await scope['open_output_pdf'](str(target), False)
                 launch.assert_not_awaited()
             scope['pdf_action_state']['processing'] = False
-            print('PASS: real COM shortcut round-trip (/select target), client URL launch, Japanese/spaces/comma/#/%/UNC, both viewport modes, busy and error paths')
+            print('PASS: real COM shortcut round-trip (/select target), client URL launch, Japanese/spaces/comma/#/%/UNC, narrow and wide layouts, busy and error paths')
             print('NOTE: foreground behavior in Explorer/Acrobat requires native UI confirmation')
         finally:
             sys.setprofile(profile)

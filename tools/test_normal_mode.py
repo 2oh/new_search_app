@@ -351,8 +351,11 @@ async def run(root):
                 normal.preview_list.scroll_to = AsyncMock()
                 await normal.toggle_preview()
                 assert normal.preview_panel.visible and normal.preview_listing.visible and not normal.tab_content.visible
-                assert normal.stock_actions.visible and not normal.result_actions.visible
-                assert normal.toolbar_actions.controls[:3] == [normal.preview_hint, normal.preview_button, normal.result_actions]
+                assert 'Esc 閉じる' in normal.preview_hint.value
+                assert not normal.stock_actions.visible and not normal.result_actions.visible
+                assert not normal.folder_button.visible
+                assert normal.toolbar_actions.controls[-2:] == [normal.preview_hint, normal.preview_button]
+                assert all(c.style == scope['BUTTON_STYLE_SECONDARY'] for c in normal.stock_actions.controls[:3])
                 assert scope['preview_focus_overlay'].visible and scope['mode_row'].disabled
                 assert normal.preview_index == 0 and normal.preview_panel.width >= 350
                 assert normal.preview_heading.controls[1].width == min(normal.table_path_width() * .75, page.width * .25)
@@ -372,6 +375,7 @@ async def run(root):
                 assert normal.items == selected
                 await page.on_keyboard_event(SimpleNamespace(key='Escape'))
                 assert not normal.preview_panel.visible and not normal.preview_listing.visible and normal.tab_content.visible
+                assert normal.stock_actions.visible and not normal.result_actions.visible
                 assert not normal.preview_target.visible and not normal.preview_focused
                 assert not scope['preview_focus_overlay'].visible and not scope['mode_row'].disabled
                 normal.tabs.selected_index = 0
@@ -380,6 +384,7 @@ async def run(root):
                 # An already stocked PDF remains ineligible for a second addition.
                 await normal.toggle_preview()
                 assert normal.preview_panel.visible
+                assert not normal.result_actions.visible and not normal.folder_button.visible
                 key = logic.path_key(normal.preview_paths[0])
                 assert normal.preview_checks[key].disabled
                 preview_columns = normal.preview_rows[0].content.controls
@@ -403,6 +408,9 @@ async def run(root):
                     await normal.toggle_preview()
                     session.get_page_patch()
                     assert normal.tab_content.visible and not normal.preview_listing.visible
+                    assert normal.folder_button.visible == (index % 2 == 0)
+                    assert normal.result_actions.visible == (index % 2 == 0)
+                    assert normal.stock_actions.visible == (index % 2 == 1)
                 await normal.toggle_preview()
                 await normal.search()
                 assert not normal.preview_panel.visible

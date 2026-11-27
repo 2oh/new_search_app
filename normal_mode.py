@@ -20,7 +20,7 @@ PDF_RESULT_LIMIT = 500
 class NormalMode(NormalPreview):
     def __init__(self, page, *, folder, output_folder, collect, preview, open_pdf,
                  merge, busy, set_busy, worker, message, completed, version, button_style,
-                 index_database=None, index_publish='', save_publish=None):
+                 index_database=None, index_publish='', save_publish=None, selection_style=None):
         self.page = page
         self.folder, self.output_folder = folder, output_folder
         self.collect, self.make_preview, self.open_pdf, self.merge = collect, preview, open_pdf, merge
@@ -93,16 +93,19 @@ class NormalMode(NormalPreview):
         self.result_listing = ft.Container(self.result_table, expand=True)
         self.stock_listing = ft.Container(self.stack_table, expand=True)
         self.result_actions = ft.Row([
-            ft.TextButton('全選択', on_click=self.select_all), ft.TextButton('全解除', on_click=self.deselect_all),
-            ft.TextButton('選択を反転', on_click=self.invert_results),
+            ft.Button('全選択', on_click=self.select_all, style=selection_style),
+            ft.Button('全解除', on_click=self.deselect_all, style=selection_style),
+            ft.Button('選択を反転', on_click=self.invert_results, style=selection_style),
             ft.Button('ストックへ追加', on_click=self.add_selected, style=button_style)], tight=True)
         self.stock_actions = ft.Row([
-            ft.TextButton('全選択', on_click=self.check_all), ft.TextButton('全解除', on_click=self.uncheck_all),
-            ft.TextButton('選択を反転', on_click=self.invert_stock), ft.TextButton('全削除', on_click=self.confirm_clear),
+            ft.Button('全選択', on_click=self.check_all, style=selection_style),
+            ft.Button('全解除', on_click=self.uncheck_all, style=selection_style),
+            ft.Button('選択を反転', on_click=self.invert_stock, style=selection_style),
+            ft.TextButton('全削除', on_click=self.confirm_clear),
             self.open_button, self.export_button], tight=True, visible=False)
         self.stack_count.visible = False
-        self.toolbar_actions = ft.Row([self.preview_hint, self.preview_button, self.result_actions,
-            self.stock_actions, self.preview_target], alignment=ft.MainAxisAlignment.END, expand=True, wrap=True)
+        self.toolbar_actions = ft.Row([self.result_actions, self.stock_actions, self.preview_target,
+            self.preview_hint, self.preview_button], alignment=ft.MainAxisAlignment.END, expand=True, wrap=True)
         self.toolbar = ft.Row([self.result_count, self.folder_button, self.stack_count, self.toolbar_actions], spacing=8)
         self.result_tab = ft.Tab(label='検索結果')
         self.stack_tab = ft.Tab(label='ストック')
@@ -241,8 +244,11 @@ class NormalMode(NormalPreview):
 
     def update_tab_actions(self):
         stock = self.tabs.selected_index == 1
-        self.stack_count.visible = self.stock_actions.visible = stock
-        self.result_count.visible = self.folder_button.visible = self.result_actions.visible = not stock
+        show_actions = not self.preview_panel.visible
+        self.stack_count.visible = stock
+        self.result_count.visible = not stock
+        self.stock_actions.visible = stock and show_actions
+        self.folder_button.visible = self.result_actions.visible = not stock and show_actions
 
     def activate(self, active):
         if not active:

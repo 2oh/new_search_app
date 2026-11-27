@@ -57,7 +57,7 @@ class CompositeRows:
                 if inspect.isawaitable(result):
                     await result
         self.page.on_keyboard_event = route_key
-        self.toolbar.controls.append(self.key_target)
+        self.toolbar_actions.controls.insert(0, self.key_target)
         self.list_host = ft.Container(self.list_panel, expand=True)
         self.body = ft.Row([self.list_host, self.preview_panel], expand=True, spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.STRETCH)
@@ -92,8 +92,7 @@ class CompositeRows:
     def render(self):
         groups = self.groups()
         self.stock_tab.label = f'部品ストック（{len(self.items)}）'
-        self.add_button.visible = not self.stock_view
-        self.remove_button.visible = self.export_button.visible = self.stock_view
+        self.update_list_actions()
         stacked = {g['key'] for g in self.items}
         updated = {}
         for group in groups:

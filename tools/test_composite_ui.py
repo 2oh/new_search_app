@@ -123,9 +123,11 @@ async def exercise(scope, destination):
     await composite.show_candidates(group)
     assert composite.preview_panel.visible and composite.image.visible
     assert composite.preview_button.content == 'PDFプレビューを閉じる'
+    assert 'Esc 閉じる' in composite.preview_hint.value
     assert scope['mode_row'].disabled and scope['folder_settings_row'].disabled
     assert composite.filters.disabled and composite.tab_bar.disabled and composite.list_panel.disabled
     assert all(action.disabled for action in composite.list_actions)
+    assert not any(action.visible for action in composite.list_actions)
     assert not composite.preview_button.disabled and not composite.candidates.disabled
     assert await scope['input_focus'].restore_preferred_focus()
     overlay = scope['preview_focus_overlay']
@@ -148,10 +150,14 @@ async def exercise(scope, destination):
     await composite.show_candidates(group)
     before = deepcopy(composite.items)
     selection = set(composite.selection)
-    assert composite.toolbar_actions.controls[:3] == [composite.preview_hint, composite.preview_button, composite.list_actions[0]]
+    assert composite.toolbar_actions.controls[-2:] == [composite.preview_hint, composite.preview_button]
+    assert all(c.style == scope['BUTTON_STYLE_SECONDARY'] for c in composite.list_actions[:3])
+    assert composite.add_button.style == scope['BUTTON_STYLE_PRIMARY']
     composite.navigation_focused = False
     await scope['page'].on_keyboard_event(SimpleNamespace(key='Escape'))
     assert not composite.preview_panel.visible and composite.items == before and composite.selection == selection
+    assert all(action.visible for action in composite.list_actions[:3]) and composite.add_button.visible
+    assert not composite.remove_button.visible and not composite.export_button.visible
     await composite.show_candidates(group)
     original_stock = deepcopy(normal.items)
     assert composite.candidate_index == 0 and not composite.navigating_candidates

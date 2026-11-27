@@ -23,7 +23,8 @@ VISIBLE_PDF_CANDIDATES = 3
 
 
 class CompositeMode(CompositeRows):
-    def __init__(self, page, normal, *, database=None, stock_path='part_stock.json', rules=DEFAULT_RULES):
+    def __init__(self, page, normal, *, database=None, stock_path='part_stock.json', rules=DEFAULT_RULES,
+                 button_style=None, selection_style=None):
         self.page, self.normal = page, normal
         self.rules = rules
         self.launcher = ft.UrlLauncher()
@@ -70,16 +71,17 @@ class CompositeMode(CompositeRows):
         self.search_controls = ft.Column([ft.Row([self.query]), ft.Row([self.exclude])], spacing=6, expand=True)
         self.count = ft.Text()
         self.preview_button = ft.OutlinedButton(SHOW_PDF_PREVIEW, on_click=self.toggle_preview)
-        self.preview_hint = ft.Text('↑↓ 部品', size=12, visible=False)
+        self.preview_hint = ft.Text('↑↓ 部品 ｜ Esc 閉じる', size=12, visible=False)
         self.result_tab = ft.Tab(label='検索結果')
         self.stock_tab = ft.Tab(label='部品ストック')
-        self.add_button = ft.Button('部品ストックへ追加', on_click=self.add_selected)
+        self.add_button = ft.Button('部品ストックへ追加', on_click=self.add_selected, style=button_style)
         self.remove_button = ft.TextButton('選択部品を削除', on_click=self.remove_selected, visible=False)
         self.export_button = ft.Button('部品一覧Excel出力', on_click=self.export, visible=False)
-        self.list_actions = [ft.TextButton('全選択', on_click=self.select_all),
-            ft.TextButton('全解除', on_click=self.select_none), ft.TextButton('選択を反転', on_click=self.invert_selection),
+        self.list_actions = [ft.Button('全選択', on_click=self.select_all, style=selection_style),
+            ft.Button('全解除', on_click=self.select_none, style=selection_style),
+            ft.Button('選択を反転', on_click=self.invert_selection, style=selection_style),
             self.add_button, self.remove_button, self.export_button]
-        self.toolbar_actions = ft.Row([self.preview_hint, self.preview_button, *self.list_actions],
+        self.toolbar_actions = ft.Row([*self.list_actions, self.preview_hint, self.preview_button],
             alignment=ft.MainAxisAlignment.END, expand=True, wrap=True)
         self.toolbar = ft.Row([self.count, self.toolbar_actions], spacing=8)
         self.list = ft.ListView(expand=True, spacing=0, build_controls_on_demand=True)
@@ -394,7 +396,7 @@ class CompositeMode(CompositeRows):
         self.navigating_candidates = False
         self.candidates.controls = []
         self.candidates.visible = False
-        self.preview_hint.value = '↑↓ 部品'
+        self.preview_hint.value = '↑↓ 部品 ｜ Esc 閉じる'
         self.image.visible = False
         self.preview_label.value = '↑↓でプレビューする部品を移動できます'
 
@@ -407,8 +409,16 @@ class CompositeMode(CompositeRows):
         self.list_panel.disabled = visible
         for action in self.list_actions:
             action.disabled = visible
+        self.update_list_actions()
         if self.on_preview_visibility is not None:
             self.on_preview_visibility(visible)
+
+    def update_list_actions(self):
+        show_actions = not self.preview_panel.visible
+        for action in self.list_actions[:3]:
+            action.visible = show_actions
+        self.add_button.visible = show_actions and not self.stock_view
+        self.remove_button.visible = self.export_button.visible = show_actions and self.stock_view
 
     def close_preview(self):
         self.navigation_sequence += 1
@@ -489,7 +499,7 @@ class CompositeMode(CompositeRows):
         multiple = self.preview_group and len(self.preview_group['pdfs']) > 1
         movement = ('↑↓ PDF候補 ｜ ← 部品へ' if active else
                     '↑↓ 部品 ｜ → PDF候補へ' if multiple else '↑↓ 部品')
-        self.preview_hint.value = movement + ' ｜ Enter PDFを開く'
+        self.preview_hint.value = movement + ' ｜ Enter PDFを開く ｜ Esc 閉じる'
         self.highlight_candidate()
 
     async def open_selected_candidate(self):

@@ -18,6 +18,7 @@ from reference_data import ReferenceData
 from app_theme import apply_theme
 from normal_mode import NormalMode
 from composite_mode import CompositeMode
+from bom_preview import BomPreview
 from part_rules import eligible as part_eligible, is_zero_quantity
 from pdf_catalog import snapshot_paths
 from datetime import datetime
@@ -27,7 +28,7 @@ from openpyxl import load_workbook
 CONFIG_FILE = "config.json"
 PREVIEW_CACHE_DIR = "preview_cache"
 APP_ICON_FILE = "assets/app_icon.ico"
-APP_VERSION = "v1.4.9"
+APP_VERSION = "v1.4.10"
 APP_WINDOW_TITLE = f"図面PDF検索結合ツール {APP_VERSION}"
 # None: append the window title. At release, set this to APP_VERSION (e.g. v1.1.1).
 OUTPUT_FILENAME_LABEL = APP_VERSION
@@ -36,7 +37,7 @@ DEBUG = False
 PDF_FILE_NAME_COLOR = ft.Colors.PRIMARY
 PDF_FILE_NAME_HOVER_COLOR = ft.Colors.TERTIARY
 
-OUTPUT_PDF_COLUMN_WIDTH = 260
+OUTPUT_PDF_COLUMN_WIDTH = 335
 
 def debug_print(*args, **kwargs):
     if DEBUG:
@@ -769,15 +770,6 @@ def main(page: ft.Page):
         "export_button": None,
     }
 
-    HOVER_PREVIEW_MIN_WIDTH = 1700
-    use_hover_preview = False
-
-    # ホバープレビュー制御用
-    hover_preview_request_id = 0
-    hover_preview_current_path = ""
-    hover_preview_pending_path = ""
-    hover_preview_is_loading = False
-
     # ---- 設定ファイル処理 ----
     REQUIRED_SEARCH_EXCLUSION_RULES = [
         {
@@ -1013,9 +1005,7 @@ def main(page: ft.Page):
         table_header.visible = bom_active
         result_area.visible = bom_active
         if not bom_active:
-            clear_hover_preview()
-        else:
-            update_hover_preview_visibility()
+            bom_preview.close()
         page.update()
 
     def on_mode_change(e):
@@ -1058,36 +1048,15 @@ def main(page: ft.Page):
         visible_vertical_scroll_bar=True,
         heading_row_color=ft.Colors.SURFACE_CONTAINER_HIGHEST,
     )
-    table_header = ft.Row([], alignment="center")
+    table_header = ft.Row([], alignment=ft.MainAxisAlignment.END, wrap=True)
+    table_toolbar = ft.Container(table_header, alignment=ft.Alignment.CENTER_RIGHT)
 
     # PDF出力時に処理結果CSVも保存するかどうか。
     # 通常運用では不要なため、起動時は常にOFF。
     result_csv_checkbox = ft.Checkbox(
         label="処理結果CSVを出力",
         value=False,
-    )
-
-    hover_preview_image = ft.Image(
-        src="",
-        width=820,
-        height=580,
-        fit=ft.BoxFit.CONTAIN,
-        visible=False,
-    )
-
-    hover_preview_message = ft.Text(
-        "",
-        size=14,
-        color=ft.Colors.PRIMARY,
-        weight=ft.FontWeight.BOLD,
-        text_align=ft.TextAlign.CENTER,
-    )
-
-    hover_preview_panel = ft.Container(
-        padding=ft.Padding.only(left=2, right=2, top=2),
-        visible=False,
-        bgcolor=ft.Colors.TRANSPARENT,
-        expand=True,
+        width=180,
     )
 
     def format_quantity_for_display(v) -> str:
@@ -1126,247 +1095,6 @@ def main(page: ft.Page):
             height=height,
             bgcolor=ft.Colors.GREY_200,
         )
-
-    def create_hover_preview_box(preview_image: ft.Image, height: int = 620) -> ft.Container:
-        return ft.Container(
-            content=preview_image,
-            alignment=ft.Alignment.TOP_CENTER,
-            height=height,
-            padding=0,
-            bgcolor=ft.Colors.TRANSPARENT,
-        )
-
-    hover_preview_panel.content = ft.Container(
-        content=ft.Column(
-            controls=[
-                hover_preview_message,
-                create_hover_preview_box(hover_preview_image, height=600)
-            ],
-            spacing=1,
-            tight=True,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        ),
-        alignment=ft.Alignment.TOP_CENTER,
-        expand=True,
-    )
-
-    def update_hover_preview(pdf_path: str):
-        """
-        出力PDF欄にホバーしたとき、プレビュー生成を予約する。
-
-        画像生成中に別のPDFへホバーした場合は、
-        途中の要求をすべて処理せず、最後にホバーしたPDFだけを処理する。
-        """
-        nonlocal hover_preview_request_id
-        nonlocal hover_preview_current_path
-        nonlocal hover_preview_pending_path
-        nonlocal hover_preview_is_loading
-
-        if not use_hover_preview:
-            return
-
-        pdf_path = str(pdf_path or "").strip()
-
-        if not pdf_path:
-            return
-
-        # 現在必要とされているPDFを更新する
-        hover_preview_request_id += 1
-        hover_preview_current_path = pdf_path
-        hover_preview_pending_path = pdf_path
-
-        hover_preview_image.src = ""
-        hover_preview_image.visible = False
-        hover_preview_message.value = "プレビューを読み込んでいます..."
-        page.update()
-
-        # すでに生成処理が動いている場合は、
-        # pending_pathだけ更新して現在の処理終了を待つ
-        if hover_preview_is_loading:
-            return
-
-        page.run_task(process_hover_preview_queue)
-
-
-    async def process_hover_preview_queue():
-        """
-        ホバープレビューの生成待ちを処理する。
-
-        一度に生成する画像は1つだけとし、
-        生成中に別のPDFへ移動した場合は最後の要求だけを残す。
-        """
-        nonlocal hover_preview_request_id
-        nonlocal hover_preview_current_path
-        nonlocal hover_preview_pending_path
-        nonlocal hover_preview_is_loading
-
-        if hover_preview_is_loading:
-            return
-
-        hover_preview_is_loading = True
-
-        try:
-            while hover_preview_pending_path:
-                pdf_path = hover_preview_pending_path
-
-                # この要求はいったん取り出したので空にする。
-                # 生成中に別のホバーが来た場合、新しいパスがここへ入る。
-                hover_preview_pending_path = ""
-
-                request_id_at_start = hover_preview_request_id
-
-                try:
-                    # PDF画像生成は重いため別スレッドで実行する
-                    preview_path = await asyncio.to_thread(
-                        create_pdf_preview_image,
-                        pdf_path,
-                        0,
-                        100,
-                    )
-
-                except Exception:
-                    # 生成完了時点ですでに別のPDFへ移動していた場合は、
-                    # 古いエラーを画面へ表示しない
-                    if (
-                        hover_preview_current_path != pdf_path
-                        or hover_preview_request_id != request_id_at_start
-                    ):
-                        continue
-
-                    hover_preview_image.src = ""
-                    hover_preview_image.visible = False
-                    hover_preview_message.value = (
-                        "プレビューを生成できませんでした。"
-                    )
-                    page.update()
-                    continue
-
-                # 生成中にマウスが外れた、または別PDFへ移動した場合は、
-                # この生成結果を画面へ表示しない
-                if (
-                    hover_preview_current_path != pdf_path
-                    or hover_preview_request_id != request_id_at_start
-                ):
-                    continue
-
-                hover_preview_image.src = preview_path
-                hover_preview_image.visible = True
-                hover_preview_message.value = Path(pdf_path).name
-                page.update()
-
-        finally:
-            hover_preview_is_loading = False
-
-            # 処理終了の直前に新しい要求が入っていた場合の保険
-            if hover_preview_pending_path:
-                page.run_task(process_hover_preview_queue)
-
-
-    def clear_hover_preview():
-        """
-        ホバープレビュー画像とファイル名表示をクリアする。
-
-        実行中の画像生成結果も、要求番号を進めることで無効化する。
-        """
-        nonlocal hover_preview_request_id
-        nonlocal hover_preview_current_path
-        nonlocal hover_preview_pending_path
-
-        hover_preview_request_id += 1
-        hover_preview_current_path = ""
-        hover_preview_pending_path = ""
-
-        hover_preview_image.src = ""
-        hover_preview_image.visible = False
-        hover_preview_message.value = ""
-
-    def on_preview_adopted_pdf(pdf_path: str):
-        """
-        採用済みPDFをプレビュー表示する。
-        自動採用・手動採用どちらでも、採用PDFパスがある行から呼び出す。
-        """
-        if pdf_action_state["processing"]:
-            return
-
-        if not pdf_path or not str(pdf_path).strip():
-            page.show_dialog(ft.SnackBar(ft.Text("採用PDFがありません。")))
-            page.update()
-            return
-
-        preview_image = ft.Image(
-            src="",
-            width=760,
-            height=520,
-            fit=ft.BoxFit.CONTAIN,
-            visible=False,
-        )
-
-        preview_message = ft.Text("プレビューを読み込み中...")
-
-        preview_state = {"open": True, "request_id": 0}
-
-        async def load_preview(e=None):
-            preview_state["request_id"] += 1
-            request_id = preview_state["request_id"]
-            preview_image.visible = False
-            preview_message.value = "プレビューを読み込んでいます..."
-            page.update()
-
-            try:
-                preview_path = await asyncio.to_thread(
-                    create_pdf_preview_image, pdf_path,
-                    page_number=0,
-                    dpi=120,
-                )
-                if not preview_state["open"] or request_id != preview_state["request_id"]:
-                    return
-                preview_image.src = preview_path
-                preview_image.visible = True
-                preview_message.value = format_pdf_path_for_display(pdf_path)
-
-            except Exception as ex:
-                if not preview_state["open"] or request_id != preview_state["request_id"]:
-                    return
-                preview_image.src = ""
-                preview_image.visible = False
-                preview_message.value = (
-                    "プレビューを生成できませんでした。"
-                    f" PDFにアクセスできない、または形式に問題がある可能性があります。詳細: {ex}"
-                )
-
-            page.update()
-
-        def close_dialog(e):
-            preview_state["open"] = False
-            render_table_from_df(current_df)
-            page.pop_dialog()
-            page.update()
-
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("採用PDFプレビュー"),
-            content=ft.Container(
-                width=860,
-                height=640,
-                content=ft.Column(
-                    controls=[
-                        preview_message,
-                        create_preview_box(preview_image, height=560),
-                    ],
-                    tight=True,
-                ),
-            ),
-            actions=[
-                ft.TextButton("再読み込み", on_click=load_preview),
-                ft.TextButton("閉じる", on_click=close_dialog),
-            ],
-            actions_alignment="end",
-        )
-
-        page.show_dialog(dialog)
-        page.update()
-
-        page.run_task(load_preview)
 
     def on_select_pdf_candidate(row_index):
         """
@@ -2001,6 +1729,17 @@ def main(page: ft.Page):
 
         return folder_text, file_name
 
+    bom_preview = BomPreview(page, busy=lambda: pdf_action_state["processing"],
+        make_preview=lambda path: create_pdf_preview_image(path, 0, 120),
+        split_path=split_pdf_path_for_two_line_display, open_pdf=open_output_pdf)
+    bom_actions = []
+
+    async def toggle_bom_preview(event):
+        sync_table_state_to_current_df()
+        await bom_preview.toggle(current_df)
+
+    bom_preview.button.on_click = toggle_bom_preview
+
     def render_table_from_df(df: pd.DataFrame):
         nonlocal current_df
 
@@ -2011,8 +1750,6 @@ def main(page: ft.Page):
 
         display_df = df.copy()
         display_df.insert(0, "項番", range(1, len(display_df) + 1))
-
-        update_hover_preview_visibility()
 
         hidden_columns = {
             "候補PDFパス一覧",
@@ -2039,13 +1776,11 @@ def main(page: ft.Page):
             "採用PDFパス",
             "採用PDF重複",
             "出力対象",
-            "プレビュー",
         ]
 
         display_only_columns = {
             "品番PG名",
             "候補確認",
-            "プレビュー",
         }
 
         display_columns = [
@@ -2057,13 +1792,6 @@ def main(page: ft.Page):
             c for c in display_df.columns
             if c not in display_columns and c not in hidden_columns
         ]
-
-        # 余白ホバープレビューが使える画面では、クリック用プレビュー列は表示しない
-        if use_hover_preview:
-            display_columns = [
-                c for c in display_columns
-                if c != "プレビュー"
-            ]
 
         def get_display_column_name(column_name: str) -> str:
             display_name_map = {
@@ -2209,18 +1937,17 @@ def main(page: ft.Page):
                 "出力対象",
                 "候補PDF数",
                 "候補確認",
-                "プレビュー",
-            }
+                }
             return column_name in center_columns
 
         # DataTable2 uses explicit widths rather than measuring every cell.
         # Widths include cell padding; keep room for two-line values and badges.
         column_widths = {
-            "項番": 46, "品名": 300, "材料": 72, "品番PG名": 130,
+            "項番": 46, "品名": 300, "材料": 112, "品番PG名": 182,
             "数量": 64, "数量セル色": 48, "出力可否": 84,
             "検索用文字列": 117, "共通": 48, "候補確認": 88,
             "採用PDFパス": OUTPUT_PDF_COLUMN_WIDTH + 12,
-            "採用PDF重複": 48, "出力対象": 84, "プレビュー": 72,
+            "採用PDF重複": 48, "出力対象": 84,
         }
 
         def refresh_header():
@@ -2254,7 +1981,6 @@ def main(page: ft.Page):
             "候補PDF数",
             "候補確認",
             "採用PDFパス",
-            "プレビュー",
         }
 
         def on_output_checkbox_change(e, row_index):
@@ -2341,31 +2067,6 @@ def main(page: ft.Page):
                             ft.Container(
                                 content=content,
                                 alignment=ft.Alignment.CENTER_LEFT,
-                            )
-                        )
-                    )
-
-                    continue
-
-                if c == "プレビュー":
-                    adopted_pdf_path = str(row.get("採用PDFパス", "") or "").strip()
-
-                    if use_hover_preview:
-                        content = ft.Text("")
-                    elif adopted_pdf_path and not is_output_ineligible(row):
-                        content = ft.IconButton(
-                            icon=ft.Icons.VISIBILITY_OUTLINED,
-                            tooltip="出力PDFをプレビュー",
-                            on_click=lambda e, pdf_path=adopted_pdf_path: on_preview_adopted_pdf(pdf_path),
-                        )
-                    else:
-                        content = ft.Text("")
-
-                    cells.append(
-                        ft.DataCell(
-                            ft.Container(
-                                content=content,
-                                alignment=ft.Alignment.CENTER,
                             )
                         )
                     )
@@ -2575,29 +2276,15 @@ def main(page: ft.Page):
                         else:
                             text_color = ft.Colors.GREEN_700
 
-                    is_hover_pdf_column = c == "採用PDFパス"
-                    adopted_pdf_path_for_hover = str(row.get("採用PDFパス", "") or "").strip()
-                    enable_hover_preview_for_cell = (
-                        use_hover_preview
-                        and is_hover_pdf_column
-                        and bool(adopted_pdf_path_for_hover)
-                    )
+                    adopted_pdf_path = str(row.get("採用PDFパス", "") or "").strip()
 
-                    normal_text_color = (
-                        ft.Colors.BLUE_700
-                        if enable_hover_preview_for_cell
-                        else text_color
-                    )
-
-                    output_pdf_file_name_text = None
-
-                    if c == "採用PDFパス" and adopted_pdf_path_for_hover:
+                    if c == "採用PDFパス" and adopted_pdf_path:
                         folder_text, file_name = split_pdf_path_for_two_line_display(
-                            adopted_pdf_path_for_hover
+                            adopted_pdf_path
                         )
 
                         # 検索先直下では相対フォルダ名がないため、実際の親を表示する。
-                        folder_text = folder_text or f"({Path(adopted_pdf_path_for_hover).parent})"
+                        folder_text = folder_text or f"({Path(adopted_pdf_path).parent})"
 
                         output_pdf_file_name_text = ft.Text(
                             file_name,
@@ -2620,12 +2307,12 @@ def main(page: ft.Page):
                                             no_wrap=True,
                                             overflow=ft.TextOverflow.ELLIPSIS,
                                         ),
-                                        adopted_pdf_path_for_hover,
+                                        adopted_pdf_path,
                                         True,
                                     ),
                                     create_output_pdf_link(
                                         output_pdf_file_name_text,
-                                        adopted_pdf_path_for_hover,
+                                        adopted_pdf_path,
                                         False,
                                     ),
                                 ],
@@ -2640,7 +2327,7 @@ def main(page: ft.Page):
                             tooltip=str(display_value),
                             content=ft.Column([
                                 ft.Text(line.replace("\n", " / "),
-                                    color=normal_text_color, weight=ft.FontWeight.NORMAL,
+                                    color=text_color, weight=ft.FontWeight.NORMAL,
                                     no_wrap=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
                                 for line in name_lines
                             ], spacing=0, tight=True),
@@ -2648,7 +2335,7 @@ def main(page: ft.Page):
                     else:
                         text_control = ft.Text(
                             display_value,
-                            color=normal_text_color,
+                            color=text_color,
                             weight=ft.FontWeight.NORMAL,
                             max_lines=2,
                             overflow=ft.TextOverflow.ELLIPSIS,
@@ -2659,50 +2346,17 @@ def main(page: ft.Page):
                             ),
                         )
 
-                    if enable_hover_preview_for_cell:
-                        def handle_output_pdf_hover(
-                            e,
-                            pdf_path=adopted_pdf_path_for_hover,
-                            file_name_text=output_pdf_file_name_text,
-                        ):
-                            if e.data is True:
-                                if file_name_text is not None:
-                                    file_name_text.color = PDF_FILE_NAME_HOVER_COLOR
-
-                                update_hover_preview(pdf_path)
-
-                            else:
-                                if file_name_text is not None:
-                                    file_name_text.color = PDF_FILE_NAME_COLOR
-
-                                clear_hover_preview()
-
-                            page.update()
-
-                        cell_content = ft.Container(
-                            content=text_control,
-                            alignment=ft.Alignment.CENTER_LEFT,
-                            on_hover=handle_output_pdf_hover,
-                        )
-                    else:
-                        cell_content = ft.Container(
-                            content=(
-                                text_control
-                                if c == "採用PDFパス" and adopted_pdf_path_for_hover
-                                else ft.SelectionArea(content=text_control)
-                            ),
-                            alignment=(
-                                ft.Alignment.CENTER
-                                if should_center_align_column(c)
-                                else ft.Alignment.CENTER_LEFT
-                            ),
-                        )
+                    cell_content = ft.Container(
+                        content=(text_control if c == "採用PDFパス" and adopted_pdf_path
+                                 else ft.SelectionArea(content=text_control)),
+                        alignment=(ft.Alignment.CENTER if should_center_align_column(c)
+                                   else ft.Alignment.CENTER_LEFT),
+                    )
 
                     cells.append(ft.DataCell(cell_content))
 
             table.rows.append(ft.DataRow(cells=cells))
 
-        update_hover_preview_visibility()
         update_pdf_export_button()
 
     # 🔽 抽出結果エリアの初期化関数を追加 🔽
@@ -2717,6 +2371,7 @@ def main(page: ft.Page):
         table.columns = [ft.DataColumn(ft.Text("抽出結果"))]
         table.min_width = 240
         table_header.controls = []
+        bom_actions.clear()
 
         pdf_action_state.pop("refresh_header", None)
         pdf_action_state["search_button"] = None
@@ -2724,8 +2379,7 @@ def main(page: ft.Page):
 
         message.value = ""
 
-        clear_hover_preview()
-        update_hover_preview_visibility()
+        bom_preview.close()
 
         page.update()
 
@@ -3047,7 +2701,7 @@ def main(page: ft.Page):
         if pdf_action_state["processing"]:
             return
 
-        clear_hover_preview()
+        bom_preview.close()
 
         # 1) Excel 未選択
         if not selected_excel_path:
@@ -3105,16 +2759,15 @@ def main(page: ft.Page):
                 pdf_action_state["search_button"] = search_pdf_btn
                 pdf_action_state["export_button"] = export_pdf_btn
 
-                table_header.controls = [
+                bom_actions[:] = [
                     search_pdf_btn,
                     ft.Container(width=40),
                     select_all_btn,
                     deselect_all_btn,
                     ft.Button("選択を反転", on_click=lambda e: toggle_all(None), style=BUTTON_STYLE_SECONDARY),
-                    export_pdf_btn,
-                    result_csv_checkbox,
-                    ft.Container(width=120),
+                    ft.Row([export_pdf_btn, result_csv_checkbox], tight=True, spacing=8),
                 ]
+                table_header.controls = [*bom_actions, bom_preview.key_target, bom_preview.hint, bom_preview.button]
 
                 render_table_from_df(df)
 
@@ -3460,6 +3113,8 @@ def main(page: ft.Page):
         """
         Excel読込・抽出・PDF検索・出力中の編集を止め、終了時に元の状態へ戻す。
         """
+        if processing:
+            bom_preview.close()
         pdf_action_state["processing"] = processing
         if processing:
             controls = [folder_settings_row, reference_actions, reference_panel, mode_dropdown, excel_control_row,
@@ -3469,7 +3124,6 @@ def main(page: ft.Page):
             pdf_action_state["disabled_before"] = [(c, c.disabled) for c in controls]
             for control in controls:
                 control.disabled = True
-            clear_hover_preview()
         else:
             for control, disabled in pdf_action_state.pop("disabled_before", []):
                 control.disabled = disabled
@@ -3967,15 +3621,20 @@ def main(page: ft.Page):
         worker=run_worker_with_progress, message=message,
         completed=show_pdf_export_completed_dialog, version=APP_VERSION,
         button_style=BUTTON_STYLE_PRIMARY,
+        selection_style=BUTTON_STYLE_SECONDARY,
         index_publish=config.get('pdf_index_publish', ''),
         save_publish=save_pdf_index_publish,
     )
-    composite_mode = CompositeMode(page, normal_mode, rules=config.get("search_exclusion_rules", []))
+    composite_mode = CompositeMode(page, normal_mode, rules=config.get("search_exclusion_rules", []),
+        button_style=BUTTON_STYLE_PRIMARY, selection_style=BUTTON_STYLE_SECONDARY)
     def lock_preview_controls(visible):
         mode_row.disabled = folder_settings_row.disabled = visible
         preview_focus_overlay.visible = visible
 
     async def restore_preview_focus():
+        if bom_preview.can_navigate():
+            await bom_preview.focus()
+            return True
         if composite_mode.can_navigate():
             await composite_mode.focus_navigation()
             return True
@@ -3985,6 +3644,7 @@ def main(page: ft.Page):
         return False
 
     composite_mode.on_preview_visibility = normal_mode.on_preview_visibility = lock_preview_controls
+    bom_preview.bind_keyboard()
     input_focus.restore_preferred_focus = restore_preview_focus
     composite_mode.search_button.style = BUTTON_STYLE_PRIMARY
     normal_mode.search_indicator.width = composite_mode.progress.width = 80
@@ -4057,7 +3717,6 @@ def main(page: ft.Page):
                 ft.Divider(height=1),
 
                 message,
-                table_header,
             ],
             spacing=8,
         ),
@@ -4079,62 +3738,28 @@ def main(page: ft.Page):
     # Give it bounded space: an outer scrolling Column would unbound its height.
     table_area = ft.Container(content=table, expand=True)
 
-    result_area = ft.Row(
-        controls=[
-            table_area,            # 狭い画面では横スクロール
-            hover_preview_panel,   # 余った幅を全部使う
-        ],
-        expand=True,
-        vertical_alignment=ft.CrossAxisAlignment.STRETCH,
-    )
+    def lock_bom_preview(visible):
+        table_area.visible = not visible
+        for action in bom_actions:
+            action.visible = not visible
+        lock_preview_controls(visible)
+
+    bom_preview.on_visibility = lock_bom_preview
+    result_area = ft.Row([
+        ft.Stack([table_area, bom_preview.listing], expand=True, fit=ft.StackFit.EXPAND),
+        bom_preview.panel,
+    ], expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
 
     layout = ft.Column(
         [
             ft.Stack([fixed_controls, preview_focus_overlay], fit=ft.StackFit.PASS_THROUGH),
+            table_toolbar,
             result_area,
             normal_mode.view,
             composite_mode.view,
         ],
         expand=True,
     )
-
-    def update_hover_preview_visibility() -> bool:
-        """
-        画面幅と抽出結果の有無に応じて、ホバープレビュー欄の表示状態を切り替える。
-        表示状態が変わった場合は True を返す。
-        """
-        nonlocal use_hover_preview
-
-        page_width = page.width or 0
-        has_results = current_df is not None and not current_df.empty
-
-        new_use_hover_preview = (
-            has_results
-            and page_width >= HOVER_PREVIEW_MIN_WIDTH
-        )
-
-        debug_print(
-            f"hover_preview: width={page_width}, "
-            f"has_results={has_results}, "
-            f"threshold={HOVER_PREVIEW_MIN_WIDTH}, "
-            f"hover={new_use_hover_preview}"
-        )
-
-        changed = new_use_hover_preview != use_hover_preview
-
-        use_hover_preview = new_use_hover_preview
-        hover_preview_panel.visible = use_hover_preview
-        # Keep space for the preview; the table scrolls horizontally if needed.
-        table_area.expand = not use_hover_preview
-        table_area.width = (
-            min(table.min_width or 240, max(600, page_width - 460))
-            if use_hover_preview else None
-        )
-
-        if not use_hover_preview:
-            clear_hover_preview()
-
-        return changed
 
     def on_page_resize(e):
         normal_mode.resize_settings()
@@ -4149,18 +3774,15 @@ def main(page: ft.Page):
         if pdf_action_state["processing"]:
             page.update()
             return
-        changed = update_hover_preview_visibility()
-
-        if changed and current_df is not None and not current_df.empty:
-            render_table_from_df(current_df)
-
+        if bom_preview.panel.visible:
+            bom_preview.viewport = None
+            bom_preview.resize()
         page.update()
 
     page.on_resize = on_page_resize
 
     page.add(layout)
 
-    update_hover_preview_visibility()
     update_mode_fields()
     page.run_task(normal_mode.startup_sync)
     page.run_task(reference_data.periodic)

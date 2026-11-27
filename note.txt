@@ -6869,6 +6869,101 @@ Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
 
 
 
+2026/11/26
+
+【v1.4.10 構成部品表モードのPDFプレビュー】
+
+・通常は表を全幅で表示し、材料・品番／PG名・出力PDFの列を広げた。
+・プレビューを開くと、項番・材料・品番／PG名・抽出対象・出力PDFと右側の図面を表示する。
+・上下キーまたは行クリックで移動し、閉じるボタンまたはEscで通常一覧に戻る。
+
+【1．ブランチ切替】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git switch -c codex/ui-v1.4.10
+git status -sb
+
+切替後に連絡する。原本への反映後、次の起動確認に進む。
+
+【2．起動確認】
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/composite_demo.py
+
+・分離サンプル起動時に表示された保存先から「構成部品表\タイプA\2001_サンプル製品01.xlsx」を選ぶ。構成部品表モードでシート「架台」を選び、「抽出実行」→「PDF候補抽出」を行う。
+・「PDFプレビューを表示」を押し、左側が5列になり、右側に採用済みPDFが表示されることを確認する。
+・上下キーや行クリックで行を移動し、未採用の行では図面が表示されないことを確認する。「PDFを開く」で関連付けアプリへ開けることも確認する。
+・採用済みPDFのプレビュー中にEnterを押し、「PDFを開く」と同じPDFが関連付けアプリに開くことを確認する。
+・閉じるボタンとEscで通常一覧に戻り、採用状態や出力チェックが残ることを確認する。必要に応じて出力PDFのフォルダ・ファイル名リンクも確認する。
+・構成部品表の操作列が右寄せで、「処理結果CSVを出力」が「PDF出力実行」の横に並ぶことを確認する。3モードのプレビューで「Esc 閉じる」が表示され、Escで閉じられることを確認する。
+・3モードでプレビュー開閉ボタンが操作列の右端にあることを確認する。開くと同じ列のほかのボタンが隠れ、閉じると戻ることを確認する。
+・全選択・全解除・選択を反転の見た目が3モードでそろい、ストック追加のボタンがPDFファイル名・複合で同じ配色であることを確認する。
+
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/test_table_layout.py .
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/test_pdf_actions.py .
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/test_ui_state.py .
+
+【3．コミット・push】
+git status -sb
+git diff --check
+git diff --stat
+git ls-files --others --exclude-standard
+
+設定・ストック・DB・ログ・キャッシュ等がコミット対象に入らないことを確認。note.txt に変更がある場合は、今回のコミットに含める内容かを確認する。
+
+git add -A
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+
+対象外のファイルがステージされていたら、git restore --staged -- <ファイル> でそのファイルをステージから外し、対象を再確認する。
+
+git commit -m "feat: add toggleable BOM PDF preview"
+git push -u origin codex/ui-v1.4.10
+
+【4．main統合・タグ】
+git status -sb
+
+作業ツリーがクリーンであることを確認して実行。
+
+git switch main
+git fetch origin
+git merge --ff-only origin/main
+git merge --ff-only codex/ui-v1.4.10
+git push origin main
+git tag --list v1.4.10
+git ls-remote --tags origin refs/tags/v1.4.10
+
+リモートの確認コマンドが成功し、ローカル・リモートの両方にタグがない場合に実行。
+
+git tag -a v1.4.10 -m "Release v1.4.10"
+git push origin v1.4.10
+
+【5．EXE作成とセルフテスト】
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
+$LASTEXITCODE
+
+終了コード0を確認して実行。
+
+$selftestDir = Join-Path $PWD ('work\v1410-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$exePath = Join-Path $PWD 'dist\図面PDF検索結合ツール (v1.4.10).exe'
+$testProcess = Start-Process -FilePath $exePath -ArgumentList @('--self-test', ('"' + $selftestDir + '"')) -WindowStyle Hidden -Wait -PassThru
+$testProcess.ExitCode
+Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
+
+終了コード0、frozen=true、version=v1.4.10を確認。
+
+【6．現地へ持っていくもの】
+・原本フォルダの dist\図面PDF検索結合ツール (v1.4.10).exe
+・原本フォルダの COMPOSITE_SETUP.md と RELEASE_NOTES.txt
+
+旧EXEを保管してから配置する。現地の config.json、normal_stack.json、part_stock.json は現地のものを使う。
+今回の範囲ではDBの再作成やバッチEXEの交換は不要。
+
+
+
+
+
+
+
 
 
 
