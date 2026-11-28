@@ -137,6 +137,37 @@ async def exercise(scope, destination):
     await composite.add_selected()
     assert len(composite.items) == 1
     assert {o['product_id'] for o in composite.items[0]['occurrences']} == {'0001','1002'}
+    original_parts = deepcopy(composite.items)
+    original_results = deepcopy(composite.results)
+    composite.tabs.selected_index = 2
+    composite.on_tab_change()
+    assert composite.sheet_stock.view.visible and not composite.body.visible
+    with patch.object(composite_catalog, 'attach_pdfs') as attach:
+        await composite.search()
+        attach.assert_not_called()
+    sheets = composite.sheet_stock
+    assert [(row['sheet'], row['hits']) for row in sheets.results] == [('ASSY2', 3)]
+    assert composite.results == original_results and composite.items == original_parts
+    sheets.select_all(True)
+    sheets.add()
+    import sheet_stock
+    assert sheet_stock.load(sheets.path) == sheets.items
+    assert len(sheets.items) == 1 and not sheets.checked
+    assert next(iter(sheets.boxes.values())).disabled
+    composite.tabs.selected_index = 3
+    composite.on_tab_change()
+    assert sheets.in_stock and sheets.export_button.visible
+    sheets.select_all(False)
+    assert not sheets.items[0]['selected']
+    sheets.select_all(True)
+    scope['output_folder_field'].value = str(destination)
+    with patch('sheet_stock_view.export_sheets', return_value=destination/'merged.xlsx') as exported:
+        await sheets.export()
+        assert exported.call_args.args[0] == sheets.items
+        assert 'merged.xlsx' in normal.message.value
+    composite.tabs.selected_index = 0
+    composite.on_tab_change()
+    assert not sheets.view.visible and composite.body.visible
     await composite.show_candidates(group)
     assert composite.preview_panel.visible and composite.image.visible
     assert composite.preview_button.content == 'PDFプレビューを閉じる'

@@ -1,5 +1,6 @@
 """Isolated App C-compatible fixture; never publishes to field folders."""
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 import sqlite3
 from contextlib import closing
@@ -45,3 +46,6 @@ def create(database, root):
             destination.parent.mkdir(exist_ok=True)
             book.save(destination)
             book.close()
+            os.utime(destination, ns=(stamp, stamp))
+            file = destination.stat()
+            db.execute('UPDATE workbooks SET mtime=?,size=? WHERE id=?', (file.st_mtime_ns, file.st_size, wid))

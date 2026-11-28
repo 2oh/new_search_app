@@ -10,9 +10,11 @@ dist-size-check/
 normal_stack.json
 normal_stack.json.*.tmp
 pdf_index_config.json
-storage/pdf-index*
+storage/
 logs/pdf-index/
 
 # Local part stock
 part_stock.json
-storage/composite-demo-*/
+sheet_stock.json
+sheet_export.log
+sheet_export.log.1

@@ -15,10 +15,12 @@ from part_rules import DEFAULT_RULES
 from update_age import format_updated
 from composite_rows import CompositeRows
 from normal_search import SearchLimitExceeded
+from sheet_stock_view import SheetStockView
 
 SHOW_PDF_PREVIEW = 'PDFプレビューを表示'
 HIDE_PDF_PREVIEW = 'PDFプレビューを閉じる'
 PDF_CANDIDATE_HEIGHT = 44
+SHEET_RESULT_LIMIT = 500
 
 
 class CompositeMode(CompositeRows):
@@ -39,6 +41,9 @@ class CompositeMode(CompositeRows):
             self.load_error = f'部品ストックを読み込めません。元データを保護するため変更を停止します：{exc}'
         self.folders, self.sheets = set(), set()
         self.stock_view = False
+        self.active_tab = 0
+        self.sheet_stock = SheetStockView(self, self.stock_path.with_name('sheet_stock.json'),
+            button_style=button_style, selection_style=selection_style)
         self.preview_generation = 0
         self.preview_group = None
         self.preview_lock = asyncio.Lock()
@@ -113,6 +118,7 @@ class CompositeMode(CompositeRows):
             if changed:
                 self.catalog = None
                 self.results, self.selection = [], set()
+                self.sheet_stock.replace_results([])
                 self.clear_preview()
             status = '構成部品表の最新データを取得しました' if changed else '配信済みの最新版と一致'
         except Exception as exc:
@@ -218,6 +224,7 @@ class CompositeMode(CompositeRows):
         if self.normal.busy():
             return
         self.close_preview()
+        sheet_search = self.active_tab >= 2
         self.progress.visible = True
         self.progress.value = None
         self.normal.set_busy(True, '構成部品表DBを読み込んでいます…')
@@ -228,6 +235,13 @@ class CompositeMode(CompositeRows):
             conditions = dict(contains=self.query.value or '', excludes=self.exclude.value or '',
                               folders=set(self.folders), sheets=set(self.sheets), ids=self.ids.value or '',
                               start=self.start.value or '', end=self.end.value or '')
+            if sheet_search:
+                rows = await self.run_search_worker(lambda report: model.search_sheets(
+                    **conditions, progress=report, max_results=SHEET_RESULT_LIMIT))
+                self.sheet_stock.replace_results(rows)
+                self.show_sheets(False)
+                self.message(f'検索結果：{len(rows)}シート')
+                return
             def run(report):
                 groups = model.search(**conditions, progress=report, max_results=300)
                 report(('PDF索引を読み込んでいます…', None))
@@ -245,8 +259,12 @@ class CompositeMode(CompositeRows):
             list_replaced = True
             self.message(f'検索結果：{len(self.results)}部品' + (f' / {warning}' if warning else ''))
         except SearchLimitExceeded as exc:
-            self.replace_results([])
-            list_replaced = True
+            if sheet_search:
+                self.sheet_stock.replace_results([])
+                self.show_sheets(False)
+            else:
+                self.replace_results([])
+                list_replaced = True
             self.message(str(exc))
         except Exception as exc:
             self.message(f'検索できません：{exc}')
@@ -263,7 +281,7 @@ class CompositeMode(CompositeRows):
         self.active_key = None
         self.expanded_keys.clear()
         self.stock_view = False
-        self.tabs.selected_index = 0
+        self.set_active_tab(0)
         self.scroll_offset = 0
         self.clear_preview()
         self.render()
@@ -294,26 +312,39 @@ class CompositeMode(CompositeRows):
 
     def show_results(self, event=None):
         self.stock_view = False
-        self.tabs.selected_index = 0
+        self.set_active_tab(0)
         self.close_preview()
         self.render()
         self.page.update()
 
     def show_stock(self, event=None):
         self.stock_view = True
-        self.tabs.selected_index = 1
+        self.set_active_tab(1)
         self.close_preview()
         self.render()
         self.page.update()
 
+    def set_active_tab(self, index):
+        self.active_tab = self.tabs.selected_index = index
+        self.sheet_stock.view.visible = index >= 2
+        self.toolbar.visible = self.body.visible = index < 2
+
+    def show_sheets(self, in_stock):
+        self.close_preview()
+        self.set_active_tab(3 if in_stock else 2)
+        self.sheet_stock.open(in_stock)
+        self.page.update()
+
     def on_tab_change(self, event=None):
-        if self.preview_panel.visible:
-            self.tabs.selected_index = int(self.stock_view)
+        if self.preview_panel.visible or self.normal.busy():
+            self.tabs.selected_index = self.active_tab
             self.page.update()
             return
-        if self.normal.busy():
+        index = self.tabs.selected_index
+        if index >= 2:
+            self.show_sheets(index == 3)
             return
-        if self.tabs.selected_index == 1:
+        if index == 1:
             self.show_stock()
         else:
             self.show_results()

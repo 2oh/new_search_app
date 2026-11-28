@@ -58,9 +58,10 @@ class CompositeRows:
         self.list_host = ft.Container(self.list_panel, expand=True)
         self.body = ft.Row([self.list_host, self.preview_panel], expand=True, spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.STRETCH)
-        self.tab_bar = ft.TabBar(tabs=[self.result_tab, self.stock_tab])
-        self.tabs = ft.Tabs(length=2, selected_index=0, on_change=self.on_tab_change, expand=True,
-            content=ft.Column([self.tab_bar, self.toolbar, self.body],
+        self.tab_bar = ft.TabBar(tabs=[self.result_tab, self.stock_tab,
+            self.sheet_stock.results_tab, self.sheet_stock.stock_tab])
+        self.tabs = ft.Tabs(length=4, selected_index=0, on_change=self.on_tab_change, expand=True,
+            content=ft.Column([self.tab_bar, self.toolbar, self.body, self.sheet_stock.view],
                 expand=True, spacing=6, horizontal_alignment=ft.CrossAxisAlignment.STRETCH))
         self.view = ft.Container(self.tabs, expand=True, visible=False,
             alignment=ft.Alignment.TOP_LEFT)
@@ -233,7 +234,7 @@ class CompositeRows:
         self.page.run_task(self.focus_navigation)
 
     async def focus_navigation(self):
-        if self.view.visible and not self.normal.busy():
+        if self.view.visible and self.active_tab < 2 and not self.normal.busy():
             await self.key_target.focus()
 
     def first_visible_group(self):

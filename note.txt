@@ -7134,6 +7134,96 @@ Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
 今回の範囲ではDBの再作成やバッチEXEの交換は不要。
 
 
+2026/11/28
+
+【v1.4.13 複合のシートストック】
+
+・シート一覧で検索結果を元Excelとシートごとに表示する。
+・選んだシートをストックし、並べ替え、元シート全体をExcelにまとめて出力できる。
+・出力元一覧と全シートをズーム70％、A1が左上に見える状態で保存する。
+
+【1．ブランチ切替】
+Set-Location 'C:\Users\shini\OneDrive\codes_od\new_search_app'
+git status -sb
+git switch -c codex/ui-v1.4.13
+git status -sb
+
+切替後に連絡する。原本への反映後、次の起動確認に進む。
+
+【2．起動確認】
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/composite_demo.py --new-sample
+
+v1.4.13のシート出力確認には新しいサンプルを使う。旧サンプルの一部には仮の更新日時とサイズが残り、出力前の照合で「登録時から元Excelが変更されています」と表示される。新規作成後に、シート一覧から出力対象を登録する。従来のサンプルフォルダとストックは既存の場所に残る。再起動でストックを確認するときは `--new-sample` を付けず、今回作ったサンプルを再度開く。
+
+・分離サンプルを起動し、「複合」→「シート一覧」を選び「検索」を押す。
+・2シート以上チェックし、「シートをストックへ追加」を押す。シートストックへ切り替えて順番を変え、出力するシートのチェックを確認する。
+・「シートをExcel出力」を押す。分離サンプルの「出力」フォルダにできたExcelを開く。
+・出力元一覧が先頭にあり、チェックしたシートが指定順で全体コピーされていることを確認する。全シートを切り替え、ズームが70％、A1が左上に見えることを確認する。
+・再起動後にシートストックが残り、既存の部品ストックと区別されることを確認する。
+
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/test_composite_ui.py
+& 'C:\dev\new_search_app\Scripts\python.exe' -B tools/test_sheet_export.py
+
+【3．コミット・push】
+git status -sb
+git diff --check
+git diff --stat
+git ls-files --others --exclude-standard
+
+設定・ストック・DB・ログ・キャッシュ等がコミット対象に入らないことを確認。新規サンプル作成で変更された `storage/composite-demo-current.json` は手元のサンプルを指すファイルなので、ステージされた場合は対象から外す。note.txt に変更がある場合は、今回のコミットに含める内容かを確認する。
+
+git add -A
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-status
+
+対象外のファイルがステージされていたら、git restore --staged -- <ファイル> でそのファイルをステージから外し、対象を再確認する。
+
+git commit -m "feat: add composite worksheet stock and Excel export"
+git push -u origin codex/ui-v1.4.13
+
+【4．main統合・タグ】
+git status -sb
+
+作業ツリーがクリーンであることを確認して実行。
+
+git switch main
+git fetch origin
+git merge --ff-only origin/main
+git merge --ff-only codex/ui-v1.4.13
+git push origin main
+git tag --list v1.4.13
+git ls-remote --tags origin refs/tags/v1.4.13
+
+リモートの確認コマンドが成功し、ローカル・リモートの両方にタグがない場合に実行。
+
+git tag -a v1.4.13 -m "Release v1.4.13"
+git push origin v1.4.13
+
+【5．EXE作成とセルフテスト】
+& 'C:\dev\new_search_app_build_v112\Scripts\python.exe' tools/build_exe.py
+$LASTEXITCODE
+
+終了コード0を確認して実行。
+
+$selftestDir = Join-Path $PWD ('work\v1413-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$exePath = Join-Path $PWD 'dist\図面PDF検索結合ツール (v1.4.13).exe'
+$testProcess = Start-Process -FilePath $exePath -ArgumentList @('--self-test', ('"' + $selftestDir + '"')) -WindowStyle Hidden -Wait -PassThru
+$testProcess.ExitCode
+Get-Content -LiteralPath (Join-Path $selftestDir 'SELFTEST_PASS.json')
+
+終了コード0、frozen=true、version=v1.4.13を確認。
+
+【6．現地へ持っていくもの】
+・原本フォルダの dist\図面PDF検索結合ツール (v1.4.13).exe
+・原本フォルダの COMPOSITE_SETUP.md と RELEASE_NOTES.txt
+
+旧EXEを保管してから配置する。現地の config.json、normal_stack.json、part_stock.json、sheet_stock.json は現地のものを使う。
+今回の範囲ではDBの再作成やバッチEXEの交換は不要。
+
+
+
+
 
 
 
